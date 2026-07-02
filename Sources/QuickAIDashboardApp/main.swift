@@ -1,5 +1,7 @@
-import Foundation
-import QuickAIDashboardCore
+import AppKit
 
-let mode = PermissionMode.semiAutomatic
-print("QuickAIDashboardApp bootstrap: \(mode.displayName)")
+let app = NSApplication.shared
+let delegate = AppDelegate()
+app.delegate = delegate
+app.setActivationPolicy(.accessory)
+app.run()
