@@ -64,6 +64,86 @@ expect(ConversationRunState.completed.isTerminal, "completed should be terminal"
 expect(ConversationRunState.failed.isTerminal, "failed should be terminal")
 expect(ConversationRunState.stopped.isTerminal, "stopped should be terminal")
 
+let emptyConversationCoordinator = ConversationCoordinator()
+expect(
+    emptyConversationCoordinator.shortcutDecision() == .openFreshEntry,
+    "shortcut opens fresh when no conversation"
+)
+
+let runningConversationCoordinator = ConversationCoordinator()
+let runningConversation = runningConversationCoordinator.startConversation(prompt: "hello")
+runningConversationCoordinator.markRunning(runningConversation.id)
+expect(
+    runningConversationCoordinator.shortcutDecision() == .recallExisting(runningConversation.id),
+    "running conversation is recalled"
+)
+
+let pinnedConversationCoordinator = ConversationCoordinator()
+let pinnedConversation = pinnedConversationCoordinator.startConversation(prompt: "pin me")
+pinnedConversationCoordinator.setPinned(true, for: pinnedConversation.id)
+expect(
+    pinnedConversationCoordinator.shortcutDecision() == .recallExisting(pinnedConversation.id),
+    "pinned conversation is recalled"
+)
+
+let keptConversationCoordinator = ConversationCoordinator()
+let keptConversation = keptConversationCoordinator.startConversation(prompt: "keep me")
+keptConversationCoordinator.setExplicitlyKept(true, for: keptConversation.id)
+expect(
+    keptConversationCoordinator.shortcutDecision() == .recallExisting(keptConversation.id),
+    "explicitly kept conversation is recalled"
+)
+
+let completedConversationCoordinator = ConversationCoordinator()
+let completedConversation = completedConversationCoordinator.startConversation(prompt: "complete me")
+completedConversationCoordinator.setPermissionMode(.fullAccess, for: completedConversation.id)
+completedConversationCoordinator.markCompleted(completedConversation.id)
+expect(
+    completedConversationCoordinator.activeConversation?.permissionMode == .semiAutomatic,
+    "completed full-access conversation resets permission to semiAutomatic"
+)
+expect(
+    completedConversationCoordinator.activeConversation?.state == .completed,
+    "completed conversation state is completed"
+)
+expect(
+    completedConversationCoordinator.shortcutDecision() == .openFreshEntry,
+    "completed unkept conversation opens fresh shortcut entry"
+)
+
+let messageConversationCoordinator = ConversationCoordinator()
+let messageConversation = messageConversationCoordinator.startConversation(prompt: "hello")
+messageConversationCoordinator.appendCodexEvent(.agentMessage("world"), to: messageConversation.id)
+expect(
+    messageConversationCoordinator.activeConversation?.events.count == 2,
+    "appending agent message creates a second event"
+)
+if case let .assistantMessage(_, text)? = messageConversationCoordinator.activeConversation?.events.last {
+    expect(text == "world", "last appended event is assistant message text world")
+} else {
+    expect(false, "last appended event is assistant message text world")
+}
+
+let sideConversationCoordinator = ConversationCoordinator()
+expect(sideConversationCoordinator.preferredSide == .right, "preferred side starts right")
+sideConversationCoordinator.togglePreferredSide()
+expect(sideConversationCoordinator.preferredSide == .left, "toggling preferred side switches right to left")
+sideConversationCoordinator.togglePreferredSide()
+expect(sideConversationCoordinator.preferredSide == .right, "toggling preferred side switches left to right")
+
+let commandConversationCoordinator = ConversationCoordinator()
+let commandConversation = commandConversationCoordinator.startConversation(prompt: "run pwd")
+commandConversationCoordinator.appendCodexEvent(
+    .command(id: "cmd1", command: "pwd", status: .completed),
+    to: commandConversation.id
+)
+if case let .command(_, command, status)? = commandConversationCoordinator.activeConversation?.events.last {
+    expect(command == "pwd", "command display event preserves command text")
+    expect(status == .completed, "command display event preserves completed status")
+} else {
+    expect(false, "command display event preserves command text and status")
+}
+
 let chargingBattery = BatteryStatus.from(
     currentCapacity: 43,
     maxCapacity: 100,
