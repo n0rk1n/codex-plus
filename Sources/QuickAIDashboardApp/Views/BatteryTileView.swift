@@ -42,7 +42,7 @@ struct BatteryTileView: View {
         case .charging:
             return "Charging"
         case .discharging:
-            return "Battery"
+            return "Discharging"
         case .full:
             return "Full"
         case .unknown:
