@@ -23,6 +23,8 @@ struct ConversationEventRow: View {
                             .font(.caption2)
                             .foregroundStyle(.secondary)
                             .lineLimit(1)
+                            .truncationMode(.middle)
+                            .frame(maxWidth: 150, alignment: .leading)
                     }
                 }
 

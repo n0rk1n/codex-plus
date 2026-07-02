@@ -66,24 +66,28 @@ struct ConversationView: View {
                 iconButton(
                     systemName: session.permissionMode == .fullAccess ? "lock.open.fill" : "lock.fill",
                     help: "Full Access",
+                    accessibilityLabel: session.permissionMode == .fullAccess ? "Disable Full Access" : "Enable Full Access",
                     action: onToggleFullAccess
                 )
 
                 iconButton(
                     systemName: "sidebar.trailing",
                     help: "Switch Side",
+                    accessibilityLabel: "Switch Side",
                     action: onToggleSide
                 )
 
                 iconButton(
                     systemName: session.isPinned ? "pin.fill" : "pin",
                     help: "Pin",
+                    accessibilityLabel: session.isPinned ? "Unpin Window" : "Pin Window",
                     action: onTogglePin
                 )
 
                 iconButton(
                     systemName: "stop.fill",
                     help: "Stop",
+                    accessibilityLabel: "Stop Codex Task",
                     isDisabled: session.state != .running,
                     action: onStop
                 )
@@ -91,6 +95,7 @@ struct ConversationView: View {
                 iconButton(
                     systemName: "xmark",
                     help: "Close",
+                    accessibilityLabel: "Close Conversation",
                     action: onClose
                 )
             }
@@ -115,6 +120,7 @@ struct ConversationView: View {
                 }
                 .buttonStyle(.plain)
                 .help("Send")
+                .accessibilityLabel("Send Follow-Up")
                 .disabled(followUp.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
             }
             .padding(.horizontal, 14)
@@ -125,6 +131,7 @@ struct ConversationView: View {
     private func iconButton(
         systemName: String,
         help: String,
+        accessibilityLabel: String,
         isDisabled: Bool = false,
         action: @escaping () -> Void
     ) -> some View {
@@ -136,6 +143,7 @@ struct ConversationView: View {
         .buttonStyle(.plain)
         .contentShape(Rectangle())
         .help(help)
+        .accessibilityLabel(accessibilityLabel)
         .disabled(isDisabled)
         .opacity(isDisabled ? 0.38 : 1)
     }
