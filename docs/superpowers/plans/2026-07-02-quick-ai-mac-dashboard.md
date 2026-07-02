@@ -737,7 +737,7 @@ public enum ConversationDisplayEvent: Equatable, Identifiable, Sendable {
     case userPrompt(id: UUID, text: String)
     case status(id: UUID, text: String)
     case assistantMessage(id: UUID, text: String)
-    case command(id: UUID, command: String, status: CodexCommandStatus)
+    case command(id: UUID, executionID: String?, command: String, status: CodexCommandStatus)
     case error(id: UUID, text: String)
     case parseWarning(id: UUID, text: String)
 
@@ -746,7 +746,7 @@ public enum ConversationDisplayEvent: Equatable, Identifiable, Sendable {
         case let .userPrompt(id, _),
              let .status(id, _),
              let .assistantMessage(id, _),
-             let .command(id, _, _),
+             let .command(id, _, _, _),
              let .error(id, _),
              let .parseWarning(id, _):
             return id
@@ -977,8 +977,8 @@ public final class ConversationCoordinator: ObservableObject {
             return .error(id: UUID(), text: message)
         case let .agentMessage(text):
             return .assistantMessage(id: UUID(), text: text)
-        case let .command(_, command, status):
-            return .command(id: UUID(), command: command, status: status)
+        case let .command(executionID, command, status):
+            return .command(id: UUID(), executionID: executionID, command: command, status: status)
         case let .error(message):
             return .error(id: UUID(), text: message)
         case let .raw(text):
@@ -1692,7 +1692,7 @@ struct ConversationEventRow: View {
             return text
         case let .assistantMessage(_, text):
             return text
-        case let .command(_, command, status):
+        case let .command(_, _, command, status):
             return "\(status.rawValue): \(command)"
         case let .error(_, text):
             return text
