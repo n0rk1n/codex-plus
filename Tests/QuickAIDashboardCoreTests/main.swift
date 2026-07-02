@@ -70,6 +70,8 @@ expect(partialLineBuffer.flush() == nil, "line buffer flush clears partial line"
 
 expect(CodexRunResult(exitCode: 0, stderr: "").succeeded, "codex run result succeeds on exit zero")
 expect(!CodexRunResult(exitCode: 1, stderr: "boom").succeeded, "codex run result fails on nonzero exit")
+let parserInjectedRunner = ProcessCodexRunner(parser: { line in .agentMessage(line) })
+expect(String(describing: type(of: parserInjectedRunner)) == "ProcessCodexRunner", "process codex runner accepts parser injection")
 
 expect(!ConversationRunState.idle.isTerminal, "idle should not be terminal")
 expect(!ConversationRunState.running.isTerminal, "running should not be terminal")

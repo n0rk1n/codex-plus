@@ -33,13 +33,16 @@ public final class ProcessCodexRunHandle: CodexRunHandle {
 public struct ProcessCodexRunner: Sendable {
     private let executableURL: URL
     private let executableArgumentsPrefix: [String]
+    private let parser: @Sendable (String) -> CodexEvent
 
     public init(
         executableURL: URL = URL(fileURLWithPath: "/usr/bin/env"),
-        executableArgumentsPrefix: [String] = ["codex"]
+        executableArgumentsPrefix: [String] = ["codex"],
+        parser: @escaping @Sendable (String) -> CodexEvent = CodexEventParser.parseLine
     ) {
         self.executableURL = executableURL
         self.executableArgumentsPrefix = executableArgumentsPrefix
+        self.parser = parser
     }
 
     @discardableResult
@@ -67,6 +70,7 @@ public struct ProcessCodexRunner: Sendable {
         let finishQueue = DispatchQueue(label: "QuickAIDashboardCore.ProcessCodexRunner.finish")
         let stdoutReader = StreamReader(fileHandle: stdoutPipe.fileHandleForReading)
         let stderrReader = StreamReader(fileHandle: stderrPipe.fileHandleForReading)
+        let eventParser = parser
 
         outputGroup.enter()
         outputGroup.enter()
@@ -102,12 +106,12 @@ public struct ProcessCodexRunner: Sendable {
                 let lines = stdoutBuffer.append(chunk)
 
                 for line in lines {
-                    onEvent(CodexEventParser.parseLine(line))
+                    onEvent(eventParser(line))
                 }
             }
 
             if let remainingLine = stdoutBuffer.flush() {
-                onEvent(CodexEventParser.parseLine(remainingLine))
+                onEvent(eventParser(remainingLine))
             }
         }
 
