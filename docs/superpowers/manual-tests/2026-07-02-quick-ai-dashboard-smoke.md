@@ -31,9 +31,16 @@ Run from the repository root.
   - Expect: compact panel hides.
   - Expect: side conversation opens on the right edge.
   - Expect: Codex events stream, or a clear Codex startup error appears.
+- [ ] Follow-up transcript
+  - Type: `Now make it shorter.`
+  - Press Enter.
+  - Expect: the follow-up appears as a user message before new Codex output.
 - [ ] Window hide and recall behavior
   - Move the mouse outside the unpinned window.
   - Expect: window hides.
+  - Expect: a slim edge affordance remains on the selected screen edge.
+  - Hover or click the edge affordance.
+  - Expect: the side conversation reappears.
   - Press Control-Option-Space while a conversation is running.
   - Expect: existing conversation is recalled.
   - Pin the window and move the mouse outside.
@@ -48,6 +55,11 @@ Run from the repository root.
   - Expect: conversation state changes to stopped.
   - Set permission to Full Access and complete, fail, or stop a run.
   - Expect: permission resets to Semi-Automatic after stop, complete, or fail.
+- [ ] Close and permission reset
+  - Set permission to Full Access while no run is active.
+  - Expect: the Full Access warning copy is shown before enabling.
+  - Close the side conversation.
+  - Expect: the active conversation is ended and the next shortcut opens a fresh compact panel.
 
 ## Out Of Scope
 

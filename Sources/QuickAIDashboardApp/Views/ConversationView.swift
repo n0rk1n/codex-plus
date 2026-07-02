@@ -65,7 +65,7 @@ struct ConversationView: View {
 
                 iconButton(
                     systemName: session.permissionMode == .fullAccess ? "lock.open.fill" : "lock.fill",
-                    help: "Full Access",
+                    help: fullAccessWarningText,
                     accessibilityLabel: session.permissionMode == .fullAccess ? "Disable Full Access" : "Enable Full Access",
                     action: onToggleFullAccess
                 )
@@ -126,6 +126,10 @@ struct ConversationView: View {
             .padding(.horizontal, 14)
             .padding(.vertical, 12)
         }
+    }
+
+    private var fullAccessWarningText: String {
+        "Full Access for this conversation. Codex can make broader local changes until this task ends or you stop it."
     }
 
     private func iconButton(

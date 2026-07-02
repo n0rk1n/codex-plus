@@ -83,10 +83,29 @@ public final class ConversationCoordinator: ObservableObject {
         preferredSide.toggle()
     }
 
+    public func appendUserPrompt(_ prompt: String, to id: UUID) {
+        let trimmedPrompt = prompt.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmedPrompt.isEmpty else {
+            return
+        }
+
+        updateActiveConversation(id) { session in
+            session.events.append(.userPrompt(id: UUID(), text: trimmedPrompt))
+        }
+    }
+
     public func appendCodexEvent(_ event: CodexEvent, to id: UUID) {
         updateActiveConversation(id) { session in
             session.events.append(Self.displayEvent(from: event))
         }
+    }
+
+    public func closeConversation(_ id: UUID) {
+        guard activeConversation?.id == id else {
+            return
+        }
+
+        activeConversation = nil
     }
 
     private func markTerminal(_ id: UUID, state: ConversationRunState) {

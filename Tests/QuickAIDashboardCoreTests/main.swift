@@ -392,6 +392,20 @@ expect(
     "stopped full-access conversation resets permission to semiAutomatic"
 )
 
+let closedConversationCoordinator = ConversationCoordinator()
+let closedConversation = closedConversationCoordinator.startConversation(prompt: "close me")
+closedConversationCoordinator.setPermissionMode(.fullAccess, for: closedConversation.id)
+closedConversationCoordinator.setPinned(true, for: closedConversation.id)
+closedConversationCoordinator.closeConversation(closedConversation.id)
+expect(
+    closedConversationCoordinator.activeConversation == nil,
+    "closing a conversation clears the active conversation"
+)
+expect(
+    closedConversationCoordinator.shortcutDecision() == .openFreshEntry,
+    "closed conversation opens fresh shortcut entry"
+)
+
 let messageConversationCoordinator = ConversationCoordinator()
 let messageConversation = messageConversationCoordinator.startConversation(prompt: "hello")
 messageConversationCoordinator.appendCodexEvent(.agentMessage("world"), to: messageConversation.id)
@@ -403,6 +417,19 @@ if case let .assistantMessage(_, text)? = messageConversationCoordinator.activeC
     expect(text == "world", "last appended event is assistant message text world")
 } else {
     expect(false, "last appended event is assistant message text world")
+}
+
+let followUpConversationCoordinator = ConversationCoordinator()
+let followUpConversation = followUpConversationCoordinator.startConversation(prompt: "hello")
+followUpConversationCoordinator.appendUserPrompt("  follow up  ", to: followUpConversation.id)
+expect(
+    followUpConversationCoordinator.activeConversation?.events.count == 2,
+    "appending follow-up user prompt creates a second event"
+)
+if case let .userPrompt(_, text)? = followUpConversationCoordinator.activeConversation?.events.last {
+    expect(text == "follow up", "follow-up user prompt is trimmed and appended")
+} else {
+    expect(false, "follow-up user prompt appends user prompt event")
 }
 
 let sideConversationCoordinator = ConversationCoordinator()

@@ -11,6 +11,7 @@ final class WindowCoordinator {
 
     private var compactPanel: GlassPanel?
     private var sidePanel: GlassPanel?
+    private var edgeAffordancePanel: GlassPanel?
     private var sidePanelModel: ConversationPanelModel?
     private var isSidePanelContentInstalled = false
     private var activeRunHandle: CodexRunHandle?
@@ -19,6 +20,8 @@ final class WindowCoordinator {
     private var stoppedRunIDs = Set<UUID>()
     private let mouseExitMonitors = EventMonitorStore()
     private var hasMouseEnteredSidePanel = false
+
+    private static let fullAccessWarningText = "Full Access for this conversation. Codex can make broader local changes until this task ends or you stop it."
 
     init(
         conversationCoordinator: ConversationCoordinator,
@@ -47,6 +50,7 @@ final class WindowCoordinator {
 
     private func showCompactPanel() {
         sidePanel?.orderOut(nil)
+        edgeAffordancePanel?.orderOut(nil)
 
         let size = NSSize(width: 420, height: 210)
         guard let screen = activeScreen() else {
@@ -78,6 +82,7 @@ final class WindowCoordinator {
 
     private func showSidePanel() {
         compactPanel?.orderOut(nil)
+        edgeAffordancePanel?.orderOut(nil)
 
         guard conversationCoordinator.activeConversation != nil else {
             showCompactPanel()
@@ -128,6 +133,7 @@ final class WindowCoordinator {
             return
         }
 
+        conversationCoordinator.appendUserPrompt(prompt, to: session.id)
         conversationCoordinator.markRunning(session.id)
         refreshSidePanelContent()
         startCodexRun(prompt: prompt, sessionID: session.id)
@@ -239,7 +245,13 @@ final class WindowCoordinator {
     }
 
     private func closeSidePanel() {
-        if conversationCoordinator.activeConversation?.state == .running {
+        guard let session = conversationCoordinator.activeConversation else {
+            sidePanel?.orderOut(nil)
+            edgeAffordancePanel?.orderOut(nil)
+            return
+        }
+
+        if session.state == .running {
             let alert = NSAlert()
             alert.alertStyle = .warning
             alert.messageText = "Stop the running Codex task?"
@@ -255,6 +267,11 @@ final class WindowCoordinator {
         }
 
         sidePanel?.orderOut(nil)
+        edgeAffordancePanel?.orderOut(nil)
+        conversationCoordinator.closeConversation(session.id)
+        sidePanelModel = nil
+        isSidePanelContentInstalled = false
+        hasMouseEnteredSidePanel = false
     }
 
     private func togglePin() {
@@ -278,6 +295,29 @@ final class WindowCoordinator {
     private func toggleFullAccess() {
         guard let session = conversationCoordinator.activeConversation else {
             return
+        }
+
+        guard session.state != .running else {
+            let alert = NSAlert()
+            alert.alertStyle = .informational
+            alert.messageText = "Full Access cannot change while Codex is running."
+            alert.informativeText = Self.fullAccessWarningText
+            alert.addButton(withTitle: "OK")
+            alert.runModal()
+            return
+        }
+
+        if session.permissionMode == .semiAutomatic {
+            let alert = NSAlert()
+            alert.alertStyle = .warning
+            alert.messageText = "Enable Full Access?"
+            alert.informativeText = Self.fullAccessWarningText
+            alert.addButton(withTitle: "Enable Full Access")
+            alert.addButton(withTitle: "Cancel")
+
+            guard alert.runModal() == .alertFirstButtonReturn else {
+                return
+            }
         }
 
         let nextMode: PermissionMode = session.permissionMode == .fullAccess ? .semiAutomatic : .fullAccess
@@ -365,6 +405,49 @@ final class WindowCoordinator {
         )
     }
 
+    private func edgeAffordanceFrame(on screen: NSScreen) -> NSRect {
+        let visibleFrame = screen.visibleFrame
+        let size = NSSize(width: 12, height: 96)
+        let x: CGFloat
+
+        switch conversationCoordinator.preferredSide {
+        case .left:
+            x = visibleFrame.minX
+        case .right:
+            x = visibleFrame.maxX - size.width
+        }
+
+        return NSRect(
+            x: x,
+            y: visibleFrame.midY - (size.height / 2),
+            width: size.width,
+            height: size.height
+        )
+    }
+
+    private func showEdgeAffordance(on screen: NSScreen?) {
+        guard
+            conversationCoordinator.activeConversation != nil,
+            conversationCoordinator.activeConversation?.isPinned != true,
+            let screen = screen ?? activeScreen()
+        else {
+            return
+        }
+
+        let frame = edgeAffordanceFrame(on: screen)
+        let panel = edgeAffordancePanel ?? makePanel(frame: frame)
+        panel.setFrame(frame, display: true)
+        panel.contentView = NSHostingView(
+            rootView: SideEdgeAffordanceView { [weak self] in
+                Task { @MainActor in
+                    self?.showSidePanel()
+                }
+            }
+        )
+        panel.orderFrontRegardless()
+        edgeAffordancePanel = panel
+    }
+
     private func installMouseExitMonitorIfNeeded() {
         guard mouseExitMonitors.isEmpty else {
             return
@@ -389,6 +472,14 @@ final class WindowCoordinator {
     }
 
     private func hideSidePanelIfMouseExited() {
+        if
+            let edgeAffordancePanel,
+            edgeAffordancePanel.isVisible,
+            NSMouseInRect(NSEvent.mouseLocation, edgeAffordancePanel.frame.insetBy(dx: -8, dy: -8), false) {
+            showSidePanel()
+            return
+        }
+
         guard
             let sidePanel,
             sidePanel.isVisible,
@@ -404,7 +495,9 @@ final class WindowCoordinator {
         }
 
         if hasMouseEnteredSidePanel {
+            let screen = sidePanel.screen ?? activeScreen()
             sidePanel.orderOut(nil)
+            showEdgeAffordance(on: screen)
         }
     }
 
@@ -459,6 +552,26 @@ private struct ConversationPanelHostView: View {
             onToggleFullAccess: onToggleFullAccess
         )
         .id(model.session.id)
+    }
+}
+
+private struct SideEdgeAffordanceView: View {
+    let onActivate: () -> Void
+
+    var body: some View {
+        Button(action: onActivate) {
+            Capsule(style: .continuous)
+                .fill(.ultraThinMaterial)
+                .overlay {
+                    Capsule(style: .continuous)
+                        .strokeBorder(Color.white.opacity(0.32), lineWidth: 1)
+                }
+                .shadow(color: Color.black.opacity(0.18), radius: 8, x: 0, y: 4)
+                .padding(2)
+        }
+        .buttonStyle(.plain)
+        .help("Show Conversation")
+        .accessibilityLabel("Show Conversation")
     }
 }
 
