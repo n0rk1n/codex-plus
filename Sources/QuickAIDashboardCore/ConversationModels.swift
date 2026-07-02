@@ -49,7 +49,7 @@ public enum ConversationDisplayEvent: Equatable, Identifiable, Sendable {
     case userPrompt(id: UUID, text: String)
     case status(id: UUID, text: String)
     case assistantMessage(id: UUID, text: String)
-    case command(id: UUID, command: String, status: CodexCommandStatus)
+    case command(id: UUID, executionID: String?, command: String, status: CodexCommandStatus)
     case error(id: UUID, text: String)
     case parseWarning(id: UUID, text: String)
 
@@ -61,7 +61,7 @@ public enum ConversationDisplayEvent: Equatable, Identifiable, Sendable {
              let .error(id, _),
              let .parseWarning(id, _):
             return id
-        case let .command(id, _, _):
+        case let .command(id, _, _, _):
             return id
         }
     }

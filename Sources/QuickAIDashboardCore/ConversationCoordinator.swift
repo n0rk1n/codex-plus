@@ -46,7 +46,15 @@ public final class ConversationCoordinator: ObservableObject {
     }
 
     public func markFailed(_ id: UUID) {
-        markTerminal(id, state: .failed)
+        markFailed(id, message: "Conversation failed")
+    }
+
+    public func markFailed(_ id: UUID, message: String) {
+        updateActiveConversation(id) { session in
+            session.state = .failed
+            session.permissionMode = .semiAutomatic
+            session.events.append(.error(id: UUID(), text: message))
+        }
     }
 
     public func markStopped(_ id: UUID) {
@@ -112,8 +120,8 @@ public final class ConversationCoordinator: ObservableObject {
             return .error(id: UUID(), text: message)
         case let .agentMessage(text):
             return .assistantMessage(id: UUID(), text: text)
-        case let .command(_, command, status):
-            return .command(id: UUID(), command: command, status: status)
+        case let .command(executionID, command, status):
+            return .command(id: UUID(), executionID: executionID, command: command, status: status)
         case let .error(message):
             return .error(id: UUID(), text: message)
         case let .raw(text):

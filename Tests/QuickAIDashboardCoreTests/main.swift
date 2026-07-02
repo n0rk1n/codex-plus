@@ -111,6 +111,37 @@ expect(
     "completed unkept conversation opens fresh shortcut entry"
 )
 
+let failedConversationCoordinator = ConversationCoordinator()
+let failedConversation = failedConversationCoordinator.startConversation(prompt: "fail me")
+failedConversationCoordinator.setPermissionMode(.fullAccess, for: failedConversation.id)
+failedConversationCoordinator.markFailed(failedConversation.id, message: "boom")
+expect(
+    failedConversationCoordinator.activeConversation?.state == .failed,
+    "failed conversation state is failed"
+)
+expect(
+    failedConversationCoordinator.activeConversation?.permissionMode == .semiAutomatic,
+    "failed full-access conversation resets permission to semiAutomatic"
+)
+if case let .error(_, text)? = failedConversationCoordinator.activeConversation?.events.last {
+    expect(text == "boom", "failed conversation appends error message")
+} else {
+    expect(false, "failed conversation appends error message")
+}
+
+let stoppedConversationCoordinator = ConversationCoordinator()
+let stoppedConversation = stoppedConversationCoordinator.startConversation(prompt: "stop me")
+stoppedConversationCoordinator.setPermissionMode(.fullAccess, for: stoppedConversation.id)
+stoppedConversationCoordinator.markStopped(stoppedConversation.id)
+expect(
+    stoppedConversationCoordinator.activeConversation?.state == .stopped,
+    "stopped conversation state is stopped"
+)
+expect(
+    stoppedConversationCoordinator.activeConversation?.permissionMode == .semiAutomatic,
+    "stopped full-access conversation resets permission to semiAutomatic"
+)
+
 let messageConversationCoordinator = ConversationCoordinator()
 let messageConversation = messageConversationCoordinator.startConversation(prompt: "hello")
 messageConversationCoordinator.appendCodexEvent(.agentMessage("world"), to: messageConversation.id)
@@ -137,11 +168,12 @@ commandConversationCoordinator.appendCodexEvent(
     .command(id: "cmd1", command: "pwd", status: .completed),
     to: commandConversation.id
 )
-if case let .command(_, command, status)? = commandConversationCoordinator.activeConversation?.events.last {
+if case let .command(_, executionID, command, status)? = commandConversationCoordinator.activeConversation?.events.last {
+    expect(executionID == "cmd1", "command display event preserves execution id")
     expect(command == "pwd", "command display event preserves command text")
     expect(status == .completed, "command display event preserves completed status")
 } else {
-    expect(false, "command display event preserves command text and status")
+    expect(false, "command display event preserves execution id, command text, and status")
 }
 
 let chargingBattery = BatteryStatus.from(
