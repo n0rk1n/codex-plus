@@ -460,9 +460,9 @@ final class CodexEventParserTests: XCTestCase {
     }
 
     func testParsesCommandExecution() {
-        let line = #"{"type":"item.started","item":{"type":"command_execution","command":"pwd","status":"in_progress"}}"#
+        let line = #"{"type":"item.started","item":{"id":"cmd1","type":"command_execution","command":"pwd","status":"in_progress"}}"#
         let event = CodexEventParser.parseLine(line)
-        XCTAssertEqual(event, .command("pwd", .inProgress))
+        XCTAssertEqual(event, .command(id: "cmd1", command: "pwd", status: .inProgress))
     }
 
     func testMalformedLineReturnsParseWarning() {
@@ -492,6 +492,7 @@ final class CodexCommandBuilderTests: XCTestCase {
             "--json",
             "--sandbox",
             "read-only",
+            "--",
             "Summarize this Mac"
         ])
     }
@@ -507,6 +508,7 @@ final class CodexCommandBuilderTests: XCTestCase {
             "--json",
             "--sandbox",
             "danger-full-access",
+            "--",
             "Fix the local setup"
         ])
     }
@@ -556,7 +558,7 @@ public enum CodexEvent: Equatable, Sendable {
     case turnCompleted
     case turnFailed(String)
     case agentMessage(String)
-    case command(String, CodexCommandStatus)
+    case command(id: String?, command: String, status: CodexCommandStatus)
     case error(String)
     case raw(String)
     case parseWarning(String)
@@ -605,11 +607,14 @@ public enum CodexEventParser {
 
         switch itemType {
         case "agent_message":
-            return .agentMessage(item["text"] as? String ?? "")
+            guard let text = item["text"] as? String, !text.isEmpty else {
+                return .raw(fallback)
+            }
+            return .agentMessage(text)
         case "command_execution":
             let command = item["command"] as? String ?? "unknown command"
             let status = CodexCommandStatus.from(item["status"] as? String)
-            return .command(command, status)
+            return .command(id: item["id"] as? String, command: command, status: status)
         default:
             return .raw(fallback)
         }
@@ -631,6 +636,7 @@ public enum CodexCommandBuilder {
             "--json",
             "--sandbox",
             sandboxValue(for: permissionMode),
+            "--",
             prompt
         ]
     }
@@ -971,7 +977,7 @@ public final class ConversationCoordinator: ObservableObject {
             return .error(id: UUID(), text: message)
         case let .agentMessage(text):
             return .assistantMessage(id: UUID(), text: text)
-        case let .command(command, status):
+        case let .command(_, command, status):
             return .command(id: UUID(), command: command, status: status)
         case let .error(message):
             return .error(id: UUID(), text: message)
