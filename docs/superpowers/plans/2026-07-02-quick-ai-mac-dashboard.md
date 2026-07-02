@@ -6,13 +6,23 @@
 
 **Architecture:** Use a Swift Package with a testable `QuickAIDashboardCore` library and a `QuickAIDashboardApp` executable. Keep pure state, battery mapping, Codex event parsing, and conversation coordination in the library; keep AppKit/SwiftUI windowing and visual treatment in the app target.
 
-**Tech Stack:** Swift 6.3, Swift Package Manager, XCTest, SwiftUI, AppKit, IOKit power source APIs, Carbon global hotkey APIs, Foundation `Process` for `codex exec --json`.
+**Tech Stack:** Swift 6.3, Swift Package Manager, custom executable Swift test harness, SwiftUI, AppKit, IOKit power source APIs, Carbon global hotkey APIs, Foundation `Process` for `codex exec --json`.
 
 ---
 
 ## Scope Check
 
 The approved MVP is one coherent subsystem: a quick AI overlay with one battery dashboard tile and one Codex-backed conversation surface. Do not implement system toggles, Homebrew management, maintenance diagnostics, persistent history, Markdown audit export, SQLite, or extra dashboard tiles in this plan.
+
+## Execution Amendment: Test Harness
+
+This Mac has Command Line Tools only. `XCTest` and Swift Testing are unavailable, so every `swift test` instruction in this plan is superseded by the executable harness command:
+
+```bash
+swift run QuickAIDashboardCoreTests
+```
+
+New tests should be added to `Tests/QuickAIDashboardCoreTests/main.swift` or helper files in that executable target. Keep the same red-green discipline: first run the harness and observe the expected failure, then implement, then run the harness again until it passes. Continue to run `swift build` for compilation checks.
 
 ## File Structure
 
