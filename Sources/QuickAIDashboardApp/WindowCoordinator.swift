@@ -10,6 +10,11 @@ final class WindowCoordinator {
 
     private var compactPanel: GlassPanel?
     private var sidePanel: GlassPanel?
+    private var activeRunHandle: CodexRunHandle?
+    private var activeRunID: UUID?
+    private var activeRunSessionID: UUID?
+    private var stoppedRunIDs = Set<UUID>()
+    private var mouseExitMonitors: [Any] = []
 
     init(
         conversationCoordinator: ConversationCoordinator,
@@ -49,7 +54,16 @@ final class WindowCoordinator {
         let panel = compactPanel ?? makePanel(frame: frame)
 
         panel.setFrame(frame, display: true)
-        panel.contentView = NSHostingView(rootView: Text("Quick AI Dashboard").padding())
+        panel.contentView = NSHostingView(
+            rootView: CompactEntryView(
+                batteryStatus: batteryProvider.currentStatus(),
+                onSubmit: { [weak self] prompt in
+                    Task { @MainActor in
+                        self?.startConversation(prompt: prompt)
+                    }
+                }
+            )
+        )
         panel.makeKeyAndOrderFront(nil)
         compactPanel = panel
     }
@@ -57,28 +71,306 @@ final class WindowCoordinator {
     private func showSidePanel() {
         compactPanel?.orderOut(nil)
 
+        guard conversationCoordinator.activeConversation != nil else {
+            showCompactPanel()
+            return
+        }
+
         guard let screen = activeScreen() else {
             return
         }
 
+        let frame = sidePanelFrame(on: screen)
+        let panel = sidePanel ?? makePanel(frame: frame)
+
+        panel.setFrame(frame, display: true)
+        refreshSidePanelContent(on: panel)
+        panel.makeKeyAndOrderFront(nil)
+        sidePanel = panel
+        installMouseExitMonitorIfNeeded()
+    }
+
+    private func makePanel(frame: NSRect) -> GlassPanel {
+        let panel = GlassPanel(contentRect: frame)
+        panel.acceptsMouseMovedEvents = true
+        return panel
+    }
+
+    private func startConversation(prompt: String) {
+        compactPanel?.orderOut(nil)
+
+        let session = conversationCoordinator.startConversation(prompt: prompt)
+        conversationCoordinator.markRunning(session.id)
+        showSidePanel()
+        startCodexRun(prompt: prompt, sessionID: session.id)
+    }
+
+    private func handleFollowUp(_ prompt: String) {
+        guard let session = conversationCoordinator.activeConversation else {
+            return
+        }
+
+        guard activeRunHandle == nil else {
+            conversationCoordinator.appendCodexEvent(
+                .error("Codex is already running. Stop the current task before sending a follow-up."),
+                to: session.id
+            )
+            refreshSidePanelContent()
+            return
+        }
+
+        conversationCoordinator.markRunning(session.id)
+        refreshSidePanelContent()
+        startCodexRun(prompt: prompt, sessionID: session.id)
+    }
+
+    private func startCodexRun(prompt: String, sessionID: UUID) {
+        guard activeRunHandle == nil else {
+            conversationCoordinator.appendCodexEvent(
+                .error("Codex is already running. Stop the current task before starting another one."),
+                to: sessionID
+            )
+            refreshSidePanelContent()
+            return
+        }
+
+        let permissionMode = conversationCoordinator.activeConversation?.permissionMode ?? .semiAutomatic
+        let runID = UUID()
+        activeRunID = runID
+        activeRunSessionID = sessionID
+
+        let handle = codexRunner.run(
+            prompt: prompt,
+            permissionMode: permissionMode,
+            onEvent: { [weak self] event in
+                Task { @MainActor in
+                    self?.handleCodexEvent(event, sessionID: sessionID, runID: runID)
+                }
+            },
+            onFinish: { [weak self] result in
+                Task { @MainActor in
+                    self?.handleCodexFinish(result, sessionID: sessionID, runID: runID)
+                }
+            }
+        )
+
+        activeRunHandle = handle
+    }
+
+    private func handleCodexEvent(_ event: CodexEvent, sessionID: UUID, runID: UUID) {
+        guard activeRunSessionID == sessionID, activeRunID == runID else {
+            return
+        }
+
+        conversationCoordinator.appendCodexEvent(event, to: sessionID)
+        refreshSidePanelContent()
+    }
+
+    private func handleCodexFinish(_ result: CodexRunResult, sessionID: UUID, runID: UUID) {
+        if stoppedRunIDs.remove(runID) != nil {
+            if activeRunID == runID {
+                activeRunHandle = nil
+                activeRunID = nil
+                activeRunSessionID = nil
+            }
+            return
+        }
+
+        guard activeRunSessionID == sessionID, activeRunID == runID else {
+            return
+        }
+
+        activeRunHandle = nil
+        activeRunID = nil
+        activeRunSessionID = nil
+
+        if result.succeeded {
+            conversationCoordinator.markCompleted(sessionID)
+        } else {
+            conversationCoordinator.markFailed(sessionID, message: failureMessage(from: result))
+        }
+
+        refreshSidePanelContent()
+    }
+
+    private func stopActiveRun(refreshesView: Bool = true) {
+        guard let session = conversationCoordinator.activeConversation else {
+            return
+        }
+
+        if let activeRunHandle, activeRunSessionID == session.id {
+            if let activeRunID {
+                stoppedRunIDs.insert(activeRunID)
+            }
+            activeRunHandle.stop()
+            self.activeRunHandle = nil
+            activeRunID = nil
+            activeRunSessionID = nil
+        }
+
+        if session.state == .running {
+            conversationCoordinator.markStopped(session.id)
+        }
+
+        if refreshesView {
+            refreshSidePanelContent()
+        }
+    }
+
+    private func closeSidePanel() {
+        if conversationCoordinator.activeConversation?.state == .running {
+            let alert = NSAlert()
+            alert.alertStyle = .warning
+            alert.messageText = "Stop the running Codex task?"
+            alert.informativeText = "Closing the side panel will stop the active run."
+            alert.addButton(withTitle: "Stop and Close")
+            alert.addButton(withTitle: "Cancel")
+
+            guard alert.runModal() == .alertFirstButtonReturn else {
+                return
+            }
+
+            stopActiveRun(refreshesView: false)
+        }
+
+        sidePanel?.orderOut(nil)
+    }
+
+    private func togglePin() {
+        guard let session = conversationCoordinator.activeConversation else {
+            return
+        }
+
+        conversationCoordinator.setPinned(!session.isPinned, for: session.id)
+        refreshSidePanelContent()
+    }
+
+    private func togglePreferredSide() {
+        conversationCoordinator.togglePreferredSide()
+
+        if let screen = activeScreen(), let sidePanel {
+            sidePanel.setFrame(sidePanelFrame(on: screen), display: true, animate: true)
+            refreshSidePanelContent(on: sidePanel)
+        }
+    }
+
+    private func toggleFullAccess() {
+        guard let session = conversationCoordinator.activeConversation else {
+            return
+        }
+
+        let nextMode: PermissionMode = session.permissionMode == .fullAccess ? .semiAutomatic : .fullAccess
+        conversationCoordinator.setPermissionMode(nextMode, for: session.id)
+        refreshSidePanelContent()
+    }
+
+    private func refreshSidePanelContent(on panel: GlassPanel? = nil) {
+        guard let session = conversationCoordinator.activeConversation else {
+            return
+        }
+
+        let targetPanel = panel ?? sidePanel
+        targetPanel?.contentView = NSHostingView(
+            rootView: ConversationView(
+                session: session,
+                onFollowUp: { [weak self] prompt in
+                    Task { @MainActor in
+                        self?.handleFollowUp(prompt)
+                    }
+                },
+                onStop: { [weak self] in
+                    Task { @MainActor in
+                        self?.stopActiveRun()
+                    }
+                },
+                onClose: { [weak self] in
+                    Task { @MainActor in
+                        self?.closeSidePanel()
+                    }
+                },
+                onTogglePin: { [weak self] in
+                    Task { @MainActor in
+                        self?.togglePin()
+                    }
+                },
+                onToggleSide: { [weak self] in
+                    Task { @MainActor in
+                        self?.togglePreferredSide()
+                    }
+                },
+                onToggleFullAccess: { [weak self] in
+                    Task { @MainActor in
+                        self?.toggleFullAccess()
+                    }
+                }
+            )
+        )
+    }
+
+    private func sidePanelFrame(on screen: NSScreen) -> NSRect {
         let visibleFrame = screen.visibleFrame
-        let width: CGFloat = 460
-        let frame = NSRect(
-            x: visibleFrame.maxX - width,
+        let width = min(CGFloat(460), visibleFrame.width)
+        let x: CGFloat
+
+        switch conversationCoordinator.preferredSide {
+        case .left:
+            x = visibleFrame.minX
+        case .right:
+            x = visibleFrame.maxX - width
+        }
+
+        return NSRect(
+            x: x,
             y: visibleFrame.minY,
             width: width,
             height: visibleFrame.height
         )
-        let panel = sidePanel ?? makePanel(frame: frame)
-
-        panel.setFrame(frame, display: true)
-        panel.contentView = NSHostingView(rootView: Text("Conversation").padding())
-        panel.makeKeyAndOrderFront(nil)
-        sidePanel = panel
     }
 
-    private func makePanel(frame: NSRect) -> GlassPanel {
-        GlassPanel(contentRect: frame)
+    private func installMouseExitMonitorIfNeeded() {
+        guard mouseExitMonitors.isEmpty else {
+            return
+        }
+
+        let localMonitor = NSEvent.addLocalMonitorForEvents(matching: [.mouseMoved]) { [weak self] event in
+            self?.hideSidePanelIfMouseExited()
+            return event
+        }
+
+        if let localMonitor {
+            mouseExitMonitors.append(localMonitor)
+        }
+
+        if let globalMonitor = NSEvent.addGlobalMonitorForEvents(matching: [.mouseMoved], handler: { [weak self] _ in
+            Task { @MainActor in
+                self?.hideSidePanelIfMouseExited()
+            }
+        }) {
+            mouseExitMonitors.append(globalMonitor)
+        }
+    }
+
+    private func hideSidePanelIfMouseExited() {
+        guard
+            let sidePanel,
+            sidePanel.isVisible,
+            conversationCoordinator.activeConversation?.isPinned != true
+        else {
+            return
+        }
+
+        if !NSMouseInRect(NSEvent.mouseLocation, sidePanel.frame, false) {
+            sidePanel.orderOut(nil)
+        }
+    }
+
+    private func failureMessage(from result: CodexRunResult) -> String {
+        let stderr = result.stderr.trimmingCharacters(in: .whitespacesAndNewlines)
+        if !stderr.isEmpty {
+            return stderr
+        }
+
+        return "Codex exited with code \(result.exitCode)."
     }
 
     private func activeScreen() -> NSScreen? {
