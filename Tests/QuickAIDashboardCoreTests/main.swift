@@ -16,6 +16,31 @@ func expect(_ condition: @autoclosure () -> Bool, _ message: String) {
 expect(PermissionMode.semiAutomatic.displayName == "Semi-Automatic", "semiAutomatic display name")
 expect(PermissionMode.fullAccess.displayName == "Full Access", "fullAccess display name")
 
+expect(
+    CodexEventParser.parseLine(#"{"type":"thread.started","thread_id":"abc"}"#) == .threadStarted("abc"),
+    "thread.started parses thread id"
+)
+expect(
+    CodexEventParser.parseLine(#"{"type":"item.completed","item":{"type":"agent_message","text":"Hello"}}"#) == .agentMessage("Hello"),
+    "item.completed parses agent message text"
+)
+expect(
+    CodexEventParser.parseLine(#"{"type":"item.started","item":{"type":"command_execution","command":"pwd"}}"#) == .command("pwd", .inProgress),
+    "item.started parses command execution as in progress"
+)
+expect(
+    CodexEventParser.parseLine("{broken") == .parseWarning("{broken"),
+    "malformed JSON returns parse warning"
+)
+expect(
+    CodexCommandBuilder.arguments(prompt: "List files", permissionMode: .semiAutomatic) == ["exec", "--json", "--sandbox", "read-only", "List files"],
+    "semi-automatic command arguments"
+)
+expect(
+    CodexCommandBuilder.arguments(prompt: "List files", permissionMode: .fullAccess) == ["exec", "--json", "--sandbox", "danger-full-access", "List files"],
+    "full access command arguments"
+)
+
 expect(!ConversationRunState.idle.isTerminal, "idle should not be terminal")
 expect(!ConversationRunState.running.isTerminal, "running should not be terminal")
 expect(ConversationRunState.completed.isTerminal, "completed should be terminal")
