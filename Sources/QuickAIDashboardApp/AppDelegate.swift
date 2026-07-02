@@ -38,6 +38,19 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             self.hotKeyController = hotKeyController
         } catch {
             NSLog("QuickAIDashboard hotkey registration failed: \(error)")
+            presentHotKeyRegistrationFailure(error)
         }
+    }
+
+    private func presentHotKeyRegistrationFailure(_ error: Error) {
+        NSApp.activate(ignoringOtherApps: true)
+
+        let alert = NSAlert()
+        alert.alertStyle = .critical
+        alert.messageText = "Quick AI Dashboard could not register Control-Option-Space."
+        alert.informativeText = "Error: \(error)"
+        alert.runModal()
+
+        NSApp.terminate(nil)
     }
 }

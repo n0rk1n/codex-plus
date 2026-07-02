@@ -43,7 +43,7 @@ final class HotKeyController {
             GetApplicationEventTarget(),
             { _, event, userData in
                 guard let event, let userData else {
-                    return noErr
+                    return OSStatus(eventNotHandledErr)
                 }
 
                 var hotKeyID = EventHotKeyID()
@@ -61,7 +61,7 @@ final class HotKeyController {
                       hotKeyID.signature == HotKeyController.hotKeySignature,
                       hotKeyID.id == HotKeyController.hotKeyID
                 else {
-                    return noErr
+                    return OSStatus(eventNotHandledErr)
                 }
 
                 let controller = Unmanaged<HotKeyController>
