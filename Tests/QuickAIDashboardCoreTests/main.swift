@@ -58,6 +58,19 @@ expect(
     "prompt beginning with dash remains after delimiter"
 )
 
+var splitLineBuffer = LineBuffer()
+expect(splitLineBuffer.append("one\ntw") == ["one"], "line buffer returns complete first line")
+expect(splitLineBuffer.append("o\nthree\n") == ["two", "three"], "line buffer completes partial and next line")
+expect(splitLineBuffer.flush() == nil, "line buffer flush returns nil when empty")
+
+var partialLineBuffer = LineBuffer()
+expect(partialLineBuffer.append("partial").isEmpty, "line buffer keeps trailing partial line")
+expect(partialLineBuffer.flush() == "partial", "line buffer flush returns partial line")
+expect(partialLineBuffer.flush() == nil, "line buffer flush clears partial line")
+
+expect(CodexRunResult(exitCode: 0, stderr: "").succeeded, "codex run result succeeds on exit zero")
+expect(!CodexRunResult(exitCode: 1, stderr: "boom").succeeded, "codex run result fails on nonzero exit")
+
 expect(!ConversationRunState.idle.isTerminal, "idle should not be terminal")
 expect(!ConversationRunState.running.isTerminal, "running should not be terminal")
 expect(ConversationRunState.completed.isTerminal, "completed should be terminal")
