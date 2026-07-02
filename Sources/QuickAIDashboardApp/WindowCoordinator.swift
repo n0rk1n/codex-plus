@@ -7,14 +7,18 @@ final class WindowCoordinator {
     private let conversationCoordinator: ConversationCoordinator
     private let batteryProvider: any BatteryStatusProviding
     private let codexRunner: ProcessCodexRunner
+    private let codexCallbackQueue = DispatchQueue(label: "QuickAIDashboardApp.WindowCoordinator.codexCallbacks")
 
     private var compactPanel: GlassPanel?
     private var sidePanel: GlassPanel?
+    private var sidePanelModel: ConversationPanelModel?
+    private var isSidePanelContentInstalled = false
     private var activeRunHandle: CodexRunHandle?
     private var activeRunID: UUID?
     private var activeRunSessionID: UUID?
     private var stoppedRunIDs = Set<UUID>()
-    private var mouseExitMonitors: [Any] = []
+    private let mouseExitMonitors = EventMonitorStore()
+    private var hasMouseEnteredSidePanel = false
 
     init(
         conversationCoordinator: ConversationCoordinator,
@@ -24,6 +28,10 @@ final class WindowCoordinator {
         self.conversationCoordinator = conversationCoordinator
         self.batteryProvider = batteryProvider
         self.codexRunner = codexRunner
+    }
+
+    deinit {
+        mouseExitMonitors.removeAll()
     }
 
     func handleGlobalShortcut() {
@@ -84,6 +92,7 @@ final class WindowCoordinator {
         let panel = sidePanel ?? makePanel(frame: frame)
 
         panel.setFrame(frame, display: true)
+        hasMouseEnteredSidePanel = false
         refreshSidePanelContent(on: panel)
         panel.makeKeyAndOrderFront(nil)
         sidePanel = panel
@@ -138,18 +147,28 @@ final class WindowCoordinator {
         let runID = UUID()
         activeRunID = runID
         activeRunSessionID = sessionID
+        let callbackQueue = codexCallbackQueue
+        let callbackTarget = WeakWindowCoordinatorBox(self)
 
         let handle = codexRunner.run(
             prompt: prompt,
             permissionMode: permissionMode,
-            onEvent: { [weak self] event in
-                Task { @MainActor in
-                    self?.handleCodexEvent(event, sessionID: sessionID, runID: runID)
+            onEvent: { event in
+                callbackQueue.async {
+                    DispatchQueue.main.async {
+                        MainActor.assumeIsolated {
+                            callbackTarget.value?.handleCodexEvent(event, sessionID: sessionID, runID: runID)
+                        }
+                    }
                 }
             },
-            onFinish: { [weak self] result in
-                Task { @MainActor in
-                    self?.handleCodexFinish(result, sessionID: sessionID, runID: runID)
+            onFinish: { result in
+                callbackQueue.async {
+                    DispatchQueue.main.async {
+                        MainActor.assumeIsolated {
+                            callbackTarget.value?.handleCodexFinish(result, sessionID: sessionID, runID: runID)
+                        }
+                    }
                 }
             }
         )
@@ -270,9 +289,25 @@ final class WindowCoordinator {
         }
 
         let targetPanel = panel ?? sidePanel
-        targetPanel?.contentView = NSHostingView(
-            rootView: ConversationView(
-                session: session,
+        let model: ConversationPanelModel
+
+        if let sidePanelModel {
+            sidePanelModel.session = session
+            model = sidePanelModel
+        } else {
+            model = ConversationPanelModel(session: session)
+            sidePanelModel = model
+        }
+
+        if let targetPanel, !isSidePanelContentInstalled {
+            installSidePanelContent(in: targetPanel, model: model)
+        }
+    }
+
+    private func installSidePanelContent(in panel: GlassPanel, model: ConversationPanelModel) {
+        panel.contentView = NSHostingView(
+            rootView: ConversationPanelHostView(
+                model: model,
                 onFollowUp: { [weak self] prompt in
                     Task { @MainActor in
                         self?.handleFollowUp(prompt)
@@ -305,6 +340,7 @@ final class WindowCoordinator {
                 }
             )
         )
+        isSidePanelContentInstalled = true
     }
 
     private func sidePanelFrame(on screen: NSScreen) -> NSRect {
@@ -359,7 +395,13 @@ final class WindowCoordinator {
             return
         }
 
-        if !NSMouseInRect(NSEvent.mouseLocation, sidePanel.frame, false) {
+        let sidePanelHitFrame = sidePanel.frame.insetBy(dx: -8, dy: -8)
+        if NSMouseInRect(NSEvent.mouseLocation, sidePanelHitFrame, false) {
+            hasMouseEnteredSidePanel = true
+            return
+        }
+
+        if hasMouseEnteredSidePanel {
             sidePanel.orderOut(nil)
         }
     }
@@ -382,5 +424,69 @@ final class WindowCoordinator {
         return NSScreen.screens.first { screen in
             NSMouseInRect(mouseLocation, screen.frame, false)
         } ?? NSScreen.main ?? NSScreen.screens.first
+    }
+}
+
+@MainActor
+private final class ConversationPanelModel: ObservableObject {
+    @Published var session: ConversationSession
+
+    init(session: ConversationSession) {
+        self.session = session
+    }
+}
+
+private struct ConversationPanelHostView: View {
+    @ObservedObject var model: ConversationPanelModel
+
+    let onFollowUp: (String) -> Void
+    let onStop: () -> Void
+    let onClose: () -> Void
+    let onTogglePin: () -> Void
+    let onToggleSide: () -> Void
+    let onToggleFullAccess: () -> Void
+
+    var body: some View {
+        ConversationView(
+            session: model.session,
+            onFollowUp: onFollowUp,
+            onStop: onStop,
+            onClose: onClose,
+            onTogglePin: onTogglePin,
+            onToggleSide: onToggleSide,
+            onToggleFullAccess: onToggleFullAccess
+        )
+    }
+}
+
+private final class EventMonitorStore: @unchecked Sendable {
+    private var monitors: [Any] = []
+
+    var isEmpty: Bool {
+        monitors.isEmpty
+    }
+
+    func append(_ monitor: Any) {
+        monitors.append(monitor)
+    }
+
+    func removeAll() {
+        for monitor in monitors {
+            NSEvent.removeMonitor(monitor)
+        }
+
+        monitors.removeAll()
+    }
+
+    deinit {
+        removeAll()
+    }
+}
+
+private final class WeakWindowCoordinatorBox: @unchecked Sendable {
+    weak var value: WindowCoordinator?
+
+    init(_ value: WindowCoordinator) {
+        self.value = value
     }
 }
