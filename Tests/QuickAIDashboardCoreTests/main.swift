@@ -13,6 +13,73 @@ func expect(_ condition: @autoclosure () -> Bool, _ message: String) {
     }
 }
 
+final class LockedRunCapture: @unchecked Sendable {
+    private let lock = NSLock()
+    private var capturedEvents: [CodexEvent] = []
+    private var capturedResults: [CodexRunResult] = []
+
+    func appendEvent(_ event: CodexEvent) {
+        lock.lock()
+        defer {
+            lock.unlock()
+        }
+
+        capturedEvents.append(event)
+    }
+
+    func appendResult(_ result: CodexRunResult) {
+        lock.lock()
+        defer {
+            lock.unlock()
+        }
+
+        capturedResults.append(result)
+    }
+
+    func events() -> [CodexEvent] {
+        lock.lock()
+        defer {
+            lock.unlock()
+        }
+
+        return capturedEvents
+    }
+
+    func results() -> [CodexRunResult] {
+        lock.lock()
+        defer {
+            lock.unlock()
+        }
+
+        return capturedResults
+    }
+}
+
+@MainActor
+func makeTemporaryScript(named name: String, contents: String) -> String {
+    let url = FileManager.default.temporaryDirectory.appendingPathComponent(
+        "quick-ai-dashboard-\(UUID().uuidString)-\(name).sh"
+    )
+
+    do {
+        try contents.write(to: url, atomically: true, encoding: .utf8)
+    } catch {
+        expect(false, "temporary script \(name) can be written")
+    }
+
+    return url.path
+}
+
+func agentMessageTexts(from events: [CodexEvent]) -> [String] {
+    events.compactMap { event in
+        if case let .agentMessage(text) = event {
+            return text
+        }
+
+        return nil
+    }
+}
+
 expect(PermissionMode.semiAutomatic.displayName == "Semi-Automatic", "semiAutomatic display name")
 expect(PermissionMode.fullAccess.displayName == "Full Access", "fullAccess display name")
 
@@ -72,6 +139,137 @@ expect(CodexRunResult(exitCode: 0, stderr: "").succeeded, "codex run result succ
 expect(!CodexRunResult(exitCode: 1, stderr: "boom").succeeded, "codex run result fails on nonzero exit")
 let parserInjectedRunner = ProcessCodexRunner(parser: { line in .agentMessage(line) })
 expect(String(describing: type(of: parserInjectedRunner)) == "ProcessCodexRunner", "process codex runner accepts parser injection")
+
+let normalScriptPath = makeTemporaryScript(
+    named: "normal",
+    contents: """
+    printf 'first\\r\\ncaf'
+    printf '\\303'
+    printf 'err caf' >&2
+    printf '\\303' >&2
+    sleep 1
+    printf '\\251\\nfinal'
+    printf '\\251' >&2
+    exit 0
+    """
+)
+defer {
+    try? FileManager.default.removeItem(atPath: normalScriptPath)
+}
+
+let normalCapture = LockedRunCapture()
+let normalFinish = DispatchSemaphore(value: 0)
+let normalRunner = ProcessCodexRunner(
+    executableURL: URL(fileURLWithPath: "/bin/sh"),
+    executableArgumentsPrefix: [normalScriptPath],
+    parser: { line in .agentMessage("parsed:\(line)") }
+)
+let normalHandle = normalRunner.run(
+    prompt: "ignored",
+    permissionMode: .semiAutomatic,
+    onEvent: { event in
+        normalCapture.appendEvent(event)
+    },
+    onFinish: { result in
+        normalCapture.appendResult(result)
+        normalFinish.signal()
+    }
+)
+let normalRunFinished = normalFinish.wait(timeout: .now() + .seconds(5)) == .success
+expect(normalRunFinished, "process codex runner normal script finishes")
+let normalDidNotFinishTwice = normalFinish.wait(timeout: .now() + .milliseconds(200)) == .timedOut
+expect(normalDidNotFinishTwice, "process codex runner normal finish is called once")
+expect(
+    agentMessageTexts(from: normalCapture.events()) == ["parsed:first", "parsed:café", "parsed:final"],
+    "process codex runner parses stdout lines through injected parser and flushes final line"
+)
+expect(normalCapture.results().count == 1, "process codex runner records one normal finish result")
+expect(normalCapture.results().first?.exitCode == 0, "process codex runner normal script exits zero")
+expect(normalCapture.results().first?.stderr == "err café", "process codex runner accumulates stderr as UTF-8")
+_ = normalHandle
+
+let missingExecutableURL = FileManager.default.temporaryDirectory.appendingPathComponent(
+    "quick-ai-dashboard-missing-\(UUID().uuidString)"
+)
+let startFailureCapture = LockedRunCapture()
+let startFailureFinish = DispatchSemaphore(value: 0)
+let startFailureRunner = ProcessCodexRunner(
+    executableURL: missingExecutableURL,
+    executableArgumentsPrefix: [],
+    parser: { line in .agentMessage(line) }
+)
+let startFailureHandle = startFailureRunner.run(
+    prompt: "ignored",
+    permissionMode: .semiAutomatic,
+    onEvent: { event in
+        startFailureCapture.appendEvent(event)
+    },
+    onFinish: { result in
+        startFailureCapture.appendResult(result)
+        startFailureFinish.signal()
+    }
+)
+let startFailureFinished = startFailureFinish.wait(timeout: .now() + .seconds(2)) == .success
+expect(startFailureFinished, "process codex runner start failure finishes")
+let startFailureDidNotFinishTwice = startFailureFinish.wait(timeout: .now() + .milliseconds(200)) == .timedOut
+expect(startFailureDidNotFinishTwice, "process codex runner start failure finish is called once")
+expect(startFailureCapture.results().count == 1, "process codex runner records one start failure result")
+expect(startFailureCapture.results().first?.exitCode == 127, "process codex runner start failure exits 127")
+if case let .error(message)? = startFailureCapture.events().first {
+    expect(message.hasPrefix("Unable to start codex:"), "process codex runner start failure emits error")
+} else {
+    expect(false, "process codex runner start failure emits error")
+}
+_ = startFailureHandle
+
+let stopScriptPath = makeTemporaryScript(
+    named: "stop",
+    contents: """
+    printf 'started\\n'
+    while :; do
+      :
+    done
+    """
+)
+defer {
+    try? FileManager.default.removeItem(atPath: stopScriptPath)
+}
+
+let stopCapture = LockedRunCapture()
+let stopStarted = DispatchSemaphore(value: 0)
+let stopFinish = DispatchSemaphore(value: 0)
+let stopRunner = ProcessCodexRunner(
+    executableURL: URL(fileURLWithPath: "/bin/sh"),
+    executableArgumentsPrefix: [stopScriptPath],
+    parser: { line in .agentMessage(line) }
+)
+let stopHandle = stopRunner.run(
+    prompt: "ignored",
+    permissionMode: .semiAutomatic,
+    onEvent: { event in
+        stopCapture.appendEvent(event)
+        if case .agentMessage("started") = event {
+            stopStarted.signal()
+        }
+    },
+    onFinish: { result in
+        stopCapture.appendResult(result)
+        stopFinish.signal()
+    }
+)
+let stopRunStarted = stopStarted.wait(timeout: .now() + .seconds(5)) == .success
+expect(stopRunStarted, "process codex runner stop script starts")
+stopHandle.stop()
+let stopRunFinished = stopFinish.wait(timeout: .now() + .seconds(5)) == .success
+expect(stopRunFinished, "process codex runner stop finishes")
+let stopDidNotFinishTwice = stopFinish.wait(timeout: .now() + .milliseconds(200)) == .timedOut
+expect(stopDidNotFinishTwice, "process codex runner stop finish is called once")
+expect(stopCapture.results().count == 1, "process codex runner records one stop result")
+if let stoppedExitCode = stopCapture.results().first?.exitCode {
+    expect(stoppedExitCode != 0, "process codex runner stop returns nonzero exit")
+} else {
+    expect(false, "process codex runner stop returns nonzero exit")
+}
 
 expect(!ConversationRunState.idle.isTerminal, "idle should not be terminal")
 expect(!ConversationRunState.running.isTerminal, "running should not be terminal")

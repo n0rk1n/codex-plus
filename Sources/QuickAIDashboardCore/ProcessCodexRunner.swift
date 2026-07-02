@@ -64,8 +64,8 @@ public struct ProcessCodexRunner: Sendable {
         process.standardOutput = stdoutPipe
         process.standardError = stderrPipe
 
-        let stdoutBuffer = LockedLineBuffer()
-        let stderrBuffer = LockedTextBuffer()
+        let stdoutBuffer = LockedOutputLineBuffer()
+        let stderrBuffer = LockedDataBuffer()
         let outputGroup = DispatchGroup()
         let finishQueue = DispatchQueue(label: "QuickAIDashboardCore.ProcessCodexRunner.finish")
         let stdoutReader = StreamReader(fileHandle: stdoutPipe.fileHandleForReading)
@@ -102,8 +102,7 @@ public struct ProcessCodexRunner: Sendable {
             }
 
             stdoutReader.readChunks { data in
-                let chunk = String(decoding: data, as: UTF8.self)
-                let lines = stdoutBuffer.append(chunk)
+                let lines = stdoutBuffer.append(data)
 
                 for line in lines {
                     onEvent(eventParser(line))
@@ -121,7 +120,7 @@ public struct ProcessCodexRunner: Sendable {
             }
 
             stderrReader.readChunks { data in
-                stderrBuffer.append(String(decoding: data, as: UTF8.self))
+                stderrBuffer.append(data)
             }
         }
 
@@ -149,17 +148,36 @@ private final class LockedProcess: @unchecked Sendable {
     }
 }
 
-private final class LockedLineBuffer: @unchecked Sendable {
+private final class LockedOutputLineBuffer: @unchecked Sendable {
     private let lock = NSLock()
-    private var buffer = LineBuffer()
+    private var buffer = Data()
 
-    func append(_ chunk: String) -> [String] {
+    func append(_ data: Data) -> [String] {
         lock.lock()
         defer {
             lock.unlock()
         }
 
-        return buffer.append(chunk)
+        buffer.append(data)
+
+        var lines: [String] = []
+        while let newlineIndex = buffer.firstIndex(of: 0x0A) {
+            var lineEndIndex = newlineIndex
+            if lineEndIndex > buffer.startIndex {
+                let previousIndex = buffer.index(before: lineEndIndex)
+                if buffer[previousIndex] == 0x0D {
+                    lineEndIndex = previousIndex
+                }
+            }
+
+            let lineData = buffer[buffer.startIndex..<lineEndIndex]
+            lines.append(String(decoding: lineData, as: UTF8.self))
+
+            let afterNewlineIndex = buffer.index(after: newlineIndex)
+            buffer.removeSubrange(buffer.startIndex..<afterNewlineIndex)
+        }
+
+        return lines
     }
 
     func flush() -> String? {
@@ -168,21 +186,23 @@ private final class LockedLineBuffer: @unchecked Sendable {
             lock.unlock()
         }
 
-        return buffer.flush()
+        let line = String(decoding: buffer, as: UTF8.self)
+        buffer.removeAll(keepingCapacity: true)
+        return line
     }
 }
 
-private final class LockedTextBuffer: @unchecked Sendable {
+private final class LockedDataBuffer: @unchecked Sendable {
     private let lock = NSLock()
-    private var buffer = ""
+    private var buffer = Data()
 
-    func append(_ text: String) {
+    func append(_ data: Data) {
         lock.lock()
         defer {
             lock.unlock()
         }
 
-        buffer += text
+        buffer.append(data)
     }
 
     func text() -> String {
@@ -191,7 +211,7 @@ private final class LockedTextBuffer: @unchecked Sendable {
             lock.unlock()
         }
 
-        return buffer
+        return String(decoding: buffer, as: UTF8.self)
     }
 }
 
