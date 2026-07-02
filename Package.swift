@@ -9,7 +9,8 @@ let package = Package(
     ],
     products: [
         .library(name: "QuickAIDashboardCore", targets: ["QuickAIDashboardCore"]),
-        .executable(name: "QuickAIDashboardApp", targets: ["QuickAIDashboardApp"])
+        .executable(name: "QuickAIDashboardApp", targets: ["QuickAIDashboardApp"]),
+        .executable(name: "QuickAIDashboardCoreTests", targets: ["QuickAIDashboardCoreTests"])
     ],
     targets: [
         .target(
@@ -26,9 +27,10 @@ let package = Package(
                 .linkedFramework("AppKit")
             ]
         ),
-        .testTarget(
+        .executableTarget(
             name: "QuickAIDashboardCoreTests",
-            dependencies: ["QuickAIDashboardCore"]
+            dependencies: ["QuickAIDashboardCore"],
+            path: "Tests/QuickAIDashboardCoreTests"
         )
     ]
 )
