@@ -55,6 +55,28 @@ final class LockedRunCapture: @unchecked Sendable {
     }
 }
 
+final class SequenceBatteryProvider: BatteryStatusProviding, @unchecked Sendable {
+    private let lock = NSLock()
+    private var statuses: [BatteryStatus]
+
+    init(_ statuses: [BatteryStatus]) {
+        self.statuses = statuses
+    }
+
+    func currentStatus() -> BatteryStatus {
+        lock.lock()
+        defer {
+            lock.unlock()
+        }
+
+        guard !statuses.isEmpty else {
+            return .unknown
+        }
+
+        return statuses.removeFirst()
+    }
+}
+
 @MainActor
 func makeTemporaryScript(named name: String, contents: String) -> String {
     let url = FileManager.default.temporaryDirectory.appendingPathComponent(
@@ -68,6 +90,21 @@ func makeTemporaryScript(named name: String, contents: String) -> String {
     }
 
     return url.path
+}
+
+@MainActor
+func waitUntil(timeout: TimeInterval, condition: () -> Bool) -> Bool {
+    let deadline = Date().addingTimeInterval(timeout)
+
+    while Date() < deadline {
+        if condition() {
+            return true
+        }
+
+        RunLoop.current.run(mode: .default, before: Date().addingTimeInterval(0.01))
+    }
+
+    return condition()
 }
 
 func agentMessageTexts(from events: [CodexEvent]) -> [String] {
@@ -335,6 +372,53 @@ if case let .error(message)? = startFailureCapture.events().first {
 }
 _ = startFailureHandle
 
+let controllerSuccessScriptPath = makeTemporaryScript(
+    named: "controller-success",
+    contents: """
+    printf '{"type":"item.completed","item":{"type":"agent_message","text":"done"}}\\n'
+    """
+)
+defer {
+    try? FileManager.default.removeItem(atPath: controllerSuccessScriptPath)
+}
+
+let controllerSuccessRunner = ProcessCodexRunner(
+    executableURL: URL(fileURLWithPath: "/bin/sh"),
+    executableArgumentsPrefix: [controllerSuccessScriptPath],
+    parser: CodexEventParser.parseLine
+)
+let codexRunController = CodexRunController(runner: controllerSuccessRunner)
+let codexRunControllerSessionID = UUID()
+var codexRunControllerEvents: [CodexEvent] = []
+var codexRunControllerFinishResult: CodexRunResult?
+
+let codexRunControllerDidStart = codexRunController.start(
+    prompt: "ignored",
+    permissionMode: .semiAutomatic,
+    sessionID: codexRunControllerSessionID,
+    onEvent: { event, sessionID in
+        if sessionID == codexRunControllerSessionID {
+            codexRunControllerEvents.append(event)
+        }
+    },
+    onFinish: { result, sessionID in
+        if sessionID == codexRunControllerSessionID {
+            codexRunControllerFinishResult = result
+        }
+    }
+)
+expect(codexRunControllerDidStart, "codex run controller starts process")
+let codexRunControllerFinished = waitUntil(timeout: 5) {
+    codexRunControllerFinishResult != nil
+}
+expect(codexRunControllerFinished, "codex run controller forwards finish")
+expect(codexRunControllerFinishResult?.succeeded == true, "codex run controller forwards success result")
+expect(codexRunController.isRunning == false, "codex run controller clears active run after finish")
+expect(
+    agentMessageTexts(from: codexRunControllerEvents) == ["done"],
+    "codex run controller forwards events"
+)
+
 let stopScriptPath = makeTemporaryScript(
     named: "stop",
     contents: """
@@ -585,6 +669,23 @@ let invalidBattery = BatteryStatus.from(
 )
 expect(invalidBattery.percentage == nil, "invalid battery percentage")
 expect(invalidBattery.state == .unknown, "invalid battery state")
+
+let batteryMonitorProvider = SequenceBatteryProvider([
+    BatteryStatus(percentage: 20, state: .discharging),
+    BatteryStatus(percentage: 21, state: .charging)
+])
+let batteryMonitor = BatteryStatusMonitor(provider: batteryMonitorProvider)
+expect(batteryMonitor.status == .unknown, "battery monitor starts unknown before refresh")
+batteryMonitor.refresh()
+expect(
+    batteryMonitor.status == BatteryStatus(percentage: 20, state: .discharging),
+    "battery monitor refresh reads provider status"
+)
+batteryMonitor.refresh()
+expect(
+    batteryMonitor.status == BatteryStatus(percentage: 21, state: .charging),
+    "battery monitor refresh updates status from provider"
+)
 
 if failures.isEmpty {
     print("QuickAIDashboardCoreTests passed: \(assertionCount) assertions")

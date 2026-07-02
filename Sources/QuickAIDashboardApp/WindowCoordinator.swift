@@ -5,23 +5,17 @@ import SwiftUI
 @MainActor
 final class WindowCoordinator {
     private let conversationCoordinator: ConversationCoordinator
-    private let batteryProvider: any BatteryStatusProviding
-    private let codexRunner: ProcessCodexRunner
-    private let codexCallbackQueue = DispatchQueue(label: "QuickAIDashboardApp.WindowCoordinator.codexCallbacks")
+    private let batteryMonitor: BatteryStatusMonitor
+    private let runController: CodexRunController
+    private let permissionPrompter = PermissionPrompter()
 
     private var compactPanel: GlassPanel?
     private var sidePanel: GlassPanel?
     private var edgeAffordancePanel: GlassPanel?
     private var sidePanelModel: ConversationPanelModel?
     private var isSidePanelContentInstalled = false
-    private var activeRunHandle: CodexRunHandle?
-    private var activeRunID: UUID?
-    private var activeRunSessionID: UUID?
-    private var stoppedRunIDs = Set<UUID>()
     private let mouseExitMonitors = EventMonitorStore()
     private var hasMouseEnteredSidePanel = false
-
-    private static let fullAccessWarningText = "Full Access for this conversation. Codex can make broader local changes until this task ends or you stop it."
 
     init(
         conversationCoordinator: ConversationCoordinator,
@@ -29,8 +23,8 @@ final class WindowCoordinator {
         codexRunner: ProcessCodexRunner
     ) {
         self.conversationCoordinator = conversationCoordinator
-        self.batteryProvider = batteryProvider
-        self.codexRunner = codexRunner
+        self.batteryMonitor = BatteryStatusMonitor(provider: batteryProvider)
+        self.runController = CodexRunController(runner: codexRunner)
     }
 
     deinit {
@@ -65,10 +59,11 @@ final class WindowCoordinator {
         let frame = NSRect(origin: origin, size: size)
         let panel = compactPanel ?? makePanel(frame: frame)
 
+        batteryMonitor.start()
         panel.setFrame(frame, display: true)
         panel.contentView = NSHostingView(
-            rootView: CompactEntryView(
-                batteryStatus: batteryProvider.currentStatus(),
+            rootView: CompactEntryHostView(
+                batteryMonitor: batteryMonitor,
                 onSubmit: { [weak self] prompt in
                     Task { @MainActor in
                         self?.startConversation(prompt: prompt)
@@ -82,6 +77,7 @@ final class WindowCoordinator {
 
     private func showSidePanel() {
         compactPanel?.orderOut(nil)
+        batteryMonitor.stop()
         edgeAffordancePanel?.orderOut(nil)
 
         guard conversationCoordinator.activeConversation != nil else {
@@ -112,6 +108,7 @@ final class WindowCoordinator {
 
     private func startConversation(prompt: String) {
         compactPanel?.orderOut(nil)
+        batteryMonitor.stop()
 
         let session = conversationCoordinator.startConversation(prompt: prompt)
         showSidePanel()
@@ -123,7 +120,7 @@ final class WindowCoordinator {
             return
         }
 
-        guard activeRunHandle == nil else {
+        guard !runController.isRunning else {
             conversationCoordinator.appendCodexEvent(
                 .error("Codex is already running. Stop the current task before sending a follow-up."),
                 to: session.id
@@ -138,7 +135,7 @@ final class WindowCoordinator {
     }
 
     private func startCodexRun(prompt: String, sessionID: UUID) {
-        guard activeRunHandle == nil else {
+        guard !runController.isRunning else {
             conversationCoordinator.appendCodexEvent(
                 .error("Codex is already running. Stop the current task before starting another one."),
                 to: sessionID
@@ -151,67 +148,25 @@ final class WindowCoordinator {
         refreshSidePanelContent()
 
         let permissionMode = conversationCoordinator.activeConversation?.permissionMode ?? .semiAutomatic
-        let runID = UUID()
-        activeRunID = runID
-        activeRunSessionID = sessionID
-        let callbackQueue = codexCallbackQueue
-        let callbackTarget = WeakWindowCoordinatorBox(self)
-
-        let handle = codexRunner.run(
+        runController.start(
             prompt: prompt,
             permissionMode: permissionMode,
-            onEvent: { event in
-                callbackQueue.async {
-                    // Preserve runner callback order before entering MainActor state.
-                    DispatchQueue.main.async {
-                        MainActor.assumeIsolated {
-                            callbackTarget.value?.handleCodexEvent(event, sessionID: sessionID, runID: runID)
-                        }
-                    }
-                }
+            sessionID: sessionID,
+            onEvent: { [weak self] event, eventSessionID in
+                self?.handleCodexEvent(event, sessionID: eventSessionID)
             },
-            onFinish: { result in
-                callbackQueue.async {
-                    // Preserve runner callback order before entering MainActor state.
-                    DispatchQueue.main.async {
-                        MainActor.assumeIsolated {
-                            callbackTarget.value?.handleCodexFinish(result, sessionID: sessionID, runID: runID)
-                        }
-                    }
-                }
+            onFinish: { [weak self] result, finishSessionID in
+                self?.handleCodexFinish(result, sessionID: finishSessionID)
             }
         )
-
-        activeRunHandle = handle
     }
 
-    private func handleCodexEvent(_ event: CodexEvent, sessionID: UUID, runID: UUID) {
-        guard activeRunSessionID == sessionID, activeRunID == runID else {
-            return
-        }
-
+    private func handleCodexEvent(_ event: CodexEvent, sessionID: UUID) {
         conversationCoordinator.appendCodexEvent(event, to: sessionID)
         refreshSidePanelContent()
     }
 
-    private func handleCodexFinish(_ result: CodexRunResult, sessionID: UUID, runID: UUID) {
-        if stoppedRunIDs.remove(runID) != nil {
-            if activeRunID == runID {
-                activeRunHandle = nil
-                activeRunID = nil
-                activeRunSessionID = nil
-            }
-            return
-        }
-
-        guard activeRunSessionID == sessionID, activeRunID == runID else {
-            return
-        }
-
-        activeRunHandle = nil
-        activeRunID = nil
-        activeRunSessionID = nil
-
+    private func handleCodexFinish(_ result: CodexRunResult, sessionID: UUID) {
         if result.succeeded {
             conversationCoordinator.markCompleted(sessionID)
         } else {
@@ -226,12 +181,7 @@ final class WindowCoordinator {
             return
         }
 
-        if let activeRunHandle, activeRunSessionID == session.id {
-            if let activeRunID {
-                stoppedRunIDs.insert(activeRunID)
-            }
-            activeRunHandle.stop()
-        }
+        runController.stop(sessionID: session.id)
 
         if session.state == .running {
             conversationCoordinator.markStopped(session.id)
@@ -250,14 +200,7 @@ final class WindowCoordinator {
         }
 
         if session.state == .running {
-            let alert = NSAlert()
-            alert.alertStyle = .warning
-            alert.messageText = "Stop the running Codex task?"
-            alert.informativeText = "Closing the side panel will stop the active run."
-            alert.addButton(withTitle: "Stop and Close")
-            alert.addButton(withTitle: "Cancel")
-
-            guard alert.runModal() == .alertFirstButtonReturn else {
+            guard permissionPrompter.confirmStopRunningTaskOnClose() else {
                 return
             }
 
@@ -296,24 +239,12 @@ final class WindowCoordinator {
         }
 
         guard session.state != .running else {
-            let alert = NSAlert()
-            alert.alertStyle = .informational
-            alert.messageText = "Full Access cannot change while Codex is running."
-            alert.informativeText = Self.fullAccessWarningText
-            alert.addButton(withTitle: "OK")
-            alert.runModal()
+            permissionPrompter.showCannotChangeWhileRunning()
             return
         }
 
         if session.permissionMode == .semiAutomatic {
-            let alert = NSAlert()
-            alert.alertStyle = .warning
-            alert.messageText = "Enable Full Access?"
-            alert.informativeText = Self.fullAccessWarningText
-            alert.addButton(withTitle: "Enable Full Access")
-            alert.addButton(withTitle: "Cancel")
-
-            guard alert.runModal() == .alertFirstButtonReturn else {
+            guard permissionPrompter.confirmEnableFullAccess() else {
                 return
             }
         }
@@ -517,90 +448,5 @@ final class WindowCoordinator {
         return NSScreen.screens.first { screen in
             NSMouseInRect(mouseLocation, screen.frame, false)
         } ?? NSScreen.main ?? NSScreen.screens.first
-    }
-}
-
-@MainActor
-private final class ConversationPanelModel: ObservableObject {
-    @Published var session: ConversationSession
-
-    init(session: ConversationSession) {
-        self.session = session
-    }
-}
-
-private struct ConversationPanelHostView: View {
-    @ObservedObject var model: ConversationPanelModel
-
-    let onFollowUp: (String) -> Void
-    let onStop: () -> Void
-    let onClose: () -> Void
-    let onTogglePin: () -> Void
-    let onToggleSide: () -> Void
-    let onToggleFullAccess: () -> Void
-
-    var body: some View {
-        ConversationView(
-            session: model.session,
-            onFollowUp: onFollowUp,
-            onStop: onStop,
-            onClose: onClose,
-            onTogglePin: onTogglePin,
-            onToggleSide: onToggleSide,
-            onToggleFullAccess: onToggleFullAccess
-        )
-        .id(model.session.id)
-    }
-}
-
-private struct SideEdgeAffordanceView: View {
-    let onActivate: () -> Void
-
-    var body: some View {
-        Button(action: onActivate) {
-            Capsule(style: .continuous)
-                .fill(.ultraThinMaterial)
-                .overlay {
-                    Capsule(style: .continuous)
-                        .strokeBorder(Color.white.opacity(0.32), lineWidth: 1)
-                }
-                .shadow(color: Color.black.opacity(0.18), radius: 8, x: 0, y: 4)
-                .padding(2)
-        }
-        .buttonStyle(.plain)
-        .help("Show Conversation")
-        .accessibilityLabel("Show Conversation")
-    }
-}
-
-private final class EventMonitorStore: @unchecked Sendable {
-    private var monitors: [Any] = []
-
-    var isEmpty: Bool {
-        monitors.isEmpty
-    }
-
-    func append(_ monitor: Any) {
-        monitors.append(monitor)
-    }
-
-    func removeAll() {
-        for monitor in monitors {
-            NSEvent.removeMonitor(monitor)
-        }
-
-        monitors.removeAll()
-    }
-
-    deinit {
-        removeAll()
-    }
-}
-
-private final class WeakWindowCoordinatorBox: @unchecked Sendable {
-    weak var value: WindowCoordinator?
-
-    init(_ value: WindowCoordinator) {
-        self.value = value
     }
 }

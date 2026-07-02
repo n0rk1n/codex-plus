@@ -129,7 +129,7 @@ struct ConversationView: View {
     }
 
     private var fullAccessWarningText: String {
-        "Full Access for this conversation. Codex can make broader local changes until this task ends or you stop it."
+        PermissionPrompter.fullAccessWarningText
     }
 
     private func iconButton(
