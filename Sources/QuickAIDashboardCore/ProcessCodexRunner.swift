@@ -186,6 +186,10 @@ private final class LockedOutputLineBuffer: @unchecked Sendable {
             lock.unlock()
         }
 
+        guard !buffer.isEmpty else {
+            return nil
+        }
+
         let line = String(decoding: buffer, as: UTF8.self)
         buffer.removeAll(keepingCapacity: true)
         return line

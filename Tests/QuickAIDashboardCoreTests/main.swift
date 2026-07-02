@@ -188,6 +188,43 @@ expect(normalCapture.results().first?.exitCode == 0, "process codex runner norma
 expect(normalCapture.results().first?.stderr == "err café", "process codex runner accumulates stderr as UTF-8")
 _ = normalHandle
 
+let noStdoutScriptPath = makeTemporaryScript(
+    named: "no-stdout",
+    contents: """
+    exit 0
+    """
+)
+defer {
+    try? FileManager.default.removeItem(atPath: noStdoutScriptPath)
+}
+
+let noStdoutCapture = LockedRunCapture()
+let noStdoutFinish = DispatchSemaphore(value: 0)
+let noStdoutRunner = ProcessCodexRunner(
+    executableURL: URL(fileURLWithPath: "/bin/sh"),
+    executableArgumentsPrefix: [noStdoutScriptPath],
+    parser: { line in .agentMessage(line) }
+)
+let noStdoutHandle = noStdoutRunner.run(
+    prompt: "ignored",
+    permissionMode: .semiAutomatic,
+    onEvent: { event in
+        noStdoutCapture.appendEvent(event)
+    },
+    onFinish: { result in
+        noStdoutCapture.appendResult(result)
+        noStdoutFinish.signal()
+    }
+)
+let noStdoutRunFinished = noStdoutFinish.wait(timeout: .now() + .seconds(5)) == .success
+expect(noStdoutRunFinished, "process codex runner no-stdout script finishes")
+let noStdoutDidNotFinishTwice = noStdoutFinish.wait(timeout: .now() + .milliseconds(200)) == .timedOut
+expect(noStdoutDidNotFinishTwice, "process codex runner no-stdout finish is called once")
+expect(noStdoutCapture.events().isEmpty, "process codex runner no-stdout script emits no events")
+expect(noStdoutCapture.results().count == 1, "process codex runner records one no-stdout result")
+expect(noStdoutCapture.results().first?.succeeded == true, "process codex runner no-stdout script succeeds")
+_ = noStdoutHandle
+
 let missingExecutableURL = FileManager.default.temporaryDirectory.appendingPathComponent(
     "quick-ai-dashboard-missing-\(UUID().uuidString)"
 )
