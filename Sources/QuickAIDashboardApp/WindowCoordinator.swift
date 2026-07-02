@@ -114,7 +114,6 @@ final class WindowCoordinator {
         compactPanel?.orderOut(nil)
 
         let session = conversationCoordinator.startConversation(prompt: prompt)
-        conversationCoordinator.markRunning(session.id)
         showSidePanel()
         startCodexRun(prompt: prompt, sessionID: session.id)
     }
@@ -134,7 +133,6 @@ final class WindowCoordinator {
         }
 
         conversationCoordinator.appendUserPrompt(prompt, to: session.id)
-        conversationCoordinator.markRunning(session.id)
         refreshSidePanelContent()
         startCodexRun(prompt: prompt, sessionID: session.id)
     }
@@ -148,6 +146,9 @@ final class WindowCoordinator {
             refreshSidePanelContent()
             return
         }
+
+        conversationCoordinator.markRunning(sessionID)
+        refreshSidePanelContent()
 
         let permissionMode = conversationCoordinator.activeConversation?.permissionMode ?? .semiAutomatic
         let runID = UUID()
@@ -230,9 +231,6 @@ final class WindowCoordinator {
                 stoppedRunIDs.insert(activeRunID)
             }
             activeRunHandle.stop()
-            self.activeRunHandle = nil
-            activeRunID = nil
-            activeRunSessionID = nil
         }
 
         if session.state == .running {

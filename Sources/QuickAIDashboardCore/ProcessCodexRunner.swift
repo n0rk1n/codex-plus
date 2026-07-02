@@ -34,15 +34,18 @@ public struct ProcessCodexRunner: Sendable {
     private let executableURL: URL
     private let executableArgumentsPrefix: [String]
     private let parser: @Sendable (String) -> CodexEvent
+    private let maxBufferedOutputBytes: Int
 
     public init(
         executableURL: URL = URL(fileURLWithPath: "/usr/bin/env"),
         executableArgumentsPrefix: [String] = ["codex"],
-        parser: @escaping @Sendable (String) -> CodexEvent = CodexEventParser.parseLine
+        parser: @escaping @Sendable (String) -> CodexEvent = CodexEventParser.parseLine,
+        maxBufferedOutputBytes: Int = 1_048_576
     ) {
         self.executableURL = executableURL
         self.executableArgumentsPrefix = executableArgumentsPrefix
         self.parser = parser
+        self.maxBufferedOutputBytes = max(1, maxBufferedOutputBytes)
     }
 
     @discardableResult
@@ -64,8 +67,8 @@ public struct ProcessCodexRunner: Sendable {
         process.standardOutput = stdoutPipe
         process.standardError = stderrPipe
 
-        let stdoutBuffer = LockedOutputLineBuffer()
-        let stderrBuffer = LockedDataBuffer()
+        let stdoutBuffer = LockedOutputLineBuffer(maxBytes: maxBufferedOutputBytes)
+        let stderrBuffer = LockedDataBuffer(maxBytes: maxBufferedOutputBytes)
         let outputGroup = DispatchGroup()
         let finishQueue = DispatchQueue(label: "QuickAIDashboardCore.ProcessCodexRunner.finish")
         let stdoutReader = StreamReader(fileHandle: stdoutPipe.fileHandleForReading)
@@ -150,7 +153,12 @@ private final class LockedProcess: @unchecked Sendable {
 
 private final class LockedOutputLineBuffer: @unchecked Sendable {
     private let lock = NSLock()
+    private let maxBytes: Int
     private var buffer = Data()
+
+    init(maxBytes: Int) {
+        self.maxBytes = max(1, maxBytes)
+    }
 
     func append(_ data: Data) -> [String] {
         lock.lock()
@@ -161,6 +169,7 @@ private final class LockedOutputLineBuffer: @unchecked Sendable {
         buffer.append(data)
 
         var lines: [String] = []
+        var shouldReleaseCapacity = false
         while let newlineIndex = buffer.firstIndex(of: 0x0A) {
             var lineEndIndex = newlineIndex
             if lineEndIndex > buffer.startIndex {
@@ -170,11 +179,26 @@ private final class LockedOutputLineBuffer: @unchecked Sendable {
                 }
             }
 
-            let lineData = buffer[buffer.startIndex..<lineEndIndex]
-            lines.append(String(decoding: lineData, as: UTF8.self))
+            let lineByteCount = buffer.distance(from: buffer.startIndex, to: lineEndIndex)
+            if lineByteCount > maxBytes {
+                lines.append(truncationMessage())
+                shouldReleaseCapacity = true
+            } else {
+                let lineData = buffer[buffer.startIndex..<lineEndIndex]
+                lines.append(String(decoding: lineData, as: UTF8.self))
+            }
 
             let afterNewlineIndex = buffer.index(after: newlineIndex)
             buffer.removeSubrange(buffer.startIndex..<afterNewlineIndex)
+        }
+
+        if shouldReleaseCapacity {
+            buffer = Data(buffer)
+        }
+
+        if buffer.count > maxBytes {
+            lines.append(truncationMessage())
+            buffer.removeAll(keepingCapacity: false)
         }
 
         return lines
@@ -191,14 +215,24 @@ private final class LockedOutputLineBuffer: @unchecked Sendable {
         }
 
         let line = String(decoding: buffer, as: UTF8.self)
-        buffer.removeAll(keepingCapacity: true)
+        buffer.removeAll(keepingCapacity: false)
         return line
+    }
+
+    private func truncationMessage() -> String {
+        return "stdout truncated after \(maxBytes) bytes"
     }
 }
 
 private final class LockedDataBuffer: @unchecked Sendable {
     private let lock = NSLock()
+    private let maxBytes: Int
     private var buffer = Data()
+    private var didTruncate = false
+
+    init(maxBytes: Int) {
+        self.maxBytes = max(1, maxBytes)
+    }
 
     func append(_ data: Data) {
         lock.lock()
@@ -206,7 +240,16 @@ private final class LockedDataBuffer: @unchecked Sendable {
             lock.unlock()
         }
 
-        buffer.append(data)
+        let remainingCapacity = maxBytes - buffer.count
+        if remainingCapacity > 0 {
+            buffer.append(data.prefix(remainingCapacity))
+        }
+
+        if data.count > remainingCapacity, !didTruncate {
+            didTruncate = true
+            let message = "\nstderr truncated after \(maxBytes) bytes"
+            buffer.append(Data(message.utf8))
+        }
     }
 
     func text() -> String {

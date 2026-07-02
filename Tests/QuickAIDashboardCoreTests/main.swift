@@ -225,6 +225,82 @@ expect(noStdoutCapture.results().count == 1, "process codex runner records one n
 expect(noStdoutCapture.results().first?.succeeded == true, "process codex runner no-stdout script succeeds")
 _ = noStdoutHandle
 
+let longStdoutScriptPath = makeTemporaryScript(
+    named: "long-stdout",
+    contents: """
+    printf 'abcdefghijklmnopqrstuvwxyz'
+    exit 0
+    """
+)
+defer {
+    try? FileManager.default.removeItem(atPath: longStdoutScriptPath)
+}
+
+let longStdoutCapture = LockedRunCapture()
+let longStdoutFinish = DispatchSemaphore(value: 0)
+let longStdoutRunner = ProcessCodexRunner(
+    executableURL: URL(fileURLWithPath: "/bin/sh"),
+    executableArgumentsPrefix: [longStdoutScriptPath],
+    parser: { line in .agentMessage(line) },
+    maxBufferedOutputBytes: 8
+)
+let longStdoutHandle = longStdoutRunner.run(
+    prompt: "ignored",
+    permissionMode: .semiAutomatic,
+    onEvent: { event in
+        longStdoutCapture.appendEvent(event)
+    },
+    onFinish: { result in
+        longStdoutCapture.appendResult(result)
+        longStdoutFinish.signal()
+    }
+)
+let longStdoutRunFinished = longStdoutFinish.wait(timeout: .now() + .seconds(5)) == .success
+expect(longStdoutRunFinished, "process codex runner long stdout script finishes")
+expect(
+    agentMessageTexts(from: longStdoutCapture.events()).contains("stdout truncated after 8 bytes"),
+    "process codex runner truncates unterminated stdout lines"
+)
+_ = longStdoutHandle
+
+let longStderrScriptPath = makeTemporaryScript(
+    named: "long-stderr",
+    contents: """
+    printf 'abcdefghijklmnopqrstuvwxyz' >&2
+    exit 1
+    """
+)
+defer {
+    try? FileManager.default.removeItem(atPath: longStderrScriptPath)
+}
+
+let longStderrCapture = LockedRunCapture()
+let longStderrFinish = DispatchSemaphore(value: 0)
+let longStderrRunner = ProcessCodexRunner(
+    executableURL: URL(fileURLWithPath: "/bin/sh"),
+    executableArgumentsPrefix: [longStderrScriptPath],
+    parser: { line in .agentMessage(line) },
+    maxBufferedOutputBytes: 8
+)
+let longStderrHandle = longStderrRunner.run(
+    prompt: "ignored",
+    permissionMode: .semiAutomatic,
+    onEvent: { event in
+        longStderrCapture.appendEvent(event)
+    },
+    onFinish: { result in
+        longStderrCapture.appendResult(result)
+        longStderrFinish.signal()
+    }
+)
+let longStderrRunFinished = longStderrFinish.wait(timeout: .now() + .seconds(5)) == .success
+expect(longStderrRunFinished, "process codex runner long stderr script finishes")
+expect(
+    longStderrCapture.results().first?.stderr.contains("stderr truncated after 8 bytes") == true,
+    "process codex runner truncates long stderr"
+)
+_ = longStderrHandle
+
 let missingExecutableURL = FileManager.default.temporaryDirectory.appendingPathComponent(
     "quick-ai-dashboard-missing-\(UUID().uuidString)"
 )
@@ -430,6 +506,27 @@ if case let .userPrompt(_, text)? = followUpConversationCoordinator.activeConver
     expect(text == "follow up", "follow-up user prompt is trimmed and appended")
 } else {
     expect(false, "follow-up user prompt appends user prompt event")
+}
+
+let cappedConversationCoordinator = ConversationCoordinator()
+let cappedConversation = cappedConversationCoordinator.startConversation(prompt: "many events")
+for index in 0..<520 {
+    cappedConversationCoordinator.appendCodexEvent(.agentMessage("event \(index)"), to: cappedConversation.id)
+}
+let cappedEvents = cappedConversationCoordinator.activeConversation?.events ?? []
+expect(
+    cappedEvents.count == ConversationCoordinator.maxStoredEvents,
+    "conversation coordinator caps stored display events"
+)
+if case let .assistantMessage(_, text)? = cappedEvents.first {
+    expect(text == "event 20", "conversation event cap drops oldest events first")
+} else {
+    expect(false, "conversation event cap keeps recent assistant events")
+}
+if case let .assistantMessage(_, text)? = cappedEvents.last {
+    expect(text == "event 519", "conversation event cap preserves latest event")
+} else {
+    expect(false, "conversation event cap preserves latest event")
 }
 
 let sideConversationCoordinator = ConversationCoordinator()

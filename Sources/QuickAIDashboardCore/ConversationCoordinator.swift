@@ -3,6 +3,8 @@ import Foundation
 
 @MainActor
 public final class ConversationCoordinator: ObservableObject {
+    public static let maxStoredEvents = 500
+
     @Published public private(set) var activeConversation: ConversationSession?
     @Published public private(set) var preferredSide: SideAttachment = .right
 
@@ -54,6 +56,7 @@ public final class ConversationCoordinator: ObservableObject {
             session.state = .failed
             session.permissionMode = .semiAutomatic
             session.events.append(.error(id: UUID(), text: message))
+            Self.trimEvents(&session.events)
         }
     }
 
@@ -91,12 +94,14 @@ public final class ConversationCoordinator: ObservableObject {
 
         updateActiveConversation(id) { session in
             session.events.append(.userPrompt(id: UUID(), text: trimmedPrompt))
+            Self.trimEvents(&session.events)
         }
     }
 
     public func appendCodexEvent(_ event: CodexEvent, to id: UUID) {
         updateActiveConversation(id) { session in
             session.events.append(Self.displayEvent(from: event))
+            Self.trimEvents(&session.events)
         }
     }
 
@@ -148,5 +153,13 @@ public final class ConversationCoordinator: ObservableObject {
         case let .parseWarning(text):
             return .parseWarning(id: UUID(), text: text)
         }
+    }
+
+    private static func trimEvents(_ events: inout [ConversationDisplayEvent]) {
+        guard events.count > maxStoredEvents else {
+            return
+        }
+
+        events = Array(events.suffix(maxStoredEvents))
     }
 }
