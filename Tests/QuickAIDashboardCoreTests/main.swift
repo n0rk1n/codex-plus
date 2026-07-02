@@ -25,20 +25,37 @@ expect(
     "item.completed parses agent message text"
 )
 expect(
-    CodexEventParser.parseLine(#"{"type":"item.started","item":{"type":"command_execution","command":"pwd"}}"#) == .command("pwd", .inProgress),
-    "item.started parses command execution as in progress"
+    CodexEventParser.parseLine(#"{"type":"item.started","item":{"id":"cmd1","type":"command_execution","command":"pwd"}}"#) == .command(id: "cmd1", command: "pwd", status: .inProgress),
+    "item.started parses command execution id and in-progress status"
+)
+expect(
+    CodexEventParser.parseLine(#"{"type":"item.completed","item":{"id":"cmd2","type":"command_execution","command":"pwd","status":"completed"}}"#) == .command(id: "cmd2", command: "pwd", status: .completed),
+    "item.completed preserves command id and completed status"
+)
+expect(
+    CodexEventParser.parseLine(#"{"type":"item.completed","item":{"id":"cmd3","type":"command_execution","command":"false","status":"failed"}}"#) == .command(id: "cmd3", command: "false", status: .failed),
+    "item.completed preserves command id and failed status"
 )
 expect(
     CodexEventParser.parseLine("{broken") == .parseWarning("{broken"),
     "malformed JSON returns parse warning"
 )
+let agentMessageWithoutText = #"{"type":"item.started","item":{"id":"m1","type":"agent_message"}}"#
 expect(
-    CodexCommandBuilder.arguments(prompt: "List files", permissionMode: .semiAutomatic) == ["exec", "--json", "--sandbox", "read-only", "List files"],
+    CodexEventParser.parseLine(agentMessageWithoutText) == .raw(agentMessageWithoutText),
+    "item.started agent message without text returns raw"
+)
+expect(
+    CodexCommandBuilder.arguments(prompt: "List files", permissionMode: .semiAutomatic) == ["exec", "--json", "--sandbox", "read-only", "--", "List files"],
     "semi-automatic command arguments"
 )
 expect(
-    CodexCommandBuilder.arguments(prompt: "List files", permissionMode: .fullAccess) == ["exec", "--json", "--sandbox", "danger-full-access", "List files"],
+    CodexCommandBuilder.arguments(prompt: "List files", permissionMode: .fullAccess) == ["exec", "--json", "--sandbox", "danger-full-access", "--", "List files"],
     "full access command arguments"
+)
+expect(
+    CodexCommandBuilder.arguments(prompt: "--help", permissionMode: .semiAutomatic) == ["exec", "--json", "--sandbox", "read-only", "--", "--help"],
+    "prompt beginning with dash remains after delimiter"
 )
 
 expect(!ConversationRunState.idle.isTerminal, "idle should not be terminal")

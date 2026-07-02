@@ -7,6 +7,7 @@ public enum CodexCommandBuilder {
             "--json",
             "--sandbox",
             sandboxValue(for: permissionMode),
+            "--",
             prompt
         ]
     }

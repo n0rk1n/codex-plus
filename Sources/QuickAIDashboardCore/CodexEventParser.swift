@@ -26,7 +26,7 @@ public enum CodexEvent: Equatable, Sendable {
     case turnCompleted
     case turnFailed(String)
     case agentMessage(String)
-    case command(String, CodexCommandStatus)
+    case command(id: String?, command: String, status: CodexCommandStatus)
     case error(String)
     case raw(String)
     case parseWarning(String)
@@ -92,12 +92,19 @@ public enum CodexEventParser {
 
         switch itemType {
         case "agent_message":
-            return .agentMessage(item["text"] as? String ?? "")
+            guard let text = item["text"] as? String, !text.isEmpty else {
+                return .raw(rawLine)
+            }
+            return .agentMessage(text)
         case "command_execution":
             guard let command = item["command"] as? String else {
                 return .parseWarning(rawLine)
             }
-            return .command(command, commandStatus(for: type, item: item))
+            return .command(
+                id: item["id"] as? String,
+                command: command,
+                status: commandStatus(for: type, item: item)
+            )
         default:
             return .raw(rawLine)
         }
