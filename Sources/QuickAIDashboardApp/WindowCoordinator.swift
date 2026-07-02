@@ -155,6 +155,7 @@ final class WindowCoordinator {
             permissionMode: permissionMode,
             onEvent: { event in
                 callbackQueue.async {
+                    // Preserve runner callback order before entering MainActor state.
                     DispatchQueue.main.async {
                         MainActor.assumeIsolated {
                             callbackTarget.value?.handleCodexEvent(event, sessionID: sessionID, runID: runID)
@@ -164,6 +165,7 @@ final class WindowCoordinator {
             },
             onFinish: { result in
                 callbackQueue.async {
+                    // Preserve runner callback order before entering MainActor state.
                     DispatchQueue.main.async {
                         MainActor.assumeIsolated {
                             callbackTarget.value?.handleCodexFinish(result, sessionID: sessionID, runID: runID)
@@ -456,6 +458,7 @@ private struct ConversationPanelHostView: View {
             onToggleSide: onToggleSide,
             onToggleFullAccess: onToggleFullAccess
         )
+        .id(model.session.id)
     }
 }
 
