@@ -8,23 +8,19 @@ let package = Package(
         .macOS(.v14)
     ],
     products: [
-        .library(name: "CodexPlusCore", targets: ["CodexPlusCore"]),
-        .executable(name: "CodexPlusApp", targets: ["CodexPlusApp"]),
-        .executable(name: "CodexPlusCoreTests", targets: ["CodexPlusCoreTests"])
+        .executable(name: "CodexPlusApp", targets: ["CodexPlusApp"])
     ],
     targets: [
         .target(
-            name: "CodexPlusCore",
-            linkerSettings: [
-                .linkedFramework("IOKit")
-            ]
+            name: "CodexPlusCore"
         ),
         .executableTarget(
             name: "CodexPlusApp",
             dependencies: ["CodexPlusCore"],
             linkerSettings: [
                 .linkedFramework("Carbon"),
-                .linkedFramework("AppKit")
+                .linkedFramework("AppKit"),
+                .linkedFramework("IOKit")
             ]
         ),
         .executableTarget(

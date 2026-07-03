@@ -257,10 +257,23 @@ func expectCodexPlusNaming() {
     }
 
     let packageText = (try? String(contentsOf: packageRoot.appendingPathComponent("Package.swift"), encoding: .utf8)) ?? ""
+    let coreBatteryText = (try? String(
+        contentsOf: packageRoot.appendingPathComponent("Sources/CodexPlusCore/BatteryStatus.swift"),
+        encoding: .utf8
+    )) ?? ""
+    let appBatteryProviderPath = packageRoot.appendingPathComponent(
+        "Sources/CodexPlusApp/IOKitBatteryStatusProvider.swift"
+    )
+
     expect(packageText.contains(#"name: "codex-plus""#), "Swift package uses codex-plus slug name")
-    expect(packageText.contains(#"CodexPlusCore"#), "Swift package uses CodexPlusCore module name")
-    expect(packageText.contains(#"CodexPlusApp"#), "Swift package uses CodexPlusApp executable name")
-    expect(packageText.contains(#"CodexPlusCoreTests"#), "Swift package uses CodexPlusCoreTests executable name")
+    expect(packageText.contains(#".executable(name: "CodexPlusApp""#), "CodexPlusApp is the only public executable product")
+    expect(!packageText.contains(#".library(name: "CodexPlusCore""#), "CodexPlusCore is not a public library product")
+    expect(!packageText.contains(#".executable(name: "CodexPlusCoreTests""#), "CodexPlusCoreTests is not a public executable product")
+    expect(!coreBatteryText.contains("IOKit"), "CodexPlusCore BatteryStatus does not import or reference IOKit")
+    expect(
+        FileManager.default.fileExists(atPath: appBatteryProviderPath.path),
+        "CodexPlusApp owns IOKitBatteryStatusProvider"
+    )
 
     let legacyFragments = [
         "Quick" + "AIDashboard",
