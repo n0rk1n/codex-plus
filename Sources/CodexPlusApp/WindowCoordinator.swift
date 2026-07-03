@@ -12,16 +12,20 @@ final class WindowCoordinator: NSObject, NSWindowDelegate {
     private let panelFactory = PanelFactory()
     private let screenProvider = ActiveScreenProvider()
 
-    private var compactPanel: GlassPanel?
-    private var compactPanelFrame: NSRect?
     private var sidePanel: GlassPanel?
     private var sidePanelCustomFrame: NSRect?
     private var edgeAffordancePanel: GlassPanel?
     private var sidePanelModel: ConversationPanelModel?
     private var isSidePanelContentInstalled = false
-    private let compactDismissMonitors = EventMonitorStore()
     private let mouseExitMonitors = EventMonitorStore()
     private var hasMouseEnteredSidePanel = false
+    private lazy var compactPanelController = CompactPanelController(
+        panelFactory: panelFactory,
+        screenProvider: screenProvider,
+        batteryMonitor: batteryMonitor,
+        codexUsageMonitor: codexUsageMonitor,
+        panelDelegate: self
+    )
 
     init(
         conversationCoordinator: ConversationCoordinator,
@@ -38,7 +42,6 @@ final class WindowCoordinator: NSObject, NSWindowDelegate {
     }
 
     deinit {
-        compactDismissMonitors.removeAll()
         mouseExitMonitors.removeAll()
     }
 
@@ -57,32 +60,11 @@ final class WindowCoordinator: NSObject, NSWindowDelegate {
         sidePanel?.orderOut(nil)
         edgeAffordancePanel?.orderOut(nil)
 
-        guard let screen = activeScreen() else {
-            return
+        compactPanelController.show { [weak self] prompt in
+            Task { @MainActor in
+                self?.startConversation(prompt: prompt)
+            }
         }
-
-        let frame = compactPanelFrame ?? defaultCompactPanelFrame(on: screen)
-        let panel = compactPanel ?? makePanel(frame: frame)
-
-        batteryMonitor.start()
-        panel.isMovableByWindowBackground = false
-        panel.setFrame(frame, display: true)
-        let contentView = DraggableHostingView(
-            rootView: CompactEntryHostView(
-                batteryMonitor: batteryMonitor,
-                codexUsageMonitor: codexUsageMonitor,
-                onSubmit: { [weak self] prompt in
-                    Task { @MainActor in
-                        self?.startConversation(prompt: prompt)
-                    }
-                }
-            )
-        )
-        contentView.windowDragMode = .compactPrompt
-        panel.contentView = contentView
-        panel.makeKeyAndOrderFront(nil)
-        compactPanel = panel
-        installCompactDismissMonitorsIfNeeded()
     }
 
     private func showSidePanel() {
@@ -331,17 +313,6 @@ final class WindowCoordinator: NSObject, NSWindowDelegate {
         isSidePanelContentInstalled = true
     }
 
-    private func defaultCompactPanelFrame(on screen: NSScreen) -> NSRect {
-        let size = NSSize(width: 420, height: 210)
-        let visibleFrame = screen.visibleFrame
-        let origin = NSPoint(
-            x: visibleFrame.midX - (size.width / 2),
-            y: visibleFrame.maxY - (visibleFrame.height / 3) - (size.height / 2)
-        )
-
-        return NSRect(origin: origin, size: size)
-    }
-
     private func sidePanelFrame(on screen: NSScreen) -> NSRect {
         if let sidePanelCustomFrame {
             return sidePanelCustomFrame
@@ -465,64 +436,7 @@ final class WindowCoordinator: NSObject, NSWindowDelegate {
     }
 
     private func dismissCompactPanel() {
-        compactPanel?.orderOut(nil)
-        batteryMonitor.stop()
-        compactDismissMonitors.removeAll()
-    }
-
-    private func installCompactDismissMonitorsIfNeeded() {
-        guard compactDismissMonitors.isEmpty else {
-            return
-        }
-
-        if let keyMonitor = NSEvent.addLocalMonitorForEvents(matching: [.keyDown], handler: { [weak self] event in
-            guard let self else {
-                return event
-            }
-
-            guard
-                self.compactPanel?.isVisible == true,
-                CompactEntryDismissPolicy.shouldDismissForKeyDown(keyCode: event.keyCode)
-            else {
-                return event
-            }
-
-            self.dismissCompactPanel()
-            return nil
-        }) {
-            compactDismissMonitors.append(keyMonitor)
-        }
-
-        let mouseDownMask: NSEvent.EventTypeMask = [.leftMouseDown, .rightMouseDown, .otherMouseDown]
-        if let localMouseMonitor = NSEvent.addLocalMonitorForEvents(matching: mouseDownMask, handler: { [weak self] event in
-            self?.dismissCompactPanelIfNeededForMouseDown(at: NSEvent.mouseLocation)
-            return event
-        }) {
-            compactDismissMonitors.append(localMouseMonitor)
-        }
-
-        if let globalMouseMonitor = NSEvent.addGlobalMonitorForEvents(matching: mouseDownMask, handler: { [weak self] _ in
-            Task { @MainActor in
-                self?.dismissCompactPanelIfNeededForMouseDown(at: NSEvent.mouseLocation)
-            }
-        }) {
-            compactDismissMonitors.append(globalMouseMonitor)
-        }
-    }
-
-    private func dismissCompactPanelIfNeededForMouseDown(at point: NSPoint) {
-        guard let compactPanel, compactPanel.isVisible else {
-            return
-        }
-
-        let shouldDismiss = CompactEntryDismissPolicy.shouldDismissForMouseDown(
-            at: point,
-            panelFrame: compactPanel.frame
-        )
-
-        if shouldDismiss {
-            dismissCompactPanel()
-        }
+        compactPanelController.dismiss()
     }
 
     func windowDidMove(_ notification: Notification) {
@@ -530,8 +444,7 @@ final class WindowCoordinator: NSObject, NSWindowDelegate {
             return
         }
 
-        if panel === compactPanel {
-            compactPanelFrame = panel.frame
+        if compactPanelController.recordMove(of: panel) {
             return
         }
 
