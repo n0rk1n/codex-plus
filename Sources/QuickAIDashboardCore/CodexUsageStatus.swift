@@ -50,6 +50,14 @@ public struct CodexUsageStatus: Equatable, Sendable {
         }
     }
 
+    public func displayPercentText(for window: CodexUsageWindow) -> String {
+        guard let percent = percent(for: window) else {
+            return "--%"
+        }
+
+        return "\(percent)%"
+    }
+
     public func ringColor(for window: CodexUsageWindow) -> CodexUsageRingColor {
         guard let percent = percent(for: window) else {
             return .inactive

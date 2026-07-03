@@ -785,11 +785,19 @@ let unknownCodexUsage = CodexUsageStatus.unknown
 expect(unknownCodexUsage.fiveHourPercent == nil, "unknown codex usage has no five-hour percent")
 expect(unknownCodexUsage.weeklyPercent == nil, "unknown codex usage has no weekly percent")
 expect(unknownCodexUsage.ringColor(for: .fiveHour) == .inactive, "unknown codex usage uses inactive ring color")
+expect(
+    unknownCodexUsage.displayPercentText(for: .weekly) == "--%",
+    "codex usage display text shows placeholder for missing percent"
+)
 
 let greenCodexUsage = CodexUsageStatus(fiveHourPercent: 42, weeklyPercent: 12, observedAt: Date(timeIntervalSince1970: 10))
 expect(greenCodexUsage.fiveHourPercent == 42, "codex usage stores five-hour percent")
 expect(greenCodexUsage.weeklyPercent == 12, "codex usage stores weekly percent")
 expect(greenCodexUsage.ringColor(for: .fiveHour) == .lowUsageGreen, "codex usage below sixty percent is green")
+expect(
+    greenCodexUsage.displayPercentText(for: .fiveHour) == "42%",
+    "codex usage display text shows known five-hour percent"
+)
 
 let yellowCodexUsage = CodexUsageStatus(fiveHourPercent: 80, weeklyPercent: 75, observedAt: nil)
 expect(yellowCodexUsage.ringColor(for: .fiveHour) == .midUsageYellow, "codex usage at eighty percent is yellow")

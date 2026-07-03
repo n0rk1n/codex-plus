@@ -6,40 +6,26 @@ struct CodexUsageRingTileView: View {
 
     var body: some View {
         LiquidGlassContainer(cornerRadius: 22) {
-            ZStack {
-                UsageRing(
-                    percent: status.fiveHourPercent,
-                    color: color(for: .fiveHour),
-                    lineWidth: 7,
-                    diameter: 72
-                )
+            VStack(spacing: 7) {
+                HStack(spacing: 0) {
+                    UsageMetricColumn(
+                        label: "5h",
+                        value: status.displayPercentText(for: .fiveHour),
+                        color: color(for: .fiveHour)
+                    )
 
-                UsageRing(
-                    percent: status.weeklyPercent,
-                    color: color(for: .weekly),
-                    lineWidth: 5,
-                    diameter: 56
-                )
-
-                VStack(spacing: 1) {
-                    Text("5H \(percentText(status.fiveHourPercent))")
-                        .font(.system(size: 13, weight: .semibold, design: .rounded))
-                        .lineLimit(1)
-                        .minimumScaleFactor(0.65)
-
-                    Text("1W \(percentText(status.weeklyPercent))")
-                        .font(.system(size: 10, weight: .medium, design: .rounded))
-                        .foregroundStyle(.secondary)
-                        .lineLimit(1)
-                        .minimumScaleFactor(0.7)
-
-                    Text(labelText)
-                        .font(.system(size: 8, weight: .medium))
-                        .foregroundStyle(.secondary)
-                        .lineLimit(1)
-                        .minimumScaleFactor(0.85)
+                    UsageMetricColumn(
+                        label: "1w",
+                        value: status.displayPercentText(for: .weekly),
+                        color: color(for: .weekly)
+                    )
                 }
-                .frame(width: 46)
+
+                Text(labelText)
+                    .font(.system(size: 10, weight: .medium))
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.85)
             }
             .frame(width: 92, height: 92)
         }
@@ -63,14 +49,6 @@ struct CodexUsageRingTileView: View {
         return "Codex usage, five hours \(accessibilityPercentText(status.fiveHourPercent)), one week \(accessibilityPercentText(status.weeklyPercent))"
     }
 
-    private func percentText(_ percent: Int?) -> String {
-        guard let percent else {
-            return "--%"
-        }
-
-        return "\(percent)%"
-    }
-
     private func accessibilityPercentText(_ percent: Int?) -> String {
         guard let percent else {
             return "no data"
@@ -91,33 +69,23 @@ struct CodexUsageRingTileView: View {
     }
 }
 
-private struct UsageRing: View {
-    let percent: Int?
+private struct UsageMetricColumn: View {
+    let label: String
+    let value: String
     let color: Color
-    let lineWidth: CGFloat
-    let diameter: CGFloat
 
     var body: some View {
-        ZStack {
-            Circle()
-                .stroke(.secondary.opacity(0.18), lineWidth: lineWidth)
+        VStack(spacing: 4) {
+            Text(label.uppercased())
+                .font(.system(size: 13, weight: .semibold, design: .rounded))
+                .foregroundStyle(.primary)
 
-            Circle()
-                .trim(from: 0, to: progress)
-                .stroke(
-                    color,
-                    style: StrokeStyle(lineWidth: lineWidth, lineCap: .round)
-                )
-                .rotationEffect(.degrees(-90))
+            Text(value)
+                .font(.system(size: 17, weight: .semibold, design: .rounded))
+                .foregroundStyle(color)
         }
-        .frame(width: diameter, height: diameter)
-    }
-
-    private var progress: CGFloat {
-        guard let percent else {
-            return 0
-        }
-
-        return CGFloat(max(0, min(100, percent))) / 100
+        .lineLimit(1)
+        .minimumScaleFactor(0.72)
+        .frame(maxWidth: .infinity)
     }
 }
