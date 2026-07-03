@@ -12,13 +12,27 @@ final class WindowCoordinator: NSObject, NSWindowDelegate {
     private let panelFactory = PanelFactory()
     private let screenProvider = ActiveScreenProvider()
 
-    private var sidePanel: GlassPanel?
-    private var sidePanelCustomFrame: NSRect?
-    private var edgeAffordancePanel: GlassPanel?
-    private var sidePanelModel: ConversationPanelModel?
-    private var isSidePanelContentInstalled = false
-    private let mouseExitMonitors = EventMonitorStore()
-    private var hasMouseEnteredSidePanel = false
+    private lazy var sidePanelController = SidePanelController(
+        panelFactory: panelFactory,
+        screenProvider: screenProvider,
+        panelDelegate: self,
+        preferredSide: { [conversationCoordinator] in
+            conversationCoordinator.preferredSide
+        },
+        setPreferredSide: { [conversationCoordinator] side in
+            guard conversationCoordinator.preferredSide != side else {
+                return
+            }
+
+            conversationCoordinator.togglePreferredSide()
+        },
+        hasActiveConversation: { [conversationCoordinator] in
+            conversationCoordinator.activeConversation != nil
+        },
+        isPinned: { [conversationCoordinator] in
+            conversationCoordinator.activeConversation?.isPinned == true
+        }
+    )
     private lazy var compactPanelController = CompactPanelController(
         panelFactory: panelFactory,
         screenProvider: screenProvider,
@@ -41,10 +55,6 @@ final class WindowCoordinator: NSObject, NSWindowDelegate {
         codexUsageMonitor.start()
     }
 
-    deinit {
-        mouseExitMonitors.removeAll()
-    }
-
     func handleGlobalShortcut() {
         NSApp.activate(ignoringOtherApps: true)
 
@@ -57,8 +67,7 @@ final class WindowCoordinator: NSObject, NSWindowDelegate {
     }
 
     private func showCompactPanel() {
-        sidePanel?.orderOut(nil)
-        edgeAffordancePanel?.orderOut(nil)
+        sidePanelController.orderOutAll()
 
         compactPanelController.show { [weak self] prompt in
             Task { @MainActor in
@@ -69,30 +78,13 @@ final class WindowCoordinator: NSObject, NSWindowDelegate {
 
     private func showSidePanel() {
         dismissCompactPanel()
-        edgeAffordancePanel?.orderOut(nil)
 
-        guard conversationCoordinator.activeConversation != nil else {
+        guard let session = conversationCoordinator.activeConversation else {
             showCompactPanel()
             return
         }
 
-        guard let screen = activeScreen() else {
-            return
-        }
-
-        let frame = sidePanelFrame(on: screen)
-        let panel = sidePanel ?? makePanel(frame: frame)
-
-        panel.setFrame(frame, display: true)
-        hasMouseEnteredSidePanel = false
-        refreshSidePanelContent(on: panel)
-        panel.makeKeyAndOrderFront(nil)
-        sidePanel = panel
-        installMouseExitMonitorIfNeeded()
-    }
-
-    private func makePanel(frame: NSRect) -> GlassPanel {
-        panelFactory.makePanel(frame: frame, delegate: self)
+        sidePanelController.show(session: session, actions: sidePanelActions())
     }
 
     private func startConversation(prompt: String) {
@@ -103,14 +95,7 @@ final class WindowCoordinator: NSObject, NSWindowDelegate {
     }
 
     private func prepareCenteredSidePanelFrame() {
-        guard let screen = activeScreen() else {
-            sidePanelCustomFrame = nil
-            return
-        }
-
-        sidePanelCustomFrame = ConversationPanelLayoutPolicy.initialCenteredFrame(
-            in: screen.visibleFrame
-        )
+        sidePanelController.prepareCenteredFrame()
     }
 
     private func handleFollowUp(_ prompt: String) {
@@ -192,8 +177,7 @@ final class WindowCoordinator: NSObject, NSWindowDelegate {
 
     private func closeSidePanel() {
         guard let session = conversationCoordinator.activeConversation else {
-            sidePanel?.orderOut(nil)
-            edgeAffordancePanel?.orderOut(nil)
+            sidePanelController.orderOutAll()
             return
         }
 
@@ -205,12 +189,8 @@ final class WindowCoordinator: NSObject, NSWindowDelegate {
             stopActiveRun(refreshesView: false)
         }
 
-        sidePanel?.orderOut(nil)
-        edgeAffordancePanel?.orderOut(nil)
         conversationCoordinator.closeConversation(session.id)
-        sidePanelModel = nil
-        isSidePanelContentInstalled = false
-        hasMouseEnteredSidePanel = false
+        sidePanelController.closeAndReset()
     }
 
     private func togglePin() {
@@ -223,12 +203,12 @@ final class WindowCoordinator: NSObject, NSWindowDelegate {
     }
 
     private func togglePreferredSide() {
-        sidePanelCustomFrame = nil
+        sidePanelController.clearCustomFrame()
         conversationCoordinator.togglePreferredSide()
 
-        if let screen = activeScreen(), let sidePanel {
-            sidePanel.setFrame(sidePanelFrame(on: screen), display: true, animate: true)
-            refreshSidePanelContent(on: sidePanel)
+        if let session = conversationCoordinator.activeConversation {
+            sidePanelController.moveToPreferredSide(session: session, actions: sidePanelActions())
+            refreshSidePanelContent()
         }
     }
 
@@ -253,186 +233,12 @@ final class WindowCoordinator: NSObject, NSWindowDelegate {
         refreshSidePanelContent()
     }
 
-    private func refreshSidePanelContent(on panel: GlassPanel? = nil) {
+    private func refreshSidePanelContent() {
         guard let session = conversationCoordinator.activeConversation else {
             return
         }
 
-        let targetPanel = panel ?? sidePanel
-        let model: ConversationPanelModel
-
-        if let sidePanelModel {
-            sidePanelModel.session = session
-            model = sidePanelModel
-        } else {
-            model = ConversationPanelModel(session: session)
-            sidePanelModel = model
-        }
-
-        if let targetPanel, !isSidePanelContentInstalled {
-            installSidePanelContent(in: targetPanel, model: model)
-        }
-    }
-
-    private func installSidePanelContent(in panel: GlassPanel, model: ConversationPanelModel) {
-        panel.contentView = DraggableHostingView(
-            rootView: ConversationPanelHostView(
-                model: model,
-                onFollowUp: { [weak self] prompt in
-                    Task { @MainActor in
-                        self?.handleFollowUp(prompt)
-                    }
-                },
-                onStop: { [weak self] in
-                    Task { @MainActor in
-                        self?.stopActiveRun()
-                    }
-                },
-                onClose: { [weak self] in
-                    Task { @MainActor in
-                        self?.closeSidePanel()
-                    }
-                },
-                onTogglePin: { [weak self] in
-                    Task { @MainActor in
-                        self?.togglePin()
-                    }
-                },
-                onToggleSide: { [weak self] in
-                    Task { @MainActor in
-                        self?.togglePreferredSide()
-                    }
-                },
-                onToggleFullAccess: { [weak self] in
-                    Task { @MainActor in
-                        self?.toggleFullAccess()
-                    }
-                }
-            )
-        )
-        isSidePanelContentInstalled = true
-    }
-
-    private func sidePanelFrame(on screen: NSScreen) -> NSRect {
-        if let sidePanelCustomFrame {
-            return sidePanelCustomFrame
-        }
-
-        let visibleFrame = screen.visibleFrame
-        let width = min(CGFloat(460), visibleFrame.width)
-        let x: CGFloat
-
-        switch conversationCoordinator.preferredSide {
-        case .left:
-            x = visibleFrame.minX
-        case .right:
-            x = visibleFrame.maxX - width
-        }
-
-        return NSRect(
-            x: x,
-            y: visibleFrame.minY,
-            width: width,
-            height: visibleFrame.height
-        )
-    }
-
-    private func edgeAffordanceFrame(on screen: NSScreen) -> NSRect {
-        let visibleFrame = screen.visibleFrame
-        let size = NSSize(width: 12, height: 96)
-        let x: CGFloat
-
-        switch conversationCoordinator.preferredSide {
-        case .left:
-            x = visibleFrame.minX
-        case .right:
-            x = visibleFrame.maxX - size.width
-        }
-
-        return NSRect(
-            x: x,
-            y: visibleFrame.midY - (size.height / 2),
-            width: size.width,
-            height: size.height
-        )
-    }
-
-    private func showEdgeAffordance(on screen: NSScreen?) {
-        guard
-            conversationCoordinator.activeConversation != nil,
-            conversationCoordinator.activeConversation?.isPinned != true,
-            sidePanelCustomFrame == nil,
-            let screen = screen ?? activeScreen()
-        else {
-            return
-        }
-
-        let frame = edgeAffordanceFrame(on: screen)
-        let panel = edgeAffordancePanel ?? makePanel(frame: frame)
-        panel.setFrame(frame, display: true)
-        panel.contentView = NSHostingView(
-            rootView: SideEdgeAffordanceView { [weak self] in
-                Task { @MainActor in
-                    self?.showSidePanel()
-                }
-            }
-        )
-        panel.orderFrontRegardless()
-        edgeAffordancePanel = panel
-    }
-
-    private func installMouseExitMonitorIfNeeded() {
-        guard mouseExitMonitors.isEmpty else {
-            return
-        }
-
-        let localMonitor = NSEvent.addLocalMonitorForEvents(matching: [.mouseMoved]) { [weak self] event in
-            self?.hideSidePanelIfMouseExited()
-            return event
-        }
-
-        if let localMonitor {
-            mouseExitMonitors.append(localMonitor)
-        }
-
-        if let globalMonitor = NSEvent.addGlobalMonitorForEvents(matching: [.mouseMoved], handler: { [weak self] _ in
-            Task { @MainActor in
-                self?.hideSidePanelIfMouseExited()
-            }
-        }) {
-            mouseExitMonitors.append(globalMonitor)
-        }
-    }
-
-    private func hideSidePanelIfMouseExited() {
-        if
-            let edgeAffordancePanel,
-            edgeAffordancePanel.isVisible,
-            NSMouseInRect(NSEvent.mouseLocation, edgeAffordancePanel.frame.insetBy(dx: -8, dy: -8), false) {
-            showSidePanel()
-            return
-        }
-
-        guard
-            let sidePanel,
-            sidePanel.isVisible,
-            sidePanelCustomFrame == nil,
-            conversationCoordinator.activeConversation?.isPinned != true
-        else {
-            return
-        }
-
-        let sidePanelHitFrame = sidePanel.frame.insetBy(dx: -8, dy: -8)
-        if NSMouseInRect(NSEvent.mouseLocation, sidePanelHitFrame, false) {
-            hasMouseEnteredSidePanel = true
-            return
-        }
-
-        if hasMouseEnteredSidePanel {
-            let screen = sidePanel.screen ?? activeScreen()
-            sidePanel.orderOut(nil)
-            showEdgeAffordance(on: screen)
-        }
+        sidePanelController.refresh(session: session, actions: sidePanelActions())
     }
 
     private func dismissCompactPanel() {
@@ -448,35 +254,9 @@ final class WindowCoordinator: NSObject, NSWindowDelegate {
             return
         }
 
-        if panel === sidePanel {
-            updateSidePanelPlacement(afterMoving: panel)
-        }
-    }
-
-    private func updateSidePanelPlacement(afterMoving panel: GlassPanel) {
-        guard let screen = panel.screen ?? activeScreen() else {
-            sidePanelCustomFrame = panel.frame
+        if sidePanelController.recordMove(of: panel) {
             return
         }
-
-        switch PanelPlacementPolicy.placement(
-            for: panel.frame,
-            in: screen.visibleFrame
-        ) {
-        case let .attached(side):
-            sidePanelCustomFrame = nil
-            setPreferredSide(side)
-        case .free:
-            sidePanelCustomFrame = panel.frame
-        }
-    }
-
-    private func setPreferredSide(_ side: SideAttachment) {
-        guard conversationCoordinator.preferredSide != side else {
-            return
-        }
-
-        conversationCoordinator.togglePreferredSide()
     }
 
     private func failureMessage(from result: CodexRunResult) -> String {
@@ -488,7 +268,38 @@ final class WindowCoordinator: NSObject, NSWindowDelegate {
         return "Codex exited with code \(result.exitCode)."
     }
 
-    private func activeScreen() -> NSScreen? {
-        screenProvider.activeScreen()
+    private func sidePanelActions() -> SidePanelActions {
+        SidePanelActions(
+            onFollowUp: { [weak self] prompt in
+                Task { @MainActor in
+                    self?.handleFollowUp(prompt)
+                }
+            },
+            onStop: { [weak self] in
+                Task { @MainActor in
+                    self?.stopActiveRun()
+                }
+            },
+            onClose: { [weak self] in
+                Task { @MainActor in
+                    self?.closeSidePanel()
+                }
+            },
+            onTogglePin: { [weak self] in
+                Task { @MainActor in
+                    self?.togglePin()
+                }
+            },
+            onToggleSide: { [weak self] in
+                Task { @MainActor in
+                    self?.togglePreferredSide()
+                }
+            },
+            onToggleFullAccess: { [weak self] in
+                Task { @MainActor in
+                    self?.toggleFullAccess()
+                }
+            }
+        )
     }
 }
