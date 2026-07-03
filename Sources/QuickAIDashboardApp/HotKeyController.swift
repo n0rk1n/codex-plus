@@ -90,7 +90,7 @@ final class HotKeyController {
         var hotKeyRef: EventHotKeyRef?
         let hotKeyStatus = RegisterEventHotKey(
             UInt32(kVK_Space),
-            UInt32(controlKey | optionKey),
+            UInt32(controlKey | optionKey | cmdKey),
             hotKeyID,
             GetApplicationEventTarget(),
             0,

@@ -47,7 +47,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
         let alert = NSAlert()
         alert.alertStyle = .critical
-        alert.messageText = "Quick AI Dashboard could not register Control-Option-Space."
+        alert.messageText = "Quick AI Dashboard could not register Control-Option-Command-Space."
         alert.informativeText = "Error: \(error)"
         alert.runModal()
 
