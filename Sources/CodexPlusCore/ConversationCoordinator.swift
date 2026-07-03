@@ -5,21 +5,67 @@ import Foundation
 public final class ConversationCoordinator: ObservableObject {
     public static let maxStoredEvents = 500
 
-    @Published public private(set) var activeConversation: ConversationSession?
+    @Published public private(set) var workspaces: [WorkspaceSessionGroup] = []
+    @Published public private(set) var conversations: [ConversationSession] = []
+    @Published public private(set) var activeWorkspaceID: UUID?
+    @Published public private(set) var activeConversationID: UUID?
+    @Published public private(set) var draft: ConversationDraft?
     @Published public private(set) var preferredSide: SideAttachment = .right
 
-    public init() {}
+    private var titleGenerator: ConversationTitleGenerator
+
+    public init(titleGenerator: ConversationTitleGenerator = ConversationTitleGenerator()) {
+        self.titleGenerator = titleGenerator
+    }
+
+    public var snapshot: ConversationCoordinatorSnapshot {
+        ConversationCoordinatorSnapshot(
+            workspaces: workspaces,
+            conversations: conversations,
+            activeWorkspaceID: activeWorkspaceID,
+            activeConversationID: activeConversationID,
+            draft: draft
+        )
+    }
+
+    public var activeConversation: ConversationSession? {
+        guard let activeConversationID else {
+            return nil
+        }
+
+        return conversations.first { $0.id == activeConversationID && !$0.isArchived }
+    }
+
+    public func conversation(with id: UUID) -> ConversationSession? {
+        conversations.first { $0.id == id }
+    }
 
     @discardableResult
-    public func startConversation(prompt: String) -> ConversationSession {
+    public func startConversation(
+        prompt: String,
+        workspacePath: String = ".",
+        now: Date = Date()
+    ) -> ConversationSession {
         let trimmedPrompt = prompt.trimmingCharacters(in: .whitespacesAndNewlines)
+        let normalizedPath = ConversationWorkspacePolicy.normalizedPath(workspacePath)
+        let title = titleGenerator.nextTitle(existingTitles: conversations.map(\.title))
         let session = ConversationSession(
+            title: title,
             prompt: trimmedPrompt,
+            workspacePath: normalizedPath,
+            state: .idle,
+            permissionMode: .semiAutomatic,
+            createdAt: now,
+            lastActivityAt: now,
             events: [
                 .userPrompt(id: UUID(), text: trimmedPrompt)
             ]
         )
-        activeConversation = session
+
+        conversations.append(session)
+        attachConversation(session.id, toWorkspacePath: normalizedPath, now: now)
+        activeConversationID = session.id
+        draft = nil
         return session
     }
 
@@ -37,22 +83,74 @@ public final class ConversationCoordinator: ObservableObject {
         return .openFreshEntry
     }
 
-    public func markRunning(_ id: UUID) {
-        updateActiveConversation(id) { session in
+    public func beginDraft(selectedWorkspacePath: String? = nil) {
+        draft = ConversationDraft(
+            selectedWorkspacePath: selectedWorkspacePath.map(ConversationWorkspacePolicy.normalizedPath)
+        )
+        activeConversationID = nil
+    }
+
+    public func setDraftWorkspacePath(_ path: String?) {
+        draft = ConversationDraft(
+            selectedWorkspacePath: path.map(ConversationWorkspacePolicy.normalizedPath),
+            errorMessage: nil
+        )
+    }
+
+    public func setDraftError(_ message: String) {
+        var nextDraft = draft ?? ConversationDraft()
+        nextDraft.errorMessage = message
+        draft = nextDraft
+    }
+
+    public func selectWorkspace(_ id: UUID) {
+        guard let workspace = workspaces.first(where: { $0.id == id }) else {
+            return
+        }
+
+        activeWorkspaceID = workspace.id
+        activeConversationID = visibleConversations(in: workspace.id).first?.id
+        draft = nil
+    }
+
+    public func selectConversation(_ id: UUID) {
+        guard let conversation = conversations.first(where: { $0.id == id && !$0.isArchived }),
+              let workspace = workspaces.first(where: { $0.path == conversation.workspacePath })
+        else {
+            return
+        }
+
+        activeWorkspaceID = workspace.id
+        activeConversationID = conversation.id
+        draft = nil
+    }
+
+    public func visibleConversations(in workspaceID: UUID) -> [ConversationSession] {
+        guard let workspace = workspaces.first(where: { $0.id == workspaceID }) else {
+            return []
+        }
+
+        return workspace.conversationIDs.compactMap { id in
+            conversations.first { $0.id == id && !$0.isArchived }
+        }
+    }
+
+    public func markRunning(_ id: UUID, now: Date = Date()) {
+        updateConversation(id, now: now) { session in
             session.state = .running
         }
     }
 
-    public func markCompleted(_ id: UUID) {
-        markTerminal(id, state: .completed)
+    public func markCompleted(_ id: UUID, now: Date = Date()) {
+        markTerminal(id, state: .completed, now: now)
     }
 
-    public func markFailed(_ id: UUID) {
-        markFailed(id, message: "Conversation failed")
+    public func markFailed(_ id: UUID, now: Date = Date()) {
+        markFailed(id, message: "Conversation failed", now: now)
     }
 
-    public func markFailed(_ id: UUID, message: String) {
-        updateActiveConversation(id) { session in
+    public func markFailed(_ id: UUID, message: String, now: Date = Date()) {
+        updateConversation(id, now: now) { session in
             session.state = .failed
             session.permissionMode = .semiAutomatic
             session.events.append(.error(id: UUID(), text: message))
@@ -60,24 +158,24 @@ public final class ConversationCoordinator: ObservableObject {
         }
     }
 
-    public func markStopped(_ id: UUID) {
-        markTerminal(id, state: .stopped)
+    public func markStopped(_ id: UUID, now: Date = Date()) {
+        markTerminal(id, state: .stopped, now: now)
     }
 
     public func setPermissionMode(_ permissionMode: PermissionMode, for id: UUID) {
-        updateActiveConversation(id) { session in
+        updateConversation(id) { session in
             session.permissionMode = permissionMode
         }
     }
 
     public func setPinned(_ isPinned: Bool, for id: UUID) {
-        updateActiveConversation(id) { session in
+        updateConversation(id) { session in
             session.isPinned = isPinned
         }
     }
 
     public func setExplicitlyKept(_ isExplicitlyKept: Bool, for id: UUID) {
-        updateActiveConversation(id) { session in
+        updateConversation(id) { session in
             session.isExplicitlyKept = isExplicitlyKept
         }
     }
@@ -86,50 +184,169 @@ public final class ConversationCoordinator: ObservableObject {
         preferredSide.toggle()
     }
 
-    public func appendUserPrompt(_ prompt: String, to id: UUID) {
+    public func appendUserPrompt(_ prompt: String, to id: UUID, now: Date = Date()) {
         let trimmedPrompt = prompt.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !trimmedPrompt.isEmpty else {
             return
         }
 
-        updateActiveConversation(id) { session in
+        updateConversation(id, now: now) { session in
             session.events.append(.userPrompt(id: UUID(), text: trimmedPrompt))
             Self.trimEvents(&session.events)
         }
     }
 
-    public func appendCodexEvent(_ event: CodexEvent, to id: UUID) {
-        updateActiveConversation(id) { session in
+    public func appendCodexEvent(_ event: CodexEvent, to id: UUID, now: Date = Date()) {
+        updateConversation(id, now: now) { session in
             session.events.append(Self.displayEvent(from: event))
             Self.trimEvents(&session.events)
         }
     }
 
     public func closeConversation(_ id: UUID) {
-        guard activeConversation?.id == id else {
+        guard activeConversationID == id else {
             return
         }
 
-        activeConversation = nil
+        activeConversationID = nil
     }
 
-    private func markTerminal(_ id: UUID, state: ConversationRunState) {
-        updateActiveConversation(id) { session in
+    public func reorderWorkspace(_ id: UUID, to targetIndex: Int) {
+        guard let sourceIndex = workspaces.firstIndex(where: { $0.id == id }),
+              workspaces.indices.contains(targetIndex),
+              sourceIndex != targetIndex
+        else {
+            return
+        }
+
+        let workspace = workspaces.remove(at: sourceIndex)
+        workspaces.insert(workspace, at: targetIndex)
+    }
+
+    public func reorderConversation(_ id: UUID, to targetIndex: Int) {
+        guard let workspaceIndex = workspaces.firstIndex(where: { $0.conversationIDs.contains(id) }) else {
+            return
+        }
+
+        var ids = workspaces[workspaceIndex].conversationIDs
+        guard let sourceIndex = ids.firstIndex(of: id),
+              ids.indices.contains(targetIndex),
+              sourceIndex != targetIndex
+        else {
+            return
+        }
+
+        let conversationID = ids.remove(at: sourceIndex)
+        ids.insert(conversationID, at: targetIndex)
+        workspaces[workspaceIndex].conversationIDs = ids
+    }
+
+    @discardableResult
+    public func archiveConversation(_ id: UUID, now: Date = Date()) -> ConversationArchiveResult? {
+        guard let conversationIndex = conversations.firstIndex(where: { $0.id == id }),
+              let workspaceIndex = workspaces.firstIndex(where: { $0.path == conversations[conversationIndex].workspacePath })
+        else {
+            return nil
+        }
+
+        let neighborID = archiveFallbackNeighbor(
+            archivedID: id,
+            conversationIDs: workspaces[workspaceIndex].conversationIDs
+        )
+
+        conversations[conversationIndex].isArchived = true
+        conversations[conversationIndex].lastActivityAt = now
+        workspaces[workspaceIndex].conversationIDs.removeAll { $0 == id }
+
+        if workspaces[workspaceIndex].conversationIDs.isEmpty {
+            workspaces.remove(at: workspaceIndex)
+        }
+
+        if activeConversationID == id {
+            if let neighborID, conversations.contains(where: { $0.id == neighborID && !$0.isArchived }) {
+                selectConversation(neighborID)
+            } else if let nextWorkspace = workspaces.max(by: { $0.lastActivityAt < $1.lastActivityAt }) {
+                selectWorkspace(nextWorkspace.id)
+            } else {
+                activeWorkspaceID = nil
+                activeConversationID = nil
+                draft = ConversationDraft()
+            }
+        }
+
+        return ConversationArchiveResult(
+            archivedConversationID: id,
+            activeWorkspaceID: activeWorkspaceID,
+            activeConversationID: activeConversationID
+        )
+    }
+
+    private func markTerminal(_ id: UUID, state: ConversationRunState, now: Date = Date()) {
+        updateConversation(id, now: now) { session in
             session.state = state
             session.permissionMode = .semiAutomatic
         }
     }
 
-    private func updateActiveConversation(
-        _ id: UUID,
-        _ update: (inout ConversationSession) -> Void
-    ) {
-        guard var session = activeConversation, session.id == id else {
+    private func attachConversation(_ conversationID: UUID, toWorkspacePath path: String, now: Date) {
+        if let workspaceIndex = workspaces.firstIndex(where: { $0.path == path }) {
+            workspaces[workspaceIndex].conversationIDs.append(conversationID)
+            workspaces[workspaceIndex].lastActivityAt = now
+            activeWorkspaceID = workspaces[workspaceIndex].id
             return
         }
 
-        update(&session)
-        activeConversation = session
+        let workspace = WorkspaceSessionGroup(
+            path: path,
+            displayName: ConversationWorkspacePolicy.displayName(for: path),
+            conversationIDs: [conversationID],
+            lastActivityAt: now
+        )
+        workspaces.append(workspace)
+        activeWorkspaceID = workspace.id
+    }
+
+    private func updateConversation(
+        _ id: UUID,
+        now: Date = Date(),
+        _ update: (inout ConversationSession) -> Void
+    ) {
+        guard let index = conversations.firstIndex(where: { $0.id == id }) else {
+            return
+        }
+
+        update(&conversations[index])
+        conversations[index].lastActivityAt = now
+        touchWorkspace(for: conversations[index], now: now)
+    }
+
+    private func touchWorkspace(for conversation: ConversationSession, now: Date) {
+        guard let workspaceIndex = workspaces.firstIndex(where: { $0.path == conversation.workspacePath }) else {
+            return
+        }
+
+        workspaces[workspaceIndex].lastActivityAt = now
+    }
+
+    private func archiveFallbackNeighbor(archivedID: UUID, conversationIDs: [UUID]) -> UUID? {
+        guard let index = conversationIDs.firstIndex(of: archivedID) else {
+            return nil
+        }
+
+        let leftID = index > 0 ? conversationIDs[index - 1] : nil
+        let rightIndex = conversationIDs.index(after: index)
+        let rightID = conversationIDs.indices.contains(rightIndex) ? conversationIDs[rightIndex] : nil
+
+        switch (leftID.flatMap(conversation(with:)), rightID.flatMap(conversation(with:))) {
+        case let (left?, right?):
+            return left.lastActivityAt >= right.lastActivityAt ? left.id : right.id
+        case let (left?, nil):
+            return left.id
+        case let (nil, right?):
+            return right.id
+        case (nil, nil):
+            return nil
+        }
     }
 
     private static func displayEvent(from event: CodexEvent) -> ConversationDisplayEvent {

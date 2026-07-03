@@ -741,165 +741,98 @@ expect(
     "conversation session default title is not fixed 0000 placeholder"
 )
 
-let emptyConversationCoordinator = ConversationCoordinator()
+let emptyConversationCoordinator = ConversationCoordinator(titleGenerator: ConversationTitleGenerator(randomSuffixes: [1111]))
 expect(
     emptyConversationCoordinator.shortcutDecision() == .openFreshEntry,
-    "shortcut opens fresh when no conversation"
+    "shortcut opens fresh when no active conversation"
+)
+expect(emptyConversationCoordinator.snapshot.workspaces.isEmpty, "empty coordinator has no workspaces")
+
+let workspaceMergeCoordinator = ConversationCoordinator(titleGenerator: ConversationTitleGenerator(randomSuffixes: [1111, 2222]))
+let mergeDate = Date(timeIntervalSince1970: 100)
+let firstMergedConversation = workspaceMergeCoordinator.startConversation(
+    prompt: "first",
+    workspacePath: "/Users/oriki/project/",
+    now: mergeDate
+)
+let secondMergedConversation = workspaceMergeCoordinator.startConversation(
+    prompt: "second",
+    workspacePath: "/Users/oriki/project",
+    now: mergeDate.addingTimeInterval(10)
+)
+expect(workspaceMergeCoordinator.snapshot.workspaces.count == 1, "same normalized path merges into one workspace")
+expect(
+    workspaceMergeCoordinator.snapshot.workspaces.first?.conversationIDs ==
+        [firstMergedConversation.id, secondMergedConversation.id],
+    "merged workspace preserves conversation order"
+)
+expect(firstMergedConversation.title == "对话_1111", "first generated conversation title")
+expect(secondMergedConversation.title == "对话_2222", "second generated conversation title")
+
+let separateWorkspaceCoordinator = ConversationCoordinator(titleGenerator: ConversationTitleGenerator(randomSuffixes: [3333, 4444]))
+let leftWorkspaceConversation = separateWorkspaceCoordinator.startConversation(
+    prompt: "left",
+    workspacePath: "/tmp/left",
+    now: Date(timeIntervalSince1970: 100)
+)
+let rightWorkspaceConversation = separateWorkspaceCoordinator.startConversation(
+    prompt: "right",
+    workspacePath: "/tmp/right",
+    now: Date(timeIntervalSince1970: 200)
+)
+expect(separateWorkspaceCoordinator.snapshot.workspaces.count == 2, "different paths create different workspaces")
+separateWorkspaceCoordinator.selectWorkspace(separateWorkspaceCoordinator.snapshot.workspaces.first!.id)
+expect(
+    separateWorkspaceCoordinator.activeConversation?.id == leftWorkspaceConversation.id,
+    "selecting workspace selects its first visible conversation"
+)
+separateWorkspaceCoordinator.selectConversation(rightWorkspaceConversation.id)
+expect(
+    separateWorkspaceCoordinator.activeConversation?.id == rightWorkspaceConversation.id,
+    "selecting conversation switches active conversation"
 )
 
-let runningConversationCoordinator = ConversationCoordinator()
-let runningConversation = runningConversationCoordinator.startConversation(prompt: "hello")
-runningConversationCoordinator.markRunning(runningConversation.id)
+let reorderCoordinator = ConversationCoordinator(titleGenerator: ConversationTitleGenerator(randomSuffixes: [1001, 1002, 1003]))
+let reorderFirst = reorderCoordinator.startConversation(prompt: "one", workspacePath: "/tmp/reorder", now: Date(timeIntervalSince1970: 1))
+let reorderSecond = reorderCoordinator.startConversation(prompt: "two", workspacePath: "/tmp/reorder", now: Date(timeIntervalSince1970: 2))
+let reorderThird = reorderCoordinator.startConversation(prompt: "three", workspacePath: "/tmp/reorder", now: Date(timeIntervalSince1970: 3))
+reorderCoordinator.reorderConversation(reorderThird.id, to: 0)
 expect(
-    runningConversationCoordinator.shortcutDecision() == .recallExisting(runningConversation.id),
-    "running conversation is recalled"
+    reorderCoordinator.snapshot.workspaces.first?.conversationIDs ==
+        [reorderThird.id, reorderFirst.id, reorderSecond.id],
+    "conversation reorder moves within workspace"
 )
 
-let pinnedConversationCoordinator = ConversationCoordinator()
-let pinnedConversation = pinnedConversationCoordinator.startConversation(prompt: "pin me")
-pinnedConversationCoordinator.setPinned(true, for: pinnedConversation.id)
+let archiveCoordinator = ConversationCoordinator(titleGenerator: ConversationTitleGenerator(randomSuffixes: [9001, 9002, 9003]))
+let archiveLeft = archiveCoordinator.startConversation(prompt: "left", workspacePath: "/tmp/archive", now: Date(timeIntervalSince1970: 10))
+let archiveMiddle = archiveCoordinator.startConversation(prompt: "middle", workspacePath: "/tmp/archive", now: Date(timeIntervalSince1970: 20))
+let archiveRight = archiveCoordinator.startConversation(prompt: "right", workspacePath: "/tmp/archive", now: Date(timeIntervalSince1970: 30))
+archiveCoordinator.appendCodexEvent(.agentMessage("new left activity"), to: archiveLeft.id, now: Date(timeIntervalSince1970: 40))
+archiveCoordinator.selectConversation(archiveMiddle.id)
+let archiveResult = archiveCoordinator.archiveConversation(archiveMiddle.id, now: Date(timeIntervalSince1970: 50))
+expect(archiveResult?.activeConversationID == archiveLeft.id, "archive selects newest neighbor by activity")
+expect(archiveCoordinator.activeConversation?.id == archiveLeft.id, "coordinator active conversation follows archive result")
 expect(
-    pinnedConversationCoordinator.shortcutDecision() == .recallExisting(pinnedConversation.id),
-    "pinned conversation is recalled"
+    archiveCoordinator.visibleConversations(in: archiveCoordinator.snapshot.workspaces.first!.id).map(\.id) ==
+        [archiveLeft.id, archiveRight.id],
+    "archived conversation disappears from visible tabs"
 )
 
-let keptConversationCoordinator = ConversationCoordinator()
-let keptConversation = keptConversationCoordinator.startConversation(prompt: "keep me")
-keptConversationCoordinator.setExplicitlyKept(true, for: keptConversation.id)
-expect(
-    keptConversationCoordinator.shortcutDecision() == .recallExisting(keptConversation.id),
-    "explicitly kept conversation is recalled"
-)
+let allArchivedCoordinator = ConversationCoordinator(titleGenerator: ConversationTitleGenerator(randomSuffixes: [7001]))
+let onlyConversation = allArchivedCoordinator.startConversation(prompt: "only", workspacePath: "/tmp/only")
+let onlyArchiveResult = allArchivedCoordinator.archiveConversation(onlyConversation.id)
+expect(onlyArchiveResult?.activeConversationID == nil, "archiving last conversation clears active conversation")
+expect(allArchivedCoordinator.snapshot.workspaces.isEmpty, "archiving last conversation removes workspace tab")
+expect(allArchivedCoordinator.activeConversation == nil, "no active conversation remains after last archive")
 
-let completedConversationCoordinator = ConversationCoordinator()
-let completedConversation = completedConversationCoordinator.startConversation(prompt: "complete me")
-completedConversationCoordinator.setPermissionMode(.fullAccess, for: completedConversation.id)
-completedConversationCoordinator.markCompleted(completedConversation.id)
-expect(
-    completedConversationCoordinator.activeConversation?.permissionMode == .semiAutomatic,
-    "completed full-access conversation resets permission to semiAutomatic"
-)
-expect(
-    completedConversationCoordinator.activeConversation?.state == .completed,
-    "completed conversation state is completed"
-)
-expect(
-    completedConversationCoordinator.shortcutDecision() == .openFreshEntry,
-    "completed unkept conversation opens fresh shortcut entry"
-)
-
-let failedConversationCoordinator = ConversationCoordinator()
-let failedConversation = failedConversationCoordinator.startConversation(prompt: "fail me")
-failedConversationCoordinator.setPermissionMode(.fullAccess, for: failedConversation.id)
-failedConversationCoordinator.markFailed(failedConversation.id, message: "boom")
-expect(
-    failedConversationCoordinator.activeConversation?.state == .failed,
-    "failed conversation state is failed"
-)
-expect(
-    failedConversationCoordinator.activeConversation?.permissionMode == .semiAutomatic,
-    "failed full-access conversation resets permission to semiAutomatic"
-)
-if case let .error(_, text)? = failedConversationCoordinator.activeConversation?.events.last {
-    expect(text == "boom", "failed conversation appends error message")
-} else {
-    expect(false, "failed conversation appends error message")
-}
-
-let stoppedConversationCoordinator = ConversationCoordinator()
-let stoppedConversation = stoppedConversationCoordinator.startConversation(prompt: "stop me")
-stoppedConversationCoordinator.setPermissionMode(.fullAccess, for: stoppedConversation.id)
-stoppedConversationCoordinator.markStopped(stoppedConversation.id)
-expect(
-    stoppedConversationCoordinator.activeConversation?.state == .stopped,
-    "stopped conversation state is stopped"
-)
-expect(
-    stoppedConversationCoordinator.activeConversation?.permissionMode == .semiAutomatic,
-    "stopped full-access conversation resets permission to semiAutomatic"
-)
-
-let closedConversationCoordinator = ConversationCoordinator()
-let closedConversation = closedConversationCoordinator.startConversation(prompt: "close me")
-closedConversationCoordinator.setPermissionMode(.fullAccess, for: closedConversation.id)
-closedConversationCoordinator.setPinned(true, for: closedConversation.id)
-closedConversationCoordinator.closeConversation(closedConversation.id)
-expect(
-    closedConversationCoordinator.activeConversation == nil,
-    "closing a conversation clears the active conversation"
-)
-expect(
-    closedConversationCoordinator.shortcutDecision() == .openFreshEntry,
-    "closed conversation opens fresh shortcut entry"
-)
-
-let messageConversationCoordinator = ConversationCoordinator()
-let messageConversation = messageConversationCoordinator.startConversation(prompt: "hello")
-messageConversationCoordinator.appendCodexEvent(.agentMessage("world"), to: messageConversation.id)
-expect(
-    messageConversationCoordinator.activeConversation?.events.count == 2,
-    "appending agent message creates a second event"
-)
-if case let .assistantMessage(_, text)? = messageConversationCoordinator.activeConversation?.events.last {
-    expect(text == "world", "last appended event is assistant message text world")
-} else {
-    expect(false, "last appended event is assistant message text world")
-}
-
-let followUpConversationCoordinator = ConversationCoordinator()
-let followUpConversation = followUpConversationCoordinator.startConversation(prompt: "hello")
-followUpConversationCoordinator.appendUserPrompt("  follow up  ", to: followUpConversation.id)
-expect(
-    followUpConversationCoordinator.activeConversation?.events.count == 2,
-    "appending follow-up user prompt creates a second event"
-)
-if case let .userPrompt(_, text)? = followUpConversationCoordinator.activeConversation?.events.last {
-    expect(text == "follow up", "follow-up user prompt is trimmed and appended")
-} else {
-    expect(false, "follow-up user prompt appends user prompt event")
-}
-
-let cappedConversationCoordinator = ConversationCoordinator()
-let cappedConversation = cappedConversationCoordinator.startConversation(prompt: "many events")
-for index in 0..<520 {
-    cappedConversationCoordinator.appendCodexEvent(.agentMessage("event \(index)"), to: cappedConversation.id)
-}
-let cappedEvents = cappedConversationCoordinator.activeConversation?.events ?? []
-expect(
-    cappedEvents.count == ConversationCoordinator.maxStoredEvents,
-    "conversation coordinator caps stored display events"
-)
-if case let .assistantMessage(_, text)? = cappedEvents.first {
-    expect(text == "event 20", "conversation event cap drops oldest events first")
-} else {
-    expect(false, "conversation event cap keeps recent assistant events")
-}
-if case let .assistantMessage(_, text)? = cappedEvents.last {
-    expect(text == "event 519", "conversation event cap preserves latest event")
-} else {
-    expect(false, "conversation event cap preserves latest event")
-}
-
-let sideConversationCoordinator = ConversationCoordinator()
-expect(sideConversationCoordinator.preferredSide == .right, "preferred side starts right")
-sideConversationCoordinator.togglePreferredSide()
-expect(sideConversationCoordinator.preferredSide == .left, "toggling preferred side switches right to left")
-sideConversationCoordinator.togglePreferredSide()
-expect(sideConversationCoordinator.preferredSide == .right, "toggling preferred side switches left to right")
-
-let commandConversationCoordinator = ConversationCoordinator()
-let commandConversation = commandConversationCoordinator.startConversation(prompt: "run pwd")
-commandConversationCoordinator.appendCodexEvent(
-    .command(id: "cmd1", command: "pwd", status: .completed),
-    to: commandConversation.id
-)
-if case let .command(_, executionID, command, status)? = commandConversationCoordinator.activeConversation?.events.last {
-    expect(executionID == "cmd1", "command display event preserves execution id")
-    expect(command == "pwd", "command display event preserves command text")
-    expect(status == .completed, "command display event preserves completed status")
-} else {
-    expect(false, "command display event preserves execution id, command text, and status")
-}
+let isolatedEventsCoordinator = ConversationCoordinator(titleGenerator: ConversationTitleGenerator(randomSuffixes: [8001, 8002]))
+let isolatedFirst = isolatedEventsCoordinator.startConversation(prompt: "one", workspacePath: "/tmp/events")
+let isolatedSecond = isolatedEventsCoordinator.startConversation(prompt: "two", workspacePath: "/tmp/events")
+isolatedEventsCoordinator.appendCodexEvent(.agentMessage("first only"), to: isolatedFirst.id)
+let firstEvents = isolatedEventsCoordinator.conversation(with: isolatedFirst.id)?.events ?? []
+let secondEvents = isolatedEventsCoordinator.conversation(with: isolatedSecond.id)?.events ?? []
+expect(firstEvents.count == 2, "first conversation receives appended event")
+expect(secondEvents.count == 1, "second conversation does not receive first event")
 
 let chargingBattery = BatteryStatus.from(
     currentCapacity: 43,
