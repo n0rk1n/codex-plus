@@ -723,6 +723,132 @@ expect(
 )
 expect(!parallelController.isRunning, "parallel controller clears aggregate running state")
 
+let parallelStopIsolationScriptPath = makeTemporaryScript(
+    named: "parallel-controller-stop-isolation",
+    contents: """
+    last_arg=""
+    for arg in "$@"; do
+      last_arg="$arg"
+    done
+
+    case "$last_arg" in
+      stop)
+        printf 'started-stop\\n'
+        while :; do
+          :
+        done
+        ;;
+      finish)
+        printf 'started-finish\\n'
+        sleep 2
+        printf 'done-finish\\n'
+        ;;
+      *)
+        printf 'unexpected-%s\\n' "$last_arg"
+        ;;
+    esac
+    """
+)
+defer {
+    try? FileManager.default.removeItem(atPath: parallelStopIsolationScriptPath)
+}
+let parallelStopIsolationStopCapture = LockedRunCapture()
+let parallelStopIsolationFinishCapture = LockedRunCapture()
+let parallelStopIsolationStopSessionID = UUID()
+let parallelStopIsolationFinishSessionID = UUID()
+let parallelStopIsolationController = CodexRunController(
+    runner: ProcessCodexRunner(
+        executableURL: URL(fileURLWithPath: "/bin/sh"),
+        executableArgumentsPrefix: [parallelStopIsolationScriptPath],
+        parser: { line in .agentMessage(line) }
+    )
+)
+let parallelStopIsolationStopStartedRun = parallelStopIsolationController.start(
+    prompt: "stop",
+    permissionMode: .semiAutomatic,
+    sessionID: parallelStopIsolationStopSessionID,
+    workingDirectoryURL: nil,
+    onEvent: { event, _ in
+        parallelStopIsolationStopCapture.appendEvent(event)
+    },
+    onFinish: { result, _ in
+        parallelStopIsolationStopCapture.appendResult(result)
+    }
+)
+let parallelStopIsolationFinishStartedRun = parallelStopIsolationController.start(
+    prompt: "finish",
+    permissionMode: .semiAutomatic,
+    sessionID: parallelStopIsolationFinishSessionID,
+    workingDirectoryURL: nil,
+    onEvent: { event, _ in
+        parallelStopIsolationFinishCapture.appendEvent(event)
+    },
+    onFinish: { result, _ in
+        parallelStopIsolationFinishCapture.appendResult(result)
+    }
+)
+expect(parallelStopIsolationStopStartedRun, "stop session starts")
+expect(parallelStopIsolationFinishStartedRun, "finish session starts")
+expect(
+    waitUntil(timeout: 2) {
+        parallelStopIsolationStopCapture.events().contains {
+            if case .agentMessage("started-stop") = $0 {
+                return true
+            }
+
+            return false
+        }
+    },
+    "stop session emits start signal"
+)
+expect(
+    waitUntil(timeout: 2) {
+        parallelStopIsolationFinishCapture.events().contains {
+            if case .agentMessage("started-finish") = $0 {
+                return true
+            }
+
+            return false
+        }
+    },
+    "finish session emits start signal"
+)
+expect(
+    parallelStopIsolationController.stop(sessionID: parallelStopIsolationStopSessionID),
+    "stopping one session succeeds"
+)
+expect(
+    parallelStopIsolationController.isRunning(sessionID: parallelStopIsolationFinishSessionID),
+    "parallel session keeps running after sibling stop"
+)
+expect(
+    waitUntil(timeout: 2) {
+        !parallelStopIsolationController.isRunning(sessionID: parallelStopIsolationStopSessionID)
+    },
+    "stopped session clears its own running state"
+)
+expect(
+    parallelStopIsolationStopCapture.results().isEmpty,
+    "stopped session does not call finish handler"
+)
+expect(
+    waitUntil(timeout: 5) { parallelStopIsolationFinishCapture.results().count == 1 },
+    "parallel session still finishes normally"
+)
+expect(
+    parallelStopIsolationFinishCapture.results().first?.succeeded == true,
+    "parallel session finish result succeeds"
+)
+expect(
+    parallelStopIsolationStopCapture.results().isEmpty,
+    "stopped session never reports finish"
+)
+expect(
+    !parallelStopIsolationController.isRunning(sessionID: parallelStopIsolationFinishSessionID),
+    "parallel session clears after finishing"
+)
+expect(!parallelStopIsolationController.isRunning, "stop isolation controller clears aggregate state")
+
 let stopScriptPath = makeTemporaryScript(
     named: "stop",
     contents: """
