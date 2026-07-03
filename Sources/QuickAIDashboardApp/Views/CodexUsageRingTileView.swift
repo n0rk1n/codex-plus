@@ -6,7 +6,7 @@ struct CodexUsageRingTileView: View {
 
     var body: some View {
         LiquidGlassContainer(cornerRadius: 22) {
-            VStack(spacing: 7) {
+            VStack(spacing: 8) {
                 HStack(spacing: 0) {
                     UsageMetricColumn(
                         label: "5h",
@@ -22,10 +22,10 @@ struct CodexUsageRingTileView: View {
                 }
 
                 Text(labelText)
-                    .font(.system(size: 10, weight: .medium))
+                    .font(.system(size: 9, weight: .medium))
                     .foregroundStyle(.secondary)
                     .lineLimit(1)
-                    .minimumScaleFactor(0.85)
+                    .minimumScaleFactor(0.75)
             }
             .frame(width: 92, height: 92)
         }
@@ -34,11 +34,7 @@ struct CodexUsageRingTileView: View {
     }
 
     private var labelText: String {
-        if status.fiveHourPercent == nil && status.weeklyPercent == nil {
-            return "No Data"
-        }
-
-        return "Codex"
+        "Codex Usage"
     }
 
     private var accessibilityText: String {
@@ -77,15 +73,15 @@ private struct UsageMetricColumn: View {
     var body: some View {
         VStack(spacing: 4) {
             Text(label.uppercased())
-                .font(.system(size: 13, weight: .semibold, design: .rounded))
+                .font(.system(size: 11, weight: .semibold, design: .rounded))
                 .foregroundStyle(.primary)
 
             Text(value)
-                .font(.system(size: 17, weight: .semibold, design: .rounded))
+                .font(.system(size: 22, weight: .semibold, design: .rounded))
                 .foregroundStyle(color)
         }
         .lineLimit(1)
-        .minimumScaleFactor(0.72)
+        .minimumScaleFactor(0.62)
         .frame(maxWidth: .infinity)
     }
 }
