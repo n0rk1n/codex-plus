@@ -659,7 +659,8 @@ expect(
     "working-directory process finishes"
 )
 expect(
-    agentMessageTexts(from: workingDirectoryCapture.events()).first == workingDirectory.path,
+    URL(fileURLWithPath: agentMessageTexts(from: workingDirectoryCapture.events()).first ?? "", isDirectory: true).resolvingSymlinksInPath().path ==
+        URL(fileURLWithPath: workingDirectory.path, isDirectory: true).resolvingSymlinksInPath().path,
     "process runner starts in supplied working directory"
 )
 
