@@ -52,10 +52,12 @@ public struct ProcessCodexRunner: Sendable {
     public func run(
         prompt: String,
         permissionMode: PermissionMode,
+        workingDirectoryURL: URL? = nil,
         onEvent: @escaping @Sendable (CodexEvent) -> Void,
         onFinish: @escaping @Sendable (CodexRunResult) -> Void
     ) -> CodexRunHandle {
         let process = Process()
+        process.currentDirectoryURL = workingDirectoryURL
         process.executableURL = executableURL
         process.arguments = executableArgumentsPrefix + CodexCommandBuilder.arguments(
             prompt: prompt,

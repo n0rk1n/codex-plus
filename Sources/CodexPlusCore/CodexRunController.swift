@@ -2,22 +2,30 @@ import Foundation
 
 @MainActor
 public final class CodexRunController {
+    private struct ActiveRun {
+        var handle: CodexRunHandle
+        var runID: UUID
+        var sessionID: UUID
+        var eventHandler: (CodexEvent, UUID) -> Void
+        var finishHandler: (CodexRunResult, UUID) -> Void
+    }
+
     private let runner: ProcessCodexRunner
     private let callbackQueue = DispatchQueue(label: "CodexPlusCore.CodexRunController.callbacks")
 
-    private var activeRunHandle: CodexRunHandle?
-    private var activeRunID: UUID?
-    private var activeRunSessionID: UUID?
+    private var activeRuns: [UUID: ActiveRun] = [:]
     private var stoppedRunIDs = Set<UUID>()
-    private var eventHandler: ((CodexEvent, UUID) -> Void)?
-    private var finishHandler: ((CodexRunResult, UUID) -> Void)?
 
     public var isRunning: Bool {
-        activeRunHandle != nil
+        !activeRuns.isEmpty
     }
 
     public init(runner: ProcessCodexRunner) {
         self.runner = runner
+    }
+
+    public func isRunning(sessionID: UUID) -> Bool {
+        activeRuns[sessionID] != nil
     }
 
     @discardableResult
@@ -25,24 +33,22 @@ public final class CodexRunController {
         prompt: String,
         permissionMode: PermissionMode,
         sessionID: UUID,
+        workingDirectoryURL: URL? = nil,
         onEvent: @escaping (CodexEvent, UUID) -> Void,
         onFinish: @escaping (CodexRunResult, UUID) -> Void
     ) -> Bool {
-        guard activeRunHandle == nil else {
+        guard activeRuns[sessionID] == nil else {
             return false
         }
 
         let runID = UUID()
-        activeRunID = runID
-        activeRunSessionID = sessionID
-        eventHandler = onEvent
-        finishHandler = onFinish
 
         let callbackQueue = callbackQueue
         let callbackTarget = WeakCodexRunControllerBox(self)
         let handle = runner.run(
             prompt: prompt,
             permissionMode: permissionMode,
+            workingDirectoryURL: workingDirectoryURL,
             onEvent: { event in
                 callbackQueue.async {
                     DispatchQueue.main.async {
@@ -63,59 +69,57 @@ public final class CodexRunController {
             }
         )
 
-        if activeRunID == runID {
-            activeRunHandle = handle
-        }
+        activeRuns[sessionID] = ActiveRun(
+            handle: handle,
+            runID: runID,
+            sessionID: sessionID,
+            eventHandler: onEvent,
+            finishHandler: onFinish
+        )
 
         return true
     }
 
     @discardableResult
     public func stop(sessionID: UUID) -> Bool {
-        guard let activeRunHandle, activeRunSessionID == sessionID else {
+        guard let activeRun = activeRuns[sessionID] else {
             return false
         }
 
-        if let activeRunID {
-            stoppedRunIDs.insert(activeRunID)
-        }
-        activeRunHandle.stop()
+        stoppedRunIDs.insert(activeRun.runID)
+        activeRun.handle.stop()
         return true
     }
 
     private func handleEvent(_ event: CodexEvent, sessionID: UUID, runID: UUID) {
-        guard activeRunSessionID == sessionID, activeRunID == runID else {
+        guard let activeRun = activeRuns[sessionID], activeRun.runID == runID else {
             return
         }
 
-        eventHandler?(event, sessionID)
+        activeRun.eventHandler(event, sessionID)
     }
 
     private func handleFinish(_ result: CodexRunResult, sessionID: UUID, runID: UUID) {
         if stoppedRunIDs.remove(runID) != nil {
-            clearRunIfCurrent(runID: runID)
+            clearRunIfCurrent(sessionID: sessionID, runID: runID)
             return
         }
 
-        guard activeRunSessionID == sessionID, activeRunID == runID else {
+        guard let activeRun = activeRuns[sessionID], activeRun.runID == runID else {
             return
         }
 
-        let finishHandler = finishHandler
-        clearRunIfCurrent(runID: runID)
-        finishHandler?(result, sessionID)
+        let finishHandler = activeRun.finishHandler
+        clearRunIfCurrent(sessionID: sessionID, runID: runID)
+        finishHandler(result, sessionID)
     }
 
-    private func clearRunIfCurrent(runID: UUID) {
-        guard activeRunID == runID else {
+    private func clearRunIfCurrent(sessionID: UUID, runID: UUID) {
+        guard activeRuns[sessionID]?.runID == runID else {
             return
         }
 
-        activeRunHandle = nil
-        activeRunID = nil
-        activeRunSessionID = nil
-        eventHandler = nil
-        finishHandler = nil
+        activeRuns[sessionID] = nil
     }
 }
 

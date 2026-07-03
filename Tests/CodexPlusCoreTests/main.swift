@@ -598,6 +598,7 @@ let codexRunControllerDidStart = codexRunController.start(
     prompt: "ignored",
     permissionMode: .semiAutomatic,
     sessionID: codexRunControllerSessionID,
+    workingDirectoryURL: nil,
     onEvent: { event, sessionID in
         if sessionID == codexRunControllerSessionID {
             codexRunControllerEvents.append(event)
@@ -620,6 +621,106 @@ expect(
     agentMessageTexts(from: codexRunControllerEvents) == ["done"],
     "codex run controller forwards events"
 )
+
+let workingDirectory = makeTemporaryDirectory(named: "runner-working-directory")
+defer {
+    try? FileManager.default.removeItem(at: workingDirectory)
+}
+let workingDirectoryScriptPath = makeTemporaryScript(
+    named: "working-directory",
+    contents: """
+    pwd
+    """
+)
+defer {
+    try? FileManager.default.removeItem(atPath: workingDirectoryScriptPath)
+}
+let workingDirectoryCapture = LockedRunCapture()
+let workingDirectoryFinish = DispatchSemaphore(value: 0)
+let workingDirectoryRunner = ProcessCodexRunner(
+    executableURL: URL(fileURLWithPath: "/bin/sh"),
+    executableArgumentsPrefix: [workingDirectoryScriptPath],
+    parser: { line in .agentMessage(line) }
+)
+_ = workingDirectoryRunner.run(
+    prompt: "ignored",
+    permissionMode: .semiAutomatic,
+    workingDirectoryURL: workingDirectory,
+    onEvent: { event in
+        workingDirectoryCapture.appendEvent(event)
+    },
+    onFinish: { result in
+        workingDirectoryCapture.appendResult(result)
+        workingDirectoryFinish.signal()
+    }
+)
+expect(
+    workingDirectoryFinish.wait(timeout: .now() + .seconds(5)) == .success,
+    "working-directory process finishes"
+)
+expect(
+    agentMessageTexts(from: workingDirectoryCapture.events()).first == workingDirectory.path,
+    "process runner starts in supplied working directory"
+)
+
+let parallelScriptPath = makeTemporaryScript(
+    named: "parallel-controller",
+    contents: """
+    printf 'started\\n'
+    sleep 1
+    printf 'done\\n'
+    """
+)
+defer {
+    try? FileManager.default.removeItem(atPath: parallelScriptPath)
+}
+let parallelRunner = ProcessCodexRunner(
+    executableURL: URL(fileURLWithPath: "/bin/sh"),
+    executableArgumentsPrefix: [parallelScriptPath],
+    parser: { line in .agentMessage(line) }
+)
+let parallelController = CodexRunController(runner: parallelRunner)
+let parallelFirstSessionID = UUID()
+let parallelSecondSessionID = UUID()
+var parallelFinishedSessionIDs: [UUID] = []
+let firstParallelStarted = parallelController.start(
+    prompt: "first",
+    permissionMode: .semiAutomatic,
+    sessionID: parallelFirstSessionID,
+    workingDirectoryURL: nil,
+    onEvent: { _, _ in },
+    onFinish: { _, sessionID in
+        parallelFinishedSessionIDs.append(sessionID)
+    }
+)
+let secondParallelStarted = parallelController.start(
+    prompt: "second",
+    permissionMode: .semiAutomatic,
+    sessionID: parallelSecondSessionID,
+    workingDirectoryURL: nil,
+    onEvent: { _, _ in },
+    onFinish: { _, sessionID in
+        parallelFinishedSessionIDs.append(sessionID)
+    }
+)
+let duplicateParallelStarted = parallelController.start(
+    prompt: "duplicate",
+    permissionMode: .semiAutomatic,
+    sessionID: parallelFirstSessionID,
+    workingDirectoryURL: nil,
+    onEvent: { _, _ in },
+    onFinish: { _, _ in }
+)
+expect(firstParallelStarted, "parallel controller starts first session")
+expect(secondParallelStarted, "parallel controller starts second session")
+expect(!duplicateParallelStarted, "parallel controller rejects duplicate session run")
+expect(parallelController.isRunning(sessionID: parallelFirstSessionID), "first session is running")
+expect(parallelController.isRunning(sessionID: parallelSecondSessionID), "second session is running")
+expect(
+    waitUntil(timeout: 5) { parallelFinishedSessionIDs.count == 2 },
+    "parallel controller forwards both finishes"
+)
+expect(!parallelController.isRunning, "parallel controller clears aggregate running state")
 
 let stopScriptPath = makeTemporaryScript(
     named: "stop",
