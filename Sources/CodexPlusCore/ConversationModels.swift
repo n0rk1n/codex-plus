@@ -83,7 +83,7 @@ public struct ConversationSession: Equatable, Identifiable, Sendable {
 
     public init(
         id: UUID = UUID(),
-        title: String = "对话_0000",
+        title: String = String(format: "对话_%04d", Int.random(in: 1000...9999)),
         prompt: String,
         workspacePath: String = ".",
         state: ConversationRunState = .idle,

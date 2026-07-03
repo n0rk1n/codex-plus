@@ -722,6 +722,21 @@ let secondTitle = titleGenerator.nextTitle(existingTitles: [firstTitle])
 expect(firstTitle == "对话_4821", "conversation title uses random suffix")
 expect(secondTitle == "对话_9130", "conversation title retries on collision")
 
+let defaultSession = ConversationSession(prompt: "default title")
+let defaultSessionTitleSuffix = String(defaultSession.title.dropFirst("对话_".count))
+expect(
+    defaultSession.title.hasPrefix("对话_"),
+    "conversation session default title has 对话_ prefix"
+)
+expect(
+    defaultSessionTitleSuffix.count == 4 && defaultSessionTitleSuffix.allSatisfy(\.isNumber),
+    "conversation session default title has 4-digit suffix"
+)
+expect(
+    defaultSession.title != "对话_0000",
+    "conversation session default title is not fixed 0000 placeholder"
+)
+
 let emptyConversationCoordinator = ConversationCoordinator()
 expect(
     emptyConversationCoordinator.shortcutDecision() == .openFreshEntry,
