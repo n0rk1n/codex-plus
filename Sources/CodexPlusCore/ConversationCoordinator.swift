@@ -278,12 +278,16 @@ public final class ConversationCoordinator: ObservableObject {
             } else {
                 activeWorkspaceID = nil
                 activeConversationID = nil
-                draft = nil
+                if !wasDraftActive {
+                    draft = nil
+                }
             }
         } else if workspaces.isEmpty {
             activeWorkspaceID = nil
             activeConversationID = nil
-            draft = nil
+            if !wasDraftActive {
+                draft = nil
+            }
         } else if activeWorkspaceID == archivedWorkspaceID {
             let nextWorkspaceID = workspaces.max(by: { $0.lastActivityAt < $1.lastActivityAt })?.id
             activeWorkspaceID = nextWorkspaceID

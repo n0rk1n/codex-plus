@@ -1146,6 +1146,24 @@ expect(
     "remaining workspace conversations stay visible after draft archive repair"
 )
 
+let draftArchiveLastCoordinator = ConversationCoordinator(titleGenerator: ConversationTitleGenerator(randomSuffixes: [7201]))
+let draftArchiveLastConversation = draftArchiveLastCoordinator.startConversation(
+    prompt: "last",
+    workspacePath: "/tmp/draft-archive-last",
+    now: Date(timeIntervalSince1970: 90)
+)
+draftArchiveLastCoordinator.beginDraft(selectedWorkspacePath: "/tmp/custom-last-draft")
+draftArchiveLastCoordinator.setDraftPrompt("Keep final draft prompt")
+draftArchiveLastCoordinator.archiveConversation(draftArchiveLastConversation.id)
+expect(
+    draftArchiveLastCoordinator.snapshot.draft?.prompt == "Keep final draft prompt",
+    "draft mode preserves prompt when archiving the last visible conversation"
+)
+expect(
+    draftArchiveLastCoordinator.shortcutDecision() == .recallDraft,
+    "shortcut recalls draft after archiving the last visible conversation from draft mode"
+)
+
 let isolatedEventsCoordinator = ConversationCoordinator(titleGenerator: ConversationTitleGenerator(randomSuffixes: [8001, 8002]))
 let isolatedFirst = isolatedEventsCoordinator.startConversation(prompt: "one", workspacePath: "/tmp/events")
 let isolatedSecond = isolatedEventsCoordinator.startConversation(prompt: "two", workspacePath: "/tmp/events")
