@@ -983,6 +983,22 @@ expect(
     "shortcut recalls existing draft when draft exists"
 )
 
+let archivedShortcutCoordinator = ConversationCoordinator(titleGenerator: ConversationTitleGenerator(randomSuffixes: [6101]))
+let archivedShortcutConversation = archivedShortcutCoordinator.startConversation(prompt: "archive", workspacePath: "/tmp/archive-shortcut")
+archivedShortcutCoordinator.archiveConversation(archivedShortcutConversation.id)
+expect(
+    archivedShortcutCoordinator.shortcutDecision() == .openFreshEntry,
+    "shortcut opens fresh entry when every conversation is archived"
+)
+
+let visibleCompletedShortcutCoordinator = ConversationCoordinator(titleGenerator: ConversationTitleGenerator(randomSuffixes: [6201]))
+let visibleCompletedConversation = visibleCompletedShortcutCoordinator.startConversation(prompt: "done", workspacePath: "/tmp/done")
+visibleCompletedShortcutCoordinator.markCompleted(visibleCompletedConversation.id)
+expect(
+    visibleCompletedShortcutCoordinator.shortcutDecision() == .recallConversation(visibleCompletedConversation.id),
+    "completed visible conversation recalls workbench while it remains unarchived"
+)
+
 let workspaceMergeCoordinator = ConversationCoordinator(titleGenerator: ConversationTitleGenerator(randomSuffixes: [1111, 2222]))
 let mergeDate = Date(timeIntervalSince1970: 100)
 let firstMergedConversation = workspaceMergeCoordinator.startConversation(

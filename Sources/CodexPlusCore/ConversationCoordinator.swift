@@ -71,12 +71,10 @@ public final class ConversationCoordinator: ObservableObject {
 
     public func shortcutDecision() -> ShortcutDecision {
         if let activeConversation {
-            if activeConversation.state == .running ||
-                activeConversation.isPinned ||
-                activeConversation.isExplicitlyKept {
-                return .recallConversation(activeConversation.id)
-            }
+            return .recallConversation(activeConversation.id)
+        }
 
+        if !conversations.isEmpty && conversations.allSatisfy(\.isArchived) {
             return .openFreshEntry
         }
 

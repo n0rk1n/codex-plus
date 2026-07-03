@@ -93,11 +93,9 @@ final class WindowCoordinator: NSObject, NSWindowDelegate {
         dismissCompactPanel()
         edgeAffordancePanel?.orderOut(nil)
 
-        let snapshot = conversationCoordinator.snapshot
-
-        guard snapshot.activeConversation != nil || snapshot.draft != nil else {
-            showCompactPanel()
-            return
+        if conversationCoordinator.activeConversation == nil,
+           conversationCoordinator.snapshot.draft == nil {
+            conversationCoordinator.beginDraft()
         }
 
         guard let screen = activeScreen() else {
