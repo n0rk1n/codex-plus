@@ -241,6 +241,44 @@ func jsonValue(_ object: [String: Any], _ path: String...) -> Any? {
 }
 
 @MainActor
+func explicitPackageProductNames(packageRoot: URL) -> [String] {
+    let process = Process()
+    process.executableURL = URL(fileURLWithPath: "/usr/bin/env")
+    process.arguments = ["swift", "package", "dump-package"]
+    process.currentDirectoryURL = packageRoot
+
+    let outputPipe = Pipe()
+    process.standardOutput = outputPipe
+    process.standardError = Pipe()
+
+    do {
+        try process.run()
+    } catch {
+        expect(false, "swift package dump-package can run")
+        return []
+    }
+
+    process.waitUntilExit()
+    guard process.terminationStatus == 0 else {
+        expect(false, "swift package dump-package exits successfully")
+        return []
+    }
+
+    let data = outputPipe.fileHandleForReading.readDataToEndOfFile()
+    guard
+        let object = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+        let products = object["products"] as? [[String: Any]]
+    else {
+        expect(false, "swift package dump-package output contains products JSON")
+        return []
+    }
+
+    return products.compactMap { product in
+        product["name"] as? String
+    }
+}
+
+@MainActor
 func expectCodexPlusNaming() {
     let packageRoot = URL(fileURLWithPath: FileManager.default.currentDirectoryPath, isDirectory: true)
     let expectedPaths = [
@@ -266,9 +304,10 @@ func expectCodexPlusNaming() {
     )
 
     expect(packageText.contains(#"name: "codex-plus""#), "Swift package uses codex-plus slug name")
-    expect(packageText.contains(#".executable(name: "CodexPlusApp""#), "CodexPlusApp is the only public executable product")
-    expect(!packageText.contains(#".library(name: "CodexPlusCore""#), "CodexPlusCore is not a public library product")
-    expect(!packageText.contains(#".executable(name: "CodexPlusCoreTests""#), "CodexPlusCoreTests is not a public executable product")
+    expect(
+        explicitPackageProductNames(packageRoot: packageRoot) == ["CodexPlusApp"],
+        "Swift package explicitly exposes only CodexPlusApp"
+    )
     expect(!coreBatteryText.contains("IOKit"), "CodexPlusCore BatteryStatus does not import or reference IOKit")
     expect(
         FileManager.default.fileExists(atPath: appBatteryProviderPath.path),

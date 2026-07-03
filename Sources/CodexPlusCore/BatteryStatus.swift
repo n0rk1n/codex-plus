@@ -1,5 +1,3 @@
-import Foundation
-
 public enum BatteryChargingState: String, Equatable, Sendable {
     case charging
     case discharging

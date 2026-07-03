@@ -1,5 +1,4 @@
 import CodexPlusCore
-import Foundation
 import IOKit.ps
 
 struct IOKitBatteryStatusProvider: BatteryStatusProviding {
