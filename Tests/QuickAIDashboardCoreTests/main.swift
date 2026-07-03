@@ -743,6 +743,37 @@ expect(
     "panel placement stays free away from edges"
 )
 
+let timelineUserID = UUID()
+let timelineStatusID = UUID()
+let timelineCommandID = UUID()
+let timelineAssistantID = UUID()
+let timelineParseWarningID = UUID()
+let timelineItems = ConversationTimelineBuilder.items(from: [
+    .userPrompt(id: timelineUserID, text: "hello"),
+    .status(id: timelineStatusID, text: "Turn started"),
+    .command(id: timelineCommandID, executionID: "cmd1", command: "pwd", status: .completed),
+    .assistantMessage(id: timelineAssistantID, text: "Hi"),
+    .parseWarning(id: timelineParseWarningID, text: "{broken")
+])
+expect(timelineItems.count == 4, "timeline builder groups consecutive technical events")
+expect(timelineItems.first == .event(.userPrompt(id: timelineUserID, text: "hello")), "timeline builder keeps user prompt visible")
+if case let .technicalGroup(id, events) = timelineItems[1] {
+    expect(id == timelineStatusID, "timeline technical group uses first event id")
+    expect(events.count == 2, "timeline technical group contains consecutive status and command")
+} else {
+    expect(false, "timeline builder creates technical group")
+}
+expect(
+    timelineItems[2] == .event(.assistantMessage(id: timelineAssistantID, text: "Hi")),
+    "timeline builder keeps assistant message visible"
+)
+if case let .technicalGroup(id, events) = timelineItems[3] {
+    expect(id == timelineParseWarningID, "timeline technical group after assistant uses parse warning id")
+    expect(events.count == 1, "timeline technical group restarts after visible event")
+} else {
+    expect(false, "timeline builder creates second technical group")
+}
+
 if failures.isEmpty {
     print("QuickAIDashboardCoreTests passed: \(assertionCount) assertions")
 } else {

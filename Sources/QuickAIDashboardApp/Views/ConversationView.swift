@@ -12,6 +12,7 @@ struct ConversationView: View {
 
     @FocusState private var isFollowUpFocused: Bool
     @State private var followUp = ""
+    @State private var expandedTechnicalGroupIDs = Set<UUID>()
 
     var body: some View {
         VStack(spacing: 12) {
@@ -21,9 +22,9 @@ struct ConversationView: View {
                 ScrollViewReader { proxy in
                     ScrollView {
                         LazyVStack(alignment: .leading, spacing: 0) {
-                            ForEach(session.events) { event in
-                                ConversationEventRow(event: event)
-                                    .id(event.id)
+                            ForEach(timelineItems) { item in
+                                timelineRow(for: item)
+                                    .id(item.id)
                             }
                         }
                         .padding(14)
@@ -132,6 +133,26 @@ struct ConversationView: View {
         PermissionPrompter.fullAccessWarningText
     }
 
+    private var timelineItems: [ConversationTimelineItem] {
+        ConversationTimelineBuilder.items(from: session.events)
+    }
+
+    @ViewBuilder
+    private func timelineRow(for item: ConversationTimelineItem) -> some View {
+        switch item {
+        case let .event(event):
+            ConversationEventRow(event: event)
+        case let .technicalGroup(id, events):
+            ConversationTechnicalEventGroupRow(
+                events: events,
+                isExpanded: expandedTechnicalGroupIDs.contains(id),
+                onToggle: {
+                    toggleTechnicalGroup(id)
+                }
+            )
+        }
+    }
+
     private func iconButton(
         systemName: String,
         help: String,
@@ -163,11 +184,19 @@ struct ConversationView: View {
     }
 
     private func scrollToLatest(using proxy: ScrollViewProxy) {
-        guard let latestID = session.events.last?.id else {
+        guard let latestID = timelineItems.last?.id else {
             return
         }
 
         proxy.scrollTo(latestID, anchor: .bottom)
+    }
+
+    private func toggleTechnicalGroup(_ id: UUID) {
+        if expandedTechnicalGroupIDs.contains(id) {
+            expandedTechnicalGroupIDs.remove(id)
+        } else {
+            expandedTechnicalGroupIDs.insert(id)
+        }
     }
 }
 
