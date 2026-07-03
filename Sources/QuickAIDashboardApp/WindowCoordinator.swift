@@ -116,8 +116,22 @@ final class WindowCoordinator: NSObject, NSWindowDelegate {
 
     private func startConversation(prompt: String) {
         let session = conversationCoordinator.startConversation(prompt: prompt)
+        prepareCenteredSidePanelFrame()
         showSidePanel()
         startCodexRun(prompt: prompt, sessionID: session.id)
+    }
+
+    private func prepareCenteredSidePanelFrame() {
+        guard let screen = activeScreen() else {
+            sidePanelCustomFrame = nil
+            return
+        }
+
+        sidePanelCustomFrame = nsRect(
+            from: ConversationPanelLayoutPolicy.initialCenteredFrame(
+                in: screenRect(from: screen.visibleFrame)
+            )
+        )
     }
 
     private func handleFollowUp(_ prompt: String) {
@@ -566,6 +580,15 @@ final class WindowCoordinator: NSObject, NSWindowDelegate {
             y: Double(rect.minY),
             width: Double(rect.width),
             height: Double(rect.height)
+        )
+    }
+
+    private func nsRect(from rect: ScreenRect) -> NSRect {
+        NSRect(
+            x: rect.x,
+            y: rect.y,
+            width: rect.width,
+            height: rect.height
         )
     }
 

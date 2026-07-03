@@ -1383,6 +1383,25 @@ expect(
     "panel placement stays free away from edges"
 )
 
+expect(
+    ConversationPanelLayoutPolicy.initialCenteredFrame(
+        in: ScreenRect(x: 0, y: 0, width: 1500, height: 1000)
+    ) == ScreenRect(x: 330, y: 90, width: 840, height: 820),
+    "conversation panel initial frame is centered and sized for the main reading area"
+)
+expect(
+    ConversationPanelLayoutPolicy.initialCenteredFrame(
+        in: ScreenRect(x: 0, y: 0, width: 3000, height: 2000)
+    ) == ScreenRect(x: 1070, y: 540, width: 860, height: 920),
+    "conversation panel initial frame caps large desktop sizes"
+)
+expect(
+    ConversationPanelLayoutPolicy.initialCenteredFrame(
+        in: ScreenRect(x: 0, y: 0, width: 700, height: 600)
+    ) == ScreenRect(x: 90, y: 24, width: 520, height: 552),
+    "conversation panel initial frame keeps margins on compact screens"
+)
+
 let timelineUserID = UUID()
 let timelineStatusID = UUID()
 let timelineCommandID = UUID()
