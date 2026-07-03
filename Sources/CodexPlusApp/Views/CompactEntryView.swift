@@ -4,6 +4,7 @@ import SwiftUI
 struct CompactEntryView: View {
     let batteryStatus: BatteryStatus
     let codexUsageStatus: CodexUsageStatus
+    let onOpenDraft: () -> Void
     let onSubmit: (String) -> Void
 
     @FocusState private var isPromptFocused: Bool
@@ -39,14 +40,26 @@ struct CompactEntryView: View {
             .animation(.snappy(duration: 0.18), value: dashboardTileOrderRaw)
 
             LiquidGlassContainer(cornerRadius: 24) {
-                TextField("Ask Codex...", text: $prompt, axis: .vertical)
-                    .textFieldStyle(.plain)
-                    .font(.system(size: 15))
-                    .lineLimit(1...3)
-                    .focused($isPromptFocused)
-                    .onSubmit(submitPrompt)
-                    .padding(.horizontal, 18)
-                    .padding(.vertical, 14)
+                HStack(alignment: .bottom, spacing: 10) {
+                    Button(action: onOpenDraft) {
+                        Image(systemName: "folder")
+                            .font(.system(size: 15, weight: .semibold))
+                            .frame(width: 32, height: 32)
+                    }
+                    .buttonStyle(.plain)
+                    .contentShape(Rectangle())
+                    .help("Choose Workspace")
+                    .accessibilityLabel("Choose Workspace")
+
+                    TextField("Ask Codex...", text: $prompt, axis: .vertical)
+                        .textFieldStyle(.plain)
+                        .font(.system(size: 15))
+                        .lineLimit(1...3)
+                        .focused($isPromptFocused)
+                        .onSubmit(submitPrompt)
+                }
+                .padding(.horizontal, 18)
+                .padding(.vertical, 14)
             }
         }
         .padding(18)

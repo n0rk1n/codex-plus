@@ -976,6 +976,13 @@ expect(
 )
 expect(emptyConversationCoordinator.snapshot.workspaces.isEmpty, "empty coordinator has no workspaces")
 
+let draftShortcutCoordinator = ConversationCoordinator(titleGenerator: ConversationTitleGenerator(randomSuffixes: [1112]))
+draftShortcutCoordinator.beginDraft(selectedWorkspacePath: "/tmp/draft")
+expect(
+    draftShortcutCoordinator.shortcutDecision() == .recallDraft,
+    "shortcut recalls existing draft when draft exists"
+)
+
 let workspaceMergeCoordinator = ConversationCoordinator(titleGenerator: ConversationTitleGenerator(randomSuffixes: [1111, 2222]))
 let mergeDate = Date(timeIntervalSince1970: 100)
 let firstMergedConversation = workspaceMergeCoordinator.startConversation(

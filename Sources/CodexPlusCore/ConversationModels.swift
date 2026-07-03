@@ -259,6 +259,7 @@ public struct ConversationTitleGenerator: Sendable {
 }
 
 public enum ShortcutDecision: Equatable, Sendable {
-    case recallExisting(UUID)
+    case recallConversation(UUID)
+    case recallDraft
     case openFreshEntry
 }

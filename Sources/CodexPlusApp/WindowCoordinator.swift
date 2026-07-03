@@ -45,7 +45,7 @@ final class WindowCoordinator: NSObject, NSWindowDelegate {
         NSApp.activate(ignoringOtherApps: true)
 
         switch conversationCoordinator.shortcutDecision() {
-        case .recallExisting:
+        case .recallConversation, .recallDraft:
             showSidePanel()
         case .openFreshEntry:
             showCompactPanel()
@@ -70,6 +70,11 @@ final class WindowCoordinator: NSObject, NSWindowDelegate {
             rootView: CompactEntryHostView(
                 batteryMonitor: batteryMonitor,
                 codexUsageMonitor: codexUsageMonitor,
+                onOpenDraft: { [weak self] in
+                    Task { @MainActor in
+                        self?.openDraftFromCompactEntry()
+                    }
+                },
                 onSubmit: { [weak self] prompt in
                     Task { @MainActor in
                         self?.startConversation(prompt: prompt)
@@ -135,6 +140,12 @@ final class WindowCoordinator: NSObject, NSWindowDelegate {
         prepareCenteredSidePanelFrame()
         showSidePanel()
         startCodexRun(prompt: prompt, sessionID: session.id, workspacePath: session.workspacePath)
+    }
+
+    private func openDraftFromCompactEntry() {
+        conversationCoordinator.beginDraft()
+        prepareCenteredSidePanelFrame()
+        showSidePanel()
     }
 
     private func prepareCenteredSidePanelFrame() {
@@ -551,9 +562,11 @@ final class WindowCoordinator: NSObject, NSWindowDelegate {
     }
 
     private func showEdgeAffordance(on screen: NSScreen?) {
+        let snapshot = conversationCoordinator.snapshot
+        let canRecallConversation = snapshot.activeConversation.map { !$0.isPinned } ?? false
+
         guard
-            conversationCoordinator.activeConversation != nil,
-            conversationCoordinator.activeConversation?.isPinned != true,
+            canRecallConversation || snapshot.draft != nil,
             sidePanelCustomFrame == nil,
             let screen = screen ?? activeScreen()
         else {

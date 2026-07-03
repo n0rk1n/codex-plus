@@ -70,14 +70,18 @@ public final class ConversationCoordinator: ObservableObject {
     }
 
     public func shortcutDecision() -> ShortcutDecision {
-        guard let activeConversation else {
+        if let activeConversation {
+            if activeConversation.state == .running ||
+                activeConversation.isPinned ||
+                activeConversation.isExplicitlyKept {
+                return .recallConversation(activeConversation.id)
+            }
+
             return .openFreshEntry
         }
 
-        if activeConversation.state == .running ||
-            activeConversation.isPinned ||
-            activeConversation.isExplicitlyKept {
-            return .recallExisting(activeConversation.id)
+        if draft != nil {
+            return .recallDraft
         }
 
         return .openFreshEntry
