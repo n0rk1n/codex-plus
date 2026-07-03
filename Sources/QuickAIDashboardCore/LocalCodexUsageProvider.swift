@@ -8,18 +8,15 @@ public struct LocalCodexUsageProvider: CodexUsageProviding, @unchecked Sendable 
     private let sessionDirectories: [URL]
     private let archiveDirectories: [URL]
     private let fileManager: FileManager
-    private let maxFilesToScan: Int
 
     public init(
         sessionDirectories: [URL] = [FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent(".codex/sessions")],
         archiveDirectories: [URL] = [FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent(".codex/archived_sessions")],
-        fileManager: FileManager = .default,
-        maxFilesToScan: Int = 80
+        fileManager: FileManager = .default
     ) {
         self.sessionDirectories = sessionDirectories
         self.archiveDirectories = archiveDirectories
         self.fileManager = fileManager
-        self.maxFilesToScan = max(1, maxFilesToScan)
     }
 
     public func currentStatus() -> CodexUsageStatus {
@@ -69,7 +66,6 @@ public struct LocalCodexUsageProvider: CodexUsageProviding, @unchecked Sendable 
 
         return files
             .sorted { lhs, rhs in lhs.modifiedAt > rhs.modifiedAt }
-            .prefix(maxFilesToScan)
             .map(\.url)
     }
 

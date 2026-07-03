@@ -118,6 +118,15 @@ func writeText(_ text: String, to url: URL) {
 }
 
 @MainActor
+func setModificationDate(_ date: Date, for url: URL) {
+    do {
+        try FileManager.default.setAttributes([.modificationDate: date], ofItemAtPath: url.path)
+    } catch {
+        expect(false, "temporary file \(url.lastPathComponent) modification date can be set")
+    }
+}
+
+@MainActor
 func waitUntil(timeout: TimeInterval, condition: () -> Bool) -> Bool {
     let deadline = Date().addingTimeInterval(timeout)
 
@@ -764,6 +773,40 @@ expect(codexUsageStatus.weeklyPercent == 55, "codex usage provider reads newest 
 expect(
     codexUsageStatus.observedAt == ISO8601DateFormatter().date(from: "2026-07-03T02:00:00Z"),
     "codex usage provider preserves newest usage timestamp"
+)
+
+let allFilesUsageDirectory = makeTemporaryDirectory(named: "codex-usage-all-files")
+defer {
+    try? FileManager.default.removeItem(at: allFilesUsageDirectory)
+}
+let newestEventByTimestampFile = allFilesUsageDirectory.appendingPathComponent("newest-event-by-timestamp.jsonl")
+writeText(
+    """
+    {"timestamp":"2026-07-03T04:00:00Z","type":"event_msg","payload":{"type":"token_count","rate_limits":{"primary":{"used_percent":88,"window_minutes":300},"secondary":{"used_percent":78,"window_minutes":10080}}}}
+    """,
+    to: newestEventByTimestampFile
+)
+setModificationDate(Date(timeIntervalSince1970: 100), for: newestEventByTimestampFile)
+
+for index in 0..<80 {
+    let recentButOlderEventFile = allFilesUsageDirectory.appendingPathComponent("recent-\(index).jsonl")
+    writeText(
+        """
+        {"timestamp":"2026-07-03T02:00:00Z","type":"event_msg","payload":{"type":"token_count","rate_limits":{"primary":{"used_percent":20,"window_minutes":300},"secondary":{"used_percent":30,"window_minutes":10080}}}}
+        """,
+        to: recentButOlderEventFile
+    )
+    setModificationDate(Date(timeIntervalSince1970: Double(200 + index)), for: recentButOlderEventFile)
+}
+
+let allFilesUsageProvider = LocalCodexUsageProvider(
+    sessionDirectories: [allFilesUsageDirectory],
+    archiveDirectories: []
+)
+let allFilesUsageStatus = allFilesUsageProvider.currentStatus()
+expect(
+    allFilesUsageStatus.fiveHourPercent == 88,
+    "codex usage provider considers all files when choosing newest event timestamp"
 )
 
 let emptyUsageDirectory = makeTemporaryDirectory(named: "codex-usage-empty")
