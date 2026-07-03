@@ -5,7 +5,7 @@ public final class CodexRunController {
     private let runner: ProcessCodexRunner
     private let callbackQueue = DispatchQueue(label: "CodexPlusCore.CodexRunController.callbacks")
 
-    private var activeRunHandle: CodexRunHandle?
+    private var activeRunHandle: ProcessCodexRunHandle?
     private var activeRunID: UUID?
     private var activeRunSessionID: UUID?
     private var stoppedRunIDs = Set<UUID>()

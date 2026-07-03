@@ -14,11 +14,7 @@ public struct CodexRunResult: Equatable, Sendable {
     }
 }
 
-public protocol CodexRunHandle: Sendable {
-    func stop()
-}
-
-public final class ProcessCodexRunHandle: CodexRunHandle {
+public final class ProcessCodexRunHandle: Sendable {
     private let process: LockedProcess
 
     public init(process: Process) {
@@ -54,7 +50,7 @@ public struct ProcessCodexRunner: Sendable {
         permissionMode: PermissionMode,
         onEvent: @escaping @Sendable (CodexEvent) -> Void,
         onFinish: @escaping @Sendable (CodexRunResult) -> Void
-    ) -> CodexRunHandle {
+    ) -> ProcessCodexRunHandle {
         let process = Process()
         process.executableURL = executableURL
         process.arguments = executableArgumentsPrefix + CodexCommandBuilder.arguments(
@@ -67,7 +63,7 @@ public struct ProcessCodexRunner: Sendable {
         process.standardOutput = stdoutPipe
         process.standardError = stderrPipe
 
-        let stdoutBuffer = LockedOutputLineBuffer(maxBytes: maxBufferedOutputBytes)
+        let stdoutBuffer = LockedOutputLines(maxBytes: maxBufferedOutputBytes)
         let stderrBuffer = LockedDataBuffer(maxBytes: maxBufferedOutputBytes)
         let outputGroup = DispatchGroup()
         let finishQueue = DispatchQueue(label: "CodexPlusCore.ProcessCodexRunner.finish")
@@ -151,7 +147,7 @@ private final class LockedProcess: @unchecked Sendable {
     }
 }
 
-private final class LockedOutputLineBuffer: @unchecked Sendable {
+private final class LockedOutputLines: @unchecked Sendable {
     private let lock = NSLock()
     private let maxBytes: Int
     private var buffer = Data()
