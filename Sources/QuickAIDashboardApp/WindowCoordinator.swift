@@ -32,6 +32,7 @@ final class WindowCoordinator: NSObject, NSWindowDelegate {
         self.runController = CodexRunController(runner: codexRunner)
 
         super.init()
+        codexUsageMonitor.start()
     }
 
     deinit {
@@ -62,7 +63,6 @@ final class WindowCoordinator: NSObject, NSWindowDelegate {
         let panel = compactPanel ?? makePanel(frame: frame)
 
         batteryMonitor.start()
-        codexUsageMonitor.start()
         panel.setFrame(frame, display: true)
         panel.contentView = DraggableHostingView(
             rootView: CompactEntryHostView(
@@ -453,7 +453,6 @@ final class WindowCoordinator: NSObject, NSWindowDelegate {
     private func dismissCompactPanel() {
         compactPanel?.orderOut(nil)
         batteryMonitor.stop()
-        codexUsageMonitor.stop()
         compactDismissMonitors.removeAll()
     }
 

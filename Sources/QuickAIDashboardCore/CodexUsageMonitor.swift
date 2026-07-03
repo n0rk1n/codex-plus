@@ -3,6 +3,8 @@ import Foundation
 
 @MainActor
 public final class CodexUsageMonitor: ObservableObject {
+    public static let defaultRefreshInterval: TimeInterval = 120
+
     @Published public private(set) var status: CodexUsageStatus
 
     private let provider: any CodexUsageProviding
@@ -14,7 +16,7 @@ public final class CodexUsageMonitor: ObservableObject {
     public init(
         provider: any CodexUsageProviding,
         initialStatus: CodexUsageStatus = .unknown,
-        interval: TimeInterval = 60
+        interval: TimeInterval = CodexUsageMonitor.defaultRefreshInterval
     ) {
         self.provider = provider
         self.status = initialStatus

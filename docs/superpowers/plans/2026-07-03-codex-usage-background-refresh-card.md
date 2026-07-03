@@ -50,7 +50,7 @@ interval: TimeInterval = 60
 to:
 
 ```swift
-interval: TimeInterval = Self.defaultRefreshInterval
+interval: TimeInterval = CodexUsageMonitor.defaultRefreshInterval
 ```
 
 - [ ] **Step 4: Run test to verify it passes**
@@ -72,13 +72,9 @@ After `super.init()` in `WindowCoordinator.init`, add:
 codexUsageMonitor.start()
 ```
 
-- [ ] **Step 2: Stop usage monitor during coordinator teardown**
+- [ ] **Step 2: Keep teardown owned by the monitor**
 
-In `deinit`, add:
-
-```swift
-codexUsageMonitor.stop()
-```
+Do not call `codexUsageMonitor.stop()` from `WindowCoordinator.deinit`. `CodexUsageMonitor` already invalidates its timer in its own `deinit`, and Swift 6 does not allow calling the MainActor-isolated `stop()` from `WindowCoordinator.deinit`.
 
 - [ ] **Step 3: Remove panel-scoped usage start**
 

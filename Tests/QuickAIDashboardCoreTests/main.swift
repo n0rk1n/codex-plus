@@ -1044,6 +1044,10 @@ let codexUsageMonitorProvider = SequenceCodexUsageProvider([
     CodexUsageStatus(fiveHourPercent: 11, weeklyPercent: 22, observedAt: nil),
     CodexUsageStatus(fiveHourPercent: 33, weeklyPercent: 44, observedAt: nil)
 ])
+expect(
+    CodexUsageMonitor.defaultRefreshInterval == 120,
+    "codex usage monitor defaults to a two-minute refresh interval"
+)
 let codexUsageMonitor = CodexUsageMonitor(provider: codexUsageMonitorProvider)
 expect(codexUsageMonitor.status == .unknown, "codex usage monitor starts unknown before refresh")
 codexUsageMonitor.refresh()

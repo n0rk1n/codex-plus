@@ -7,7 +7,7 @@ struct CodexUsageRingTileView: View {
     var body: some View {
         LiquidGlassContainer(cornerRadius: 22) {
             VStack(spacing: 8) {
-                HStack(spacing: 0) {
+                HStack(spacing: 10) {
                     UsageMetricColumn(
                         label: "5h",
                         value: status.displayPercentText(for: .fiveHour),
@@ -27,7 +27,7 @@ struct CodexUsageRingTileView: View {
                     .lineLimit(1)
                     .minimumScaleFactor(0.75)
             }
-            .frame(width: 92, height: 92)
+            .frame(width: 138, height: 92)
         }
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(accessibilityText)

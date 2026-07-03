@@ -17,7 +17,7 @@ The Codex usage tile keeps its Liquid Glass treatment and text layout, but chang
 ## Architecture
 
 - `CodexUsageMonitor` owns the default background interval as a testable constant.
-- `WindowCoordinator` starts `codexUsageMonitor` once during initialization and stops it only during coordinator teardown.
+- `WindowCoordinator` starts `codexUsageMonitor` once during initialization. Timer cleanup remains owned by `CodexUsageMonitor` when it is deallocated.
 - `dismissCompactPanel()` no longer stops `codexUsageMonitor`.
 - `CodexUsageRingTileView` changes only its fixed frame and internal horizontal spacing.
 
