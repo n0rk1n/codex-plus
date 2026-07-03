@@ -2,11 +2,12 @@ import Foundation
 
 public enum DashboardTile: String, CaseIterable, Equatable, Hashable, Sendable {
     case battery
+    case codexDesktop
     case codexUsage
 }
 
 public struct DashboardTileOrder: Equatable, Sendable {
-    public static let defaultTiles: [DashboardTile] = [.codexUsage]
+    public static let defaultTiles: [DashboardTile] = [.codexDesktop, .codexUsage]
 
     public let tiles: [DashboardTile]
 

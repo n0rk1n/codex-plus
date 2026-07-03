@@ -48,8 +48,8 @@ final class CompactPanelController {
             rootView: CompactEntryHostView(
                 batteryMonitor: batteryMonitor,
                 codexUsageMonitor: codexUsageMonitor,
-                onOpenCodexDesktop: { [codexDesktopLauncher] in
-                    codexDesktopLauncher.open()
+                onOpenCodexDesktop: { [weak self] in
+                    self?.openCodexDesktopAndDismiss()
                 },
                 onSubmit: onSubmit
             )
@@ -77,7 +77,7 @@ final class CompactPanelController {
     }
 
     private static func defaultFrame(on screen: NSScreen) -> NSRect {
-        let size = NSSize(width: 420, height: 296)
+        let size = NSSize(width: 420, height: 210)
         let visibleFrame = screen.visibleFrame
         let origin = NSPoint(
             x: visibleFrame.midX - (size.width / 2),
@@ -85,6 +85,11 @@ final class CompactPanelController {
         )
 
         return NSRect(origin: origin, size: size)
+    }
+
+    private func openCodexDesktopAndDismiss() {
+        codexDesktopLauncher.open()
+        dismiss()
     }
 
     private func installDismissMonitorsIfNeeded() {

@@ -376,6 +376,7 @@ func expectCodexDesktopLauncherIntegration() {
     let launcherPath = "Sources/CodexPlusApp/CodexDesktopLauncher.swift"
     let tilePath = "Sources/CodexPlusApp/Views/CodexDesktopTileView.swift"
     let compactEntryPath = "Sources/CodexPlusApp/Views/CompactEntryView.swift"
+    let compactControllerPath = "Sources/CodexPlusApp/CompactPanelController.swift"
 
     for sourceFile in [launcherPath, tilePath] {
         let exists = FileManager.default.fileExists(
@@ -409,6 +410,16 @@ func expectCodexDesktopLauncherIntegration() {
         encoding: .utf8
     )) ?? ""
     expect(compactEntryText.contains("CodexDesktopTileView"), "compact entry renders Codex Desktop tile above prompt")
+    expect(compactEntryText.contains("case .codexDesktop"), "Codex Desktop tile is part of dashboard tile row")
+
+    let compactControllerText = (try? String(
+        contentsOf: packageRoot.appendingPathComponent(compactControllerPath),
+        encoding: .utf8
+    )) ?? ""
+    expect(
+        compactControllerText.contains("openCodexDesktopAndDismiss"),
+        "Codex Desktop tile click dismisses compact panel after opening Codex"
+    )
 }
 
 expect(PermissionMode.semiAutomatic.displayName == "Semi-Automatic", "semiAutomatic display name")
@@ -967,65 +978,69 @@ expect(invalidBattery.percentage == nil, "invalid battery percentage")
 expect(invalidBattery.state == .unknown, "invalid battery state")
 
 let defaultTileOrder = DashboardTileOrder(rawValue: nil)
-expect(defaultTileOrder.tiles == [.codexUsage], "dashboard tile order hides battery by default")
-expect(defaultTileOrder.rawValue == "codexUsage", "dashboard tile order serializes visible default order")
+expect(defaultTileOrder.tiles == [.codexDesktop, .codexUsage], "dashboard tile order defaults to Codex Desktop then usage")
+expect(defaultTileOrder.rawValue == "codexDesktop,codexUsage", "dashboard tile order serializes visible default order")
 
 let legacyTileOrder = DashboardTileOrder(rawValue: "battery,codexUsage")
-expect(legacyTileOrder.tiles == [.codexUsage], "dashboard tile order hides battery from persisted legacy order")
+expect(legacyTileOrder.tiles == [.codexDesktop, .codexUsage], "dashboard tile order migrates persisted battery to Codex Desktop")
 
-let reversedTileOrder = DashboardTileOrder(rawValue: "codexUsage,battery")
-expect(reversedTileOrder.tiles == [.codexUsage], "dashboard tile order hides battery from reversed persisted order")
+let reversedTileOrder = DashboardTileOrder(rawValue: "codexUsage,codexDesktop")
+expect(reversedTileOrder.tiles == [.codexUsage, .codexDesktop], "dashboard tile order reads reversed persisted order")
 
 let invalidTileOrder = DashboardTileOrder(rawValue: "battery,battery,unknown")
-expect(invalidTileOrder.tiles == [.codexUsage], "dashboard tile order falls back to visible tiles when persisted order is invalid")
+expect(invalidTileOrder.tiles == [.codexDesktop, .codexUsage], "dashboard tile order falls back to visible tiles when persisted order is invalid")
 
-let swappedTileOrder = defaultTileOrder.swapping(.codexUsage, with: .battery)
-expect(swappedTileOrder.tiles == [.codexUsage], "dashboard tile order ignores swaps with hidden battery tile")
+let swappedTileOrder = defaultTileOrder.swapping(.codexDesktop, with: .codexUsage)
+expect(swappedTileOrder.tiles == [.codexUsage, .codexDesktop], "dashboard tile order swaps Codex Desktop and usage tiles")
 expect(
-    defaultTileOrder.layoutTiles(excludingDragged: nil) == [.codexUsage],
-    "dashboard tile layout shows the visible codex usage tile"
+    defaultTileOrder.layoutTiles(excludingDragged: nil) == [.codexDesktop, .codexUsage],
+    "dashboard tile layout shows visible tiles"
 )
 expect(
-    defaultTileOrder.layoutTiles(excludingDragged: .battery) == [.codexUsage],
-    "dashboard tile layout ignores hidden battery drag exclusions"
+    defaultTileOrder.layoutTiles(excludingDragged: .codexDesktop) == [.codexUsage],
+    "dashboard tile layout removes dragged Codex Desktop tile"
 )
 expect(
-    defaultTileOrder.layoutTiles(excludingDragged: .codexUsage) == [],
+    defaultTileOrder.layoutTiles(excludingDragged: .codexUsage) == [.codexDesktop],
     "dashboard tile layout removes dragged codex usage tile"
 )
 expect(
     DashboardTileLayoutPolicy.placements(for: defaultTileOrder.tiles) == [
+        DashboardTilePlacement(tile: .codexDesktop, centerX: -75, width: 92),
+        DashboardTilePlacement(tile: .codexUsage, centerX: 52, width: 138)
+    ],
+    "dashboard tile layout places Codex Desktop left of usage"
+)
+expect(
+    DashboardTileLayoutPolicy.placements(for: reversedTileOrder.tiles) == [
+        DashboardTilePlacement(tile: .codexUsage, centerX: -52, width: 138),
+        DashboardTilePlacement(tile: .codexDesktop, centerX: 75, width: 92)
+    ],
+    "dashboard tile layout places reversed tiles at stable visual centers"
+)
+expect(
+    DashboardTileLayoutPolicy.placements(for: defaultTileOrder.layoutTiles(excludingDragged: .codexDesktop)) == [
         DashboardTilePlacement(tile: .codexUsage, centerX: 0, width: 138)
     ],
-    "dashboard tile layout centers the visible codex usage tile"
+    "dashboard tile layout recenters usage while Codex Desktop is dragged"
 )
 expect(
-    DashboardTileLayoutPolicy.placements(for: legacyTileOrder.tiles) == [
-        DashboardTilePlacement(tile: .codexUsage, centerX: 0, width: 138)
-    ],
-    "dashboard tile layout centers codex usage after hiding persisted battery"
+    DashboardTileLayoutPolicy.tile(atX: 135, rowWidth: 420, tiles: defaultTileOrder.tiles) == .codexDesktop,
+    "dashboard tile hit testing selects Codex Desktop at its visual center"
 )
 expect(
-    DashboardTileLayoutPolicy.placements(for: defaultTileOrder.layoutTiles(excludingDragged: .codexUsage)) == [],
-    "dashboard tile layout has no placements while codex usage is dragged away"
+    DashboardTileLayoutPolicy.tile(atX: 262, rowWidth: 420, tiles: defaultTileOrder.tiles) == .codexUsage,
+    "dashboard tile hit testing selects codex usage at its visual center"
 )
 expect(
-    DashboardTileLayoutPolicy.tile(atX: 110, rowWidth: 420, tiles: defaultTileOrder.tiles) == nil,
-    "dashboard tile hit testing ignores the hidden battery area"
-)
-expect(
-    DashboardTileLayoutPolicy.tile(atX: 210, rowWidth: 420, tiles: defaultTileOrder.tiles) == .codexUsage,
-    "dashboard tile hit testing selects centered codex usage"
-)
-expect(
-    DashboardTileLayoutPolicy.tile(atX: 280, rowWidth: 420, tiles: defaultTileOrder.tiles) == nil,
-    "dashboard tile hit testing ignores space outside centered codex usage"
+    DashboardTileLayoutPolicy.tile(atX: 187, rowWidth: 420, tiles: defaultTileOrder.tiles) == nil,
+    "dashboard tile hit testing ignores the gap between tiles"
 )
 
-let compactEntryBounds = CGRect(x: 0, y: 0, width: 420, height: 296)
+let compactEntryBounds = CGRect(x: 0, y: 0, width: 420, height: 210)
 expect(
     !CompactDashboardTileDragPolicy.shouldMoveWindowFromMouseDown(
-        at: CGPoint(x: 210, y: 50),
+        at: CGPoint(x: 110, y: 64),
         panelBounds: compactEntryBounds,
         verticalOrigin: .top
     ),
@@ -1033,7 +1048,7 @@ expect(
 )
 expect(
     !CompactDashboardTileDragPolicy.shouldMoveWindowFromMouseDown(
-        at: CGPoint(x: 210, y: 128),
+        at: CGPoint(x: 290, y: 64),
         panelBounds: compactEntryBounds,
         verticalOrigin: .top
     ),
@@ -1041,7 +1056,7 @@ expect(
 )
 expect(
     !CompactDashboardTileDragPolicy.shouldMoveWindowFromMouseDown(
-        at: CGPoint(x: 50, y: 128),
+        at: CGPoint(x: 50, y: 64),
         panelBounds: compactEntryBounds,
         verticalOrigin: .top
     ),
@@ -1049,7 +1064,7 @@ expect(
 )
 expect(
     CompactDashboardTileDragPolicy.shouldMoveWindowFromMouseDown(
-        at: CGPoint(x: 210, y: 236),
+        at: CGPoint(x: 210, y: 152),
         panelBounds: compactEntryBounds,
         verticalOrigin: .top
     ),
@@ -1057,7 +1072,7 @@ expect(
 )
 expect(
     !CompactDashboardTileDragPolicy.shouldMoveWindowFromMouseDown(
-        at: CGPoint(x: 210, y: 168),
+        at: CGPoint(x: 110, y: 146),
         panelBounds: compactEntryBounds,
         verticalOrigin: .bottom
     ),

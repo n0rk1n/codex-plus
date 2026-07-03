@@ -9,8 +9,7 @@ struct CodexDesktopTileView: View {
             LiquidGlassContainer(cornerRadius: 22) {
                 image
                     .frame(width: 48, height: 48)
-                    .padding(.vertical, 9)
-                    .frame(maxWidth: .infinity, minHeight: 66)
+                    .frame(width: 92, height: 92)
             }
         }
         .buttonStyle(.plain)
