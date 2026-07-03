@@ -1005,6 +1005,15 @@ expect(
     "shortcut opens fresh entry when every conversation is archived"
 )
 
+let archivedDraftShortcutCoordinator = ConversationCoordinator(titleGenerator: ConversationTitleGenerator(randomSuffixes: [6102]))
+let archivedDraftShortcutConversation = archivedDraftShortcutCoordinator.startConversation(prompt: "archive draft", workspacePath: "/tmp/archive-draft-shortcut")
+archivedDraftShortcutCoordinator.archiveConversation(archivedDraftShortcutConversation.id)
+archivedDraftShortcutCoordinator.beginDraft(selectedWorkspacePath: "/tmp/archive-draft-shortcut", prompt: "resume draft prompt")
+expect(
+    archivedDraftShortcutCoordinator.shortcutDecision() == .recallDraft,
+    "shortcut recalls draft when all conversations are archived and a draft exists"
+)
+
 let visibleCompletedShortcutCoordinator = ConversationCoordinator(titleGenerator: ConversationTitleGenerator(randomSuffixes: [6201]))
 let visibleCompletedConversation = visibleCompletedShortcutCoordinator.startConversation(prompt: "done", workspacePath: "/tmp/done")
 visibleCompletedShortcutCoordinator.markCompleted(visibleCompletedConversation.id)

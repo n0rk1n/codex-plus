@@ -74,10 +74,6 @@ public final class ConversationCoordinator: ObservableObject {
             return .recallConversation(activeConversation.id)
         }
 
-        if !conversations.isEmpty && conversations.allSatisfy(\.isArchived) {
-            return .openFreshEntry
-        }
-
         if draft != nil {
             return .recallDraft
         }

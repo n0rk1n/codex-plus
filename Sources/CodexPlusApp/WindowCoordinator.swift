@@ -70,9 +70,9 @@ final class WindowCoordinator: NSObject, NSWindowDelegate {
             rootView: CompactEntryHostView(
                 batteryMonitor: batteryMonitor,
                 codexUsageMonitor: codexUsageMonitor,
-                onOpenDraft: { [weak self] in
+                onOpenDraft: { [weak self] prompt in
                     Task { @MainActor in
-                        self?.openDraftFromCompactEntry()
+                        self?.openDraftFromCompactEntry(prompt: prompt)
                     }
                 },
                 onSubmit: { [weak self] prompt in
@@ -151,8 +151,8 @@ final class WindowCoordinator: NSObject, NSWindowDelegate {
         startCodexRun(prompt: trimmedPrompt, sessionID: session.id, workspacePath: session.workspacePath)
     }
 
-    private func openDraftFromCompactEntry() {
-        conversationCoordinator.beginDraft()
+    private func openDraftFromCompactEntry(prompt: String) {
+        conversationCoordinator.beginDraft(prompt: prompt)
         prepareCenteredSidePanelFrame()
         showSidePanel()
     }

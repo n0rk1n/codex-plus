@@ -4,7 +4,7 @@ import SwiftUI
 struct CompactEntryView: View {
     let batteryStatus: BatteryStatus
     let codexUsageStatus: CodexUsageStatus
-    let onOpenDraft: () -> Void
+    let onOpenDraft: (String) -> Void
     let onSubmit: (String) -> Void
 
     @FocusState private var isPromptFocused: Bool
@@ -41,7 +41,7 @@ struct CompactEntryView: View {
 
             LiquidGlassContainer(cornerRadius: 24) {
                 HStack(alignment: .bottom, spacing: 10) {
-                    Button(action: onOpenDraft) {
+                    Button(action: { onOpenDraft(prompt) }) {
                         Image(systemName: "folder")
                             .font(.system(size: 15, weight: .semibold))
                             .frame(width: 32, height: 32)
