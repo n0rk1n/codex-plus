@@ -18,27 +18,28 @@ struct CodexUsageRingTileView: View {
                     percent: status.weeklyPercent,
                     color: color(for: .weekly),
                     lineWidth: 5,
-                    diameter: 52
+                    diameter: 56
                 )
 
                 VStack(spacing: 1) {
                     Text("5H \(percentText(status.fiveHourPercent))")
-                        .font(.system(size: 15, weight: .semibold, design: .rounded))
+                        .font(.system(size: 13, weight: .semibold, design: .rounded))
                         .lineLimit(1)
-                        .minimumScaleFactor(0.75)
+                        .minimumScaleFactor(0.65)
 
                     Text("1W \(percentText(status.weeklyPercent))")
-                        .font(.system(size: 11, weight: .medium, design: .rounded))
+                        .font(.system(size: 10, weight: .medium, design: .rounded))
                         .foregroundStyle(.secondary)
                         .lineLimit(1)
-                        .minimumScaleFactor(0.75)
+                        .minimumScaleFactor(0.7)
 
                     Text(labelText)
-                        .font(.system(size: 9, weight: .medium))
+                        .font(.system(size: 8, weight: .medium))
                         .foregroundStyle(.secondary)
                         .lineLimit(1)
+                        .minimumScaleFactor(0.85)
                 }
-                .frame(width: 54)
+                .frame(width: 46)
             }
             .frame(width: 92, height: 92)
         }
@@ -55,7 +56,11 @@ struct CodexUsageRingTileView: View {
     }
 
     private var accessibilityText: String {
-        "Codex usage, five hours \(percentText(status.fiveHourPercent)), one week \(percentText(status.weeklyPercent))"
+        if status.fiveHourPercent == nil && status.weeklyPercent == nil {
+            return "Codex usage, no data"
+        }
+
+        return "Codex usage, five hours \(accessibilityPercentText(status.fiveHourPercent)), one week \(accessibilityPercentText(status.weeklyPercent))"
     }
 
     private func percentText(_ percent: Int?) -> String {
@@ -64,6 +69,14 @@ struct CodexUsageRingTileView: View {
         }
 
         return "\(percent)%"
+    }
+
+    private func accessibilityPercentText(_ percent: Int?) -> String {
+        guard let percent else {
+            return "no data"
+        }
+
+        return "\(percent) percent"
     }
 
     private func color(for window: CodexUsageWindow) -> Color {

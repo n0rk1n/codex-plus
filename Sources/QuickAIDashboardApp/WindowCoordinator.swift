@@ -453,6 +453,7 @@ final class WindowCoordinator: NSObject, NSWindowDelegate {
     private func dismissCompactPanel() {
         compactPanel?.orderOut(nil)
         batteryMonitor.stop()
+        codexUsageMonitor.stop()
         compactDismissMonitors.removeAll()
     }
 
