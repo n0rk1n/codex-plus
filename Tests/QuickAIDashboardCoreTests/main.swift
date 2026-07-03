@@ -679,6 +679,31 @@ let invalidBattery = BatteryStatus.from(
 expect(invalidBattery.percentage == nil, "invalid battery percentage")
 expect(invalidBattery.state == .unknown, "invalid battery state")
 
+let unknownCodexUsage = CodexUsageStatus.unknown
+expect(unknownCodexUsage.fiveHourPercent == nil, "unknown codex usage has no five-hour percent")
+expect(unknownCodexUsage.weeklyPercent == nil, "unknown codex usage has no weekly percent")
+expect(unknownCodexUsage.ringColor(for: .fiveHour) == .inactive, "unknown codex usage uses inactive ring color")
+
+let greenCodexUsage = CodexUsageStatus(fiveHourPercent: 42, weeklyPercent: 12, observedAt: Date(timeIntervalSince1970: 10))
+expect(greenCodexUsage.fiveHourPercent == 42, "codex usage stores five-hour percent")
+expect(greenCodexUsage.weeklyPercent == 12, "codex usage stores weekly percent")
+expect(greenCodexUsage.ringColor(for: .fiveHour) == .lowUsageGreen, "codex usage below sixty percent is green")
+
+let yellowCodexUsage = CodexUsageStatus(fiveHourPercent: 80, weeklyPercent: 75, observedAt: nil)
+expect(yellowCodexUsage.ringColor(for: .fiveHour) == .midUsageYellow, "codex usage at eighty percent is yellow")
+expect(
+    yellowCodexUsage.ringColor(for: .weekly) != .lowUsageGreen,
+    "codex usage between sixty and eighty percent interpolates away from green"
+)
+
+let redCodexUsage = CodexUsageStatus(fiveHourPercent: 96, weeklyPercent: 100, observedAt: nil)
+expect(redCodexUsage.ringColor(for: .fiveHour) != .midUsageYellow, "codex usage above eighty percent interpolates away from yellow")
+expect(redCodexUsage.ringColor(for: .weekly) == .highUsageRed, "codex usage at one hundred percent is red")
+
+let clampedCodexUsage = CodexUsageStatus(fiveHourPercent: -5, weeklyPercent: 140, observedAt: nil)
+expect(clampedCodexUsage.fiveHourPercent == 0, "codex usage clamps low percent to zero")
+expect(clampedCodexUsage.weeklyPercent == 100, "codex usage clamps high percent to one hundred")
+
 let batteryMonitorProvider = SequenceBatteryProvider([
     BatteryStatus(percentage: 20, state: .discharging),
     BatteryStatus(percentage: 21, state: .charging)
