@@ -1054,6 +1054,80 @@ let clampedCodexUsage = CodexUsageStatus(fiveHourPercent: -5, weeklyPercent: 140
 expect(clampedCodexUsage.fiveHourPercent == 0, "codex usage clamps low percent to zero")
 expect(clampedCodexUsage.weeklyPercent == 100, "codex usage clamps high percent to one hundred")
 
+let unknownDailyTokens = DailyTokenStatus.unknown
+expect(unknownDailyTokens.inputText == "--", "unknown daily tokens show placeholder input")
+expect(unknownDailyTokens.outputText == "--", "unknown daily tokens show placeholder output")
+expect(unknownDailyTokens.hitRateText == "--", "unknown daily tokens show placeholder hit rate")
+
+let compactDailyTokens = DailyTokenStatus(
+    inputTokens: 1_234_431,
+    outputTokens: 12_345,
+    cachedInputTokens: 617_216,
+    observedAt: Date(timeIntervalSince1970: 10)
+)
+expect(compactDailyTokens.inputText == "1.2M", "daily tokens compact large input totals")
+expect(compactDailyTokens.outputText == "12K", "daily tokens compact medium output totals")
+expect(compactDailyTokens.hitRateText == "50%", "daily tokens show rounded cache hit rate")
+
+let dailyTokenSessionsDirectory = makeTemporaryDirectory(named: "daily-token-sessions")
+let dailyTokenArchivesDirectory = makeTemporaryDirectory(named: "daily-token-archives")
+defer {
+    try? FileManager.default.removeItem(at: dailyTokenSessionsDirectory)
+    try? FileManager.default.removeItem(at: dailyTokenArchivesDirectory)
+}
+var dailyTokenCalendar = Calendar(identifier: .gregorian)
+dailyTokenCalendar.timeZone = TimeZone(secondsFromGMT: 0)!
+let dailyTokenNow = ISO8601DateFormatter().date(from: "2026-07-03T12:00:00Z")!
+
+writeText(
+    """
+    {malformed
+    {"timestamp":"2026-07-02T23:59:00Z","type":"event_msg","payload":{"type":"token_count","info":{"last_token_usage":{"input_tokens":9000,"cached_input_tokens":9000,"output_tokens":900}}}}
+    {"timestamp":"2026-07-03T01:00:00Z","type":"event_msg","payload":{"type":"token_count","info":{"last_token_usage":{"input_tokens":1000,"cached_input_tokens":200,"output_tokens":50}}}}
+    """,
+    to: dailyTokenSessionsDirectory.appendingPathComponent("today.jsonl")
+)
+writeText(
+    """
+    {"timestamp":"2026-07-03T02:00:00Z","type":"event_msg","payload":{"type":"token_count","info":{"last_token_usage":{"input_tokens":2000,"cached_input_tokens":1300,"output_tokens":150}}}}
+    """,
+    to: dailyTokenArchivesDirectory.appendingPathComponent("archived.jsonl")
+)
+writeText(
+    """
+    {"timestamp":"2026-07-03T03:00:00Z","type":"event_msg","payload":{"type":"token_count","info":{"last_token_usage":{"input_tokens":9999,"cached_input_tokens":9999,"output_tokens":999}}}}
+    """,
+    to: dailyTokenSessionsDirectory.appendingPathComponent("ignored.txt")
+)
+
+let dailyTokenProvider = LocalDailyTokenUsageProvider(
+    sessionDirectories: [dailyTokenSessionsDirectory],
+    archiveDirectories: [dailyTokenArchivesDirectory],
+    calendar: dailyTokenCalendar,
+    now: { dailyTokenNow }
+)
+let dailyTokenStatus = dailyTokenProvider.currentStatus()
+expect(dailyTokenStatus.inputTokens == 3000, "daily token provider sums today's input deltas")
+expect(dailyTokenStatus.cachedInputTokens == 1500, "daily token provider sums today's cached input deltas")
+expect(dailyTokenStatus.outputTokens == 200, "daily token provider sums today's output deltas")
+expect(dailyTokenStatus.hitRateText == "50%", "daily token provider computes cache hit rate from summed input")
+expect(
+    dailyTokenStatus.observedAt == ISO8601DateFormatter().date(from: "2026-07-03T02:00:00Z"),
+    "daily token provider preserves newest contributing timestamp"
+)
+
+let emptyDailyTokenDirectory = makeTemporaryDirectory(named: "daily-token-empty")
+defer {
+    try? FileManager.default.removeItem(at: emptyDailyTokenDirectory)
+}
+let emptyDailyTokenProvider = LocalDailyTokenUsageProvider(
+    sessionDirectories: [emptyDailyTokenDirectory],
+    archiveDirectories: [],
+    calendar: dailyTokenCalendar,
+    now: { dailyTokenNow }
+)
+expect(emptyDailyTokenProvider.currentStatus() == .unknown, "daily token provider returns unknown without token events")
+
 let codexUsageSessionsDirectory = makeTemporaryDirectory(named: "codex-usage-sessions")
 let codexUsageArchivesDirectory = makeTemporaryDirectory(named: "codex-usage-archives")
 defer {
