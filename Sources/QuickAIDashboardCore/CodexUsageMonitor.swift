@@ -7,7 +7,9 @@ public final class CodexUsageMonitor: ObservableObject {
 
     private let provider: any CodexUsageProviding
     private let interval: TimeInterval
+    private let refreshQueue = DispatchQueue(label: "QuickAIDashboardCore.CodexUsageMonitor.refresh", qos: .utility)
     private var timer: Timer?
+    private var refreshID = UUID()
 
     public init(
         provider: any CodexUsageProviding,
@@ -22,6 +24,7 @@ public final class CodexUsageMonitor: ObservableObject {
     deinit {
         MainActor.assumeIsolated {
             timer?.invalidate()
+            refreshID = UUID()
         }
     }
 
@@ -42,9 +45,24 @@ public final class CodexUsageMonitor: ObservableObject {
     public func stop() {
         timer?.invalidate()
         timer = nil
+        refreshID = UUID()
     }
 
     public func refresh() {
-        status = provider.currentStatus()
+        let requestedRefreshID = UUID()
+        refreshID = requestedRefreshID
+        let provider = provider
+
+        refreshQueue.async { [provider, requestedRefreshID, weak self] in
+            let nextStatus = provider.currentStatus()
+
+            Task { @MainActor [weak self] in
+                guard let self, self.refreshID == requestedRefreshID else {
+                    return
+                }
+
+                self.status = nextStatus
+            }
+        }
     }
 }

@@ -99,6 +99,52 @@ final class SequenceCodexUsageProvider: CodexUsageProviding, @unchecked Sendable
     }
 }
 
+final class BlockingCodexUsageProvider: CodexUsageProviding, @unchecked Sendable {
+    private let lock = NSLock()
+    private let started = DispatchSemaphore(value: 0)
+    private let releaseSemaphore = DispatchSemaphore(value: 0)
+    private let finished = DispatchSemaphore(value: 0)
+    private let status: CodexUsageStatus
+    private var callWasOnMainThreadValue: Bool?
+
+    init(status: CodexUsageStatus) {
+        self.status = status
+    }
+
+    func currentStatus() -> CodexUsageStatus {
+        lock.lock()
+        callWasOnMainThreadValue = Thread.isMainThread
+        lock.unlock()
+
+        started.signal()
+        _ = releaseSemaphore.wait(timeout: .now() + .seconds(2))
+        finished.signal()
+
+        return status
+    }
+
+    func release() {
+        releaseSemaphore.signal()
+    }
+
+    func waitUntilStarted() -> Bool {
+        started.wait(timeout: .now() + .seconds(2)) == .success
+    }
+
+    func waitUntilFinished() -> Bool {
+        finished.wait(timeout: .now() + .seconds(2)) == .success
+    }
+
+    var callWasOnMainThread: Bool? {
+        lock.lock()
+        defer {
+            lock.unlock()
+        }
+
+        return callWasOnMainThreadValue
+    }
+}
+
 @MainActor
 func makeTemporaryScript(named name: String, contents: String) -> String {
     let url = FileManager.default.temporaryDirectory.appendingPathComponent(
@@ -906,6 +952,59 @@ expect(
     "codex usage provider ignores non-jsonl files"
 )
 
+let cacheUsageDirectory = makeTemporaryDirectory(named: "codex-usage-cache")
+defer {
+    try? FileManager.default.removeItem(at: cacheUsageDirectory)
+}
+let cacheUsageFile = cacheUsageDirectory.appendingPathComponent("usage.jsonl")
+let cacheMetadataDate = Date(timeIntervalSince1970: 1_700_000_000)
+writeText(
+    """
+    {"timestamp":"2026-07-03T07:00:00Z","type":"event_msg","payload":{"type":"token_count","rate_limits":{"primary":{"used_percent":21,"window_minutes":300},"secondary":{"used_percent":22,"window_minutes":10080}}}}
+    """,
+    to: cacheUsageFile
+)
+setModificationDate(cacheMetadataDate, for: cacheUsageFile)
+
+let cacheUsageProvider = LocalCodexUsageProvider(
+    sessionDirectories: [cacheUsageDirectory],
+    archiveDirectories: []
+)
+let firstCacheUsageStatus = cacheUsageProvider.currentStatus()
+expect(firstCacheUsageStatus.fiveHourPercent == 21, "codex usage provider cache first read five-hour percent")
+expect(firstCacheUsageStatus.weeklyPercent == 22, "codex usage provider cache first read weekly percent")
+
+writeText(
+    """
+    {"timestamp":"2026-07-03T07:01:00Z","type":"event_msg","payload":{"type":"token_count","rate_limits":{"primary":{"used_percent":31,"window_minutes":300},"secondary":{"used_percent":32,"window_minutes":10080}}}}
+    """,
+    to: cacheUsageFile
+)
+setModificationDate(cacheMetadataDate, for: cacheUsageFile)
+let unchangedMetadataUsageStatus = cacheUsageProvider.currentStatus()
+expect(
+    unchangedMetadataUsageStatus.fiveHourPercent == 21,
+    "codex usage provider reuses cached status when file metadata is unchanged"
+)
+
+writeText(
+    """
+    {malformed
+    {"timestamp":"2026-07-03T07:02:00Z","type":"event_msg","payload":{"type":"token_count","rate_limits":{"primary":{"used_percent":41,"window_minutes":300},"secondary":{"used_percent":52,"window_minutes":10080}}}}
+    """,
+    to: cacheUsageFile
+)
+setModificationDate(cacheMetadataDate.addingTimeInterval(1), for: cacheUsageFile)
+let invalidatedCacheUsageStatus = cacheUsageProvider.currentStatus()
+expect(
+    invalidatedCacheUsageStatus.fiveHourPercent == 41,
+    "codex usage provider invalidates cached status when file metadata changes"
+)
+expect(
+    invalidatedCacheUsageStatus.weeklyPercent == 52,
+    "codex usage provider invalidation reads new weekly percent"
+)
+
 let emptyUsageDirectory = makeTemporaryDirectory(named: "codex-usage-empty")
 defer {
     try? FileManager.default.removeItem(at: emptyUsageDirectory)
@@ -940,14 +1039,91 @@ let codexUsageMonitorProvider = SequenceCodexUsageProvider([
 let codexUsageMonitor = CodexUsageMonitor(provider: codexUsageMonitorProvider)
 expect(codexUsageMonitor.status == .unknown, "codex usage monitor starts unknown before refresh")
 codexUsageMonitor.refresh()
+let codexUsageMonitorFirstUpdate = waitUntil(timeout: 2) {
+    codexUsageMonitor.status == CodexUsageStatus(fiveHourPercent: 11, weeklyPercent: 22, observedAt: nil)
+}
 expect(
-    codexUsageMonitor.status == CodexUsageStatus(fiveHourPercent: 11, weeklyPercent: 22, observedAt: nil),
-    "codex usage monitor refresh reads provider status"
+    codexUsageMonitorFirstUpdate,
+    "codex usage monitor refresh eventually reads provider status"
 )
 codexUsageMonitor.refresh()
+let codexUsageMonitorSecondUpdate = waitUntil(timeout: 2) {
+    codexUsageMonitor.status == CodexUsageStatus(fiveHourPercent: 33, weeklyPercent: 44, observedAt: nil)
+}
 expect(
-    codexUsageMonitor.status == CodexUsageStatus(fiveHourPercent: 33, weeklyPercent: 44, observedAt: nil),
-    "codex usage monitor refresh updates status from provider"
+    codexUsageMonitorSecondUpdate,
+    "codex usage monitor refresh eventually updates status from provider"
+)
+
+let asyncCodexUsageStatus = CodexUsageStatus(
+    fiveHourPercent: 66,
+    weeklyPercent: 77,
+    observedAt: Date(timeIntervalSince1970: 20)
+)
+let asyncCodexUsageProvider = BlockingCodexUsageProvider(status: asyncCodexUsageStatus)
+let asyncCodexUsageMonitor = CodexUsageMonitor(provider: asyncCodexUsageProvider)
+DispatchQueue.global().asyncAfter(deadline: .now() + .milliseconds(350)) {
+    asyncCodexUsageProvider.release()
+}
+let asyncRefreshStartedAt = Date()
+asyncCodexUsageMonitor.refresh()
+let asyncRefreshDuration = Date().timeIntervalSince(asyncRefreshStartedAt)
+expect(
+    asyncRefreshDuration < 0.15,
+    "codex usage monitor refresh returns before a slow provider finishes"
+)
+expect(
+    asyncCodexUsageProvider.waitUntilStarted(),
+    "codex usage monitor refresh starts provider work"
+)
+expect(
+    asyncCodexUsageMonitor.status == .unknown,
+    "codex usage monitor keeps status unchanged while background provider work is pending"
+)
+expect(
+    asyncCodexUsageProvider.waitUntilFinished(),
+    "codex usage monitor slow provider finishes"
+)
+let asyncCodexUsageMonitorUpdated = waitUntil(timeout: 2) {
+    asyncCodexUsageMonitor.status == asyncCodexUsageStatus
+}
+expect(
+    asyncCodexUsageMonitorUpdated,
+    "codex usage monitor publishes background provider status on the main actor"
+)
+expect(
+    asyncCodexUsageProvider.callWasOnMainThread == false,
+    "codex usage monitor calls provider off the main thread"
+)
+
+let stoppedCodexUsageStatus = CodexUsageStatus(
+    fiveHourPercent: 81,
+    weeklyPercent: 82,
+    observedAt: Date(timeIntervalSince1970: 30)
+)
+let stoppedCodexUsageProvider = BlockingCodexUsageProvider(status: stoppedCodexUsageStatus)
+let stoppedCodexUsageMonitor = CodexUsageMonitor(provider: stoppedCodexUsageProvider)
+DispatchQueue.global().asyncAfter(deadline: .now() + .milliseconds(350)) {
+    stoppedCodexUsageProvider.release()
+}
+let stoppedRefreshStartedAt = Date()
+stoppedCodexUsageMonitor.refresh()
+let stoppedRefreshDuration = Date().timeIntervalSince(stoppedRefreshStartedAt)
+expect(
+    stoppedRefreshDuration < 0.15,
+    "codex usage monitor stop test refresh returns before a slow provider finishes"
+)
+stoppedCodexUsageMonitor.stop()
+expect(
+    stoppedCodexUsageProvider.waitUntilFinished(),
+    "codex usage monitor stopped provider finishes"
+)
+let stoppedCodexUsageMonitorUpdated = waitUntil(timeout: 0.3) {
+    stoppedCodexUsageMonitor.status == stoppedCodexUsageStatus
+}
+expect(
+    !stoppedCodexUsageMonitorUpdated,
+    "codex usage monitor stop prevents in-flight refresh from updating status"
 )
 
 let compactPanelFrame = ScreenRect(x: 100, y: 100, width: 420, height: 210)
