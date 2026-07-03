@@ -20,16 +20,23 @@ public struct ProcessCodexAppServerHandoffRunner: Sendable {
     fileprivate static let initializeRequestID = 0
     fileprivate static let threadStartRequestID = 1
     fileprivate static let turnStartRequestID = 2
+    public static var defaultWorkingDirectoryURL: URL {
+        FileManager.default.homeDirectoryForCurrentUser
+            .appendingPathComponent(".codex/threads", isDirectory: true)
+    }
 
     private let executableURL: URL
     private let executableArgumentsPrefix: [String]
+    private let workingDirectoryURL: URL
 
     public init(
         executableURL: URL = URL(fileURLWithPath: "/usr/bin/env"),
-        executableArgumentsPrefix: [String] = ["codex", "app-server"]
+        executableArgumentsPrefix: [String] = ["codex", "app-server"],
+        workingDirectoryURL: URL = ProcessCodexAppServerHandoffRunner.defaultWorkingDirectoryURL
     ) {
         self.executableURL = executableURL
         self.executableArgumentsPrefix = executableArgumentsPrefix
+        self.workingDirectoryURL = workingDirectoryURL
     }
 
     @discardableResult
@@ -42,6 +49,7 @@ public struct ProcessCodexAppServerHandoffRunner: Sendable {
         let process = Process()
         process.executableURL = executableURL
         process.arguments = executableArgumentsPrefix
+        process.currentDirectoryURL = workingDirectoryURL
 
         let stdinPipe = Pipe()
         let stdoutPipe = Pipe()
@@ -72,6 +80,10 @@ public struct ProcessCodexAppServerHandoffRunner: Sendable {
         }
 
         do {
+            try FileManager.default.createDirectory(
+                at: workingDirectoryURL,
+                withIntermediateDirectories: true
+            )
             try process.run()
         } catch {
             state.finishIfNeeded(.failure("Unable to start codex app-server: \(error)"))

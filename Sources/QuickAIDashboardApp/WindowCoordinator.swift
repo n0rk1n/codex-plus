@@ -4,6 +4,8 @@ import SwiftUI
 
 @MainActor
 final class WindowCoordinator: NSObject, NSWindowDelegate {
+    private static let codexDesktopBundleIdentifier = "com.openai.codex"
+
     private let conversationCoordinator: ConversationCoordinator
     private let batteryMonitor: BatteryStatusMonitor
     private let codexUsageMonitor: CodexUsageMonitor
@@ -155,7 +157,7 @@ final class WindowCoordinator: NSObject, NSWindowDelegate {
         handoffID: UUID,
         prompt: String
     ) {
-        if NSWorkspace.shared.open(handoff.openThreadURL) {
+        if openCodexThread(handoff.openThreadURL) {
             openedCodexAppHandoffIDs.insert(handoffID)
             return
         }
@@ -166,6 +168,28 @@ final class WindowCoordinator: NSObject, NSWindowDelegate {
             prompt: prompt,
             message: "\(fallbackText)\nThread: \(handoff.sessionID ?? handoff.threadID)"
         )
+    }
+
+    private func openCodexThread(_ url: URL) -> Bool {
+        let didOpen = NSWorkspace.shared.open(url)
+
+        guard didOpen else {
+            return false
+        }
+
+        activateCodexDesktopApp(after: 0.25)
+        activateCodexDesktopApp(after: 0.8)
+        return true
+    }
+
+    private func activateCodexDesktopApp(after delay: TimeInterval) {
+        DispatchQueue.main.asyncAfter(deadline: .now() + delay) {
+            NSRunningApplication
+                .runningApplications(withBundleIdentifier: Self.codexDesktopBundleIdentifier)
+                .forEach { application in
+                    application.activate(options: [.activateAllWindows])
+                }
+        }
     }
 
     private func handleCodexAppHandoffFinished(
@@ -199,6 +223,7 @@ final class WindowCoordinator: NSObject, NSWindowDelegate {
 
         do {
             try process.run()
+            activateCodexDesktopApp(after: 0.8)
             return true
         } catch {
             return false

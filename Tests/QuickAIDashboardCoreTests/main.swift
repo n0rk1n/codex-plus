@@ -344,7 +344,7 @@ let projectlessThreadStart = jsonObject(
 )
 expect(jsonValue(projectlessThreadStart, "id") as? Int == 1, "app-server thread start request uses id")
 expect(jsonValue(projectlessThreadStart, "method") as? String == "thread/start", "app-server thread start method")
-expect(jsonValue(projectlessThreadStart, "params", "cwd") == nil, "app-server thread start omits cwd for projectless chat")
+expect(jsonValue(projectlessThreadStart, "params", "cwd") == nil, "app-server thread start lets the process cwd choose the workspace")
 expect(jsonValue(projectlessThreadStart, "params", "sandbox") as? String == "read-only", "semi-automatic handoff uses read-only sandbox")
 expect(jsonValue(projectlessThreadStart, "params", "approvalPolicy") as? String == "on-request", "semi-automatic handoff asks on request")
 
@@ -592,10 +592,15 @@ _ = startFailureHandle
 let appServerCaptureFile = FileManager.default.temporaryDirectory.appendingPathComponent(
     "quick-ai-dashboard-\(UUID().uuidString)-app-server-input.jsonl"
 )
+let appServerWorkingDirectory = makeTemporaryDirectory(named: "app-server-projectless-cwd")
+let appServerWorkingDirectoryCaptureFile = FileManager.default.temporaryDirectory.appendingPathComponent(
+    "quick-ai-dashboard-\(UUID().uuidString)-app-server-pwd.txt"
+)
 let appServerScriptPath = makeTemporaryScript(
     named: "app-server-handoff",
     contents: """
     capture='\(appServerCaptureFile.path)'
+    pwd > '\(appServerWorkingDirectoryCaptureFile.path)'
     count=0
     while IFS= read -r line; do
       count=$((count + 1))
@@ -615,6 +620,8 @@ let appServerScriptPath = makeTemporaryScript(
 defer {
     try? FileManager.default.removeItem(atPath: appServerScriptPath)
     try? FileManager.default.removeItem(at: appServerCaptureFile)
+    try? FileManager.default.removeItem(at: appServerWorkingDirectory)
+    try? FileManager.default.removeItem(at: appServerWorkingDirectoryCaptureFile)
 }
 
 let appServerHandoffCapture = LockedHandoffCapture()
@@ -622,7 +629,8 @@ let appServerHandoffStarted = DispatchSemaphore(value: 0)
 let appServerHandoffFinished = DispatchSemaphore(value: 0)
 let appServerHandoffRunner = ProcessCodexAppServerHandoffRunner(
     executableURL: URL(fileURLWithPath: "/bin/sh"),
-    executableArgumentsPrefix: [appServerScriptPath]
+    executableArgumentsPrefix: [appServerScriptPath],
+    workingDirectoryURL: appServerWorkingDirectory
 )
 let appServerHandoffHandle = appServerHandoffRunner.start(
     prompt: "Hello Codex App",
@@ -650,6 +658,13 @@ expect(appServerInputText.contains("\"method\":\"initialize\""), "app-server han
 expect(appServerInputText.contains("\"method\":\"initialized\""), "app-server handoff sends initialized notification")
 expect(appServerInputText.contains("\"method\":\"thread/start\""), "app-server handoff sends thread start")
 expect(appServerInputText.contains("\"method\":\"turn/start\""), "app-server handoff sends turn start")
+let appServerWorkingDirectoryText = ((try? String(contentsOf: appServerWorkingDirectoryCaptureFile, encoding: .utf8)) ?? "")
+    .trimmingCharacters(in: .whitespacesAndNewlines)
+expect(
+    URL(fileURLWithPath: appServerWorkingDirectoryText).resolvingSymlinksInPath().path ==
+        appServerWorkingDirectory.resolvingSymlinksInPath().path,
+    "app-server handoff runs codex app-server from the projectless working directory"
+)
 _ = appServerHandoffHandle
 
 let controllerSuccessScriptPath = makeTemporaryScript(
