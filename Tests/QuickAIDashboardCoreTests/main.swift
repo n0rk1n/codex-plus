@@ -696,6 +696,30 @@ expect(
     "battery monitor refresh updates status from provider"
 )
 
+let compactPanelFrame = ScreenRect(x: 100, y: 100, width: 420, height: 210)
+expect(
+    CompactEntryDismissPolicy.shouldDismissForKeyDown(keyCode: CompactEntryDismissPolicy.escapeKeyCode),
+    "compact dismiss policy dismisses on escape"
+)
+expect(
+    !CompactEntryDismissPolicy.shouldDismissForKeyDown(keyCode: 0),
+    "compact dismiss policy ignores non-escape keys"
+)
+expect(
+    !CompactEntryDismissPolicy.shouldDismissForMouseDown(
+        at: ScreenPoint(x: 200, y: 150),
+        panelFrame: compactPanelFrame
+    ),
+    "compact dismiss policy keeps visible for inside clicks"
+)
+expect(
+    CompactEntryDismissPolicy.shouldDismissForMouseDown(
+        at: ScreenPoint(x: 20, y: 150),
+        panelFrame: compactPanelFrame
+    ),
+    "compact dismiss policy dismisses for outside clicks"
+)
+
 if failures.isEmpty {
     print("QuickAIDashboardCoreTests passed: \(assertionCount) assertions")
 } else {
