@@ -4,13 +4,10 @@ import SwiftUI
 
 @MainActor
 final class WindowCoordinator: NSObject, NSWindowDelegate {
-    private static let codexDesktopBundleIdentifier = "com.openai.codex"
-
     private let conversationCoordinator: ConversationCoordinator
     private let batteryMonitor: BatteryStatusMonitor
     private let codexUsageMonitor: CodexUsageMonitor
     private let runController: CodexRunController
-    private let codexAppServerHandoffRunner: ProcessCodexAppServerHandoffRunner
     private let permissionPrompter = PermissionPrompter()
 
     private var compactPanel: GlassPanel?
@@ -22,30 +19,23 @@ final class WindowCoordinator: NSObject, NSWindowDelegate {
     private var isSidePanelContentInstalled = false
     private let compactDismissMonitors = EventMonitorStore()
     private let mouseExitMonitors = EventMonitorStore()
-    private var activeCodexAppHandoffHandles: [UUID: CodexAppServerHandoffHandle] = [:]
-    private var openedCodexAppHandoffIDs = Set<UUID>()
     private var hasMouseEnteredSidePanel = false
 
     init(
         conversationCoordinator: ConversationCoordinator,
         batteryProvider: any BatteryStatusProviding,
-        codexRunner: ProcessCodexRunner,
-        codexAppServerHandoffRunner: ProcessCodexAppServerHandoffRunner
+        codexRunner: ProcessCodexRunner
     ) {
         self.conversationCoordinator = conversationCoordinator
         self.batteryMonitor = BatteryStatusMonitor(provider: batteryProvider)
         self.codexUsageMonitor = CodexUsageMonitor(provider: LocalCodexUsageProvider())
         self.runController = CodexRunController(runner: codexRunner)
-        self.codexAppServerHandoffRunner = codexAppServerHandoffRunner
 
         super.init()
         codexUsageMonitor.start()
     }
 
     deinit {
-        activeCodexAppHandoffHandles.values.forEach { handle in
-            handle.stop()
-        }
         compactDismissMonitors.removeAll()
         mouseExitMonitors.removeAll()
     }
@@ -81,7 +71,7 @@ final class WindowCoordinator: NSObject, NSWindowDelegate {
                 codexUsageMonitor: codexUsageMonitor,
                 onSubmit: { [weak self] prompt in
                     Task { @MainActor in
-                        self?.startCodexAppHandoff(prompt: prompt)
+                        self?.startConversation(prompt: prompt)
                     }
                 }
             )
@@ -128,106 +118,6 @@ final class WindowCoordinator: NSObject, NSWindowDelegate {
         let session = conversationCoordinator.startConversation(prompt: prompt)
         showSidePanel()
         startCodexRun(prompt: prompt, sessionID: session.id)
-    }
-
-    private func startCodexAppHandoff(prompt: String) {
-        dismissCompactPanel()
-
-        let handoffID = UUID()
-        let handle = codexAppServerHandoffRunner.start(
-            prompt: prompt,
-            permissionMode: .semiAutomatic,
-            onStarted: { [weak self] handoff in
-                Task { @MainActor in
-                    self?.handleCodexAppHandoffStarted(handoff, handoffID: handoffID, prompt: prompt)
-                }
-            },
-            onFinish: { [weak self] result in
-                Task { @MainActor in
-                    self?.handleCodexAppHandoffFinished(result, handoffID: handoffID, prompt: prompt)
-                }
-            }
-        )
-
-        activeCodexAppHandoffHandles[handoffID] = handle
-    }
-
-    private func handleCodexAppHandoffStarted(
-        _ handoff: CodexAppServerHandoff,
-        handoffID: UUID,
-        prompt: String
-    ) {
-        if openCodexThread(handoff.openThreadURL) {
-            openedCodexAppHandoffIDs.insert(handoffID)
-            return
-        }
-
-        let launchedCodexApp = launchCodexDesktopApp()
-        let fallbackText = launchedCodexApp ? "Codex app was launched, but the thread deep link could not be opened." : "Codex app could not be launched."
-        showCodexAppHandoffFailure(
-            prompt: prompt,
-            message: "\(fallbackText)\nThread: \(handoff.sessionID ?? handoff.threadID)"
-        )
-    }
-
-    private func openCodexThread(_ url: URL) -> Bool {
-        let didOpen = NSWorkspace.shared.open(url)
-
-        guard didOpen else {
-            return false
-        }
-
-        activateCodexDesktopApp(after: 0.25)
-        activateCodexDesktopApp(after: 0.8)
-        return true
-    }
-
-    private func activateCodexDesktopApp(after delay: TimeInterval) {
-        DispatchQueue.main.asyncAfter(deadline: .now() + delay) {
-            NSRunningApplication
-                .runningApplications(withBundleIdentifier: Self.codexDesktopBundleIdentifier)
-                .forEach { application in
-                    application.activate(options: [.activateAllWindows])
-                }
-        }
-    }
-
-    private func handleCodexAppHandoffFinished(
-        _ result: CodexAppServerHandoffResult,
-        handoffID: UUID,
-        prompt: String
-    ) {
-        activeCodexAppHandoffHandles.removeValue(forKey: handoffID)
-        let wasOpened = openedCodexAppHandoffIDs.remove(handoffID) != nil
-
-        guard !result.succeeded, !wasOpened else {
-            return
-        }
-
-        showCodexAppHandoffFailure(
-            prompt: prompt,
-            message: result.message ?? "Codex app-server handoff failed."
-        )
-    }
-
-    private func showCodexAppHandoffFailure(prompt: String, message: String) {
-        let session = conversationCoordinator.startConversation(prompt: prompt)
-        conversationCoordinator.markFailed(session.id, message: message)
-        showSidePanel()
-    }
-
-    private func launchCodexDesktopApp() -> Bool {
-        let process = Process()
-        process.executableURL = URL(fileURLWithPath: "/usr/bin/env")
-        process.arguments = ["codex", "app"]
-
-        do {
-            try process.run()
-            activateCodexDesktopApp(after: 0.8)
-            return true
-        } catch {
-            return false
-        }
     }
 
     private func handleFollowUp(_ prompt: String) {

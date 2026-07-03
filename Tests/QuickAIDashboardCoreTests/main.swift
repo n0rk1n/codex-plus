@@ -240,45 +240,39 @@ func jsonValue(_ object: [String: Any], _ path: String...) -> Any? {
     return current
 }
 
-final class LockedHandoffCapture: @unchecked Sendable {
-    private let lock = NSLock()
-    private var capturedHandoffs: [CodexAppServerHandoff] = []
-    private var capturedResults: [CodexAppServerHandoffResult] = []
+@MainActor
+func expectNoCodexDesktopHandoffIntegration() {
+    let packageRoot = URL(fileURLWithPath: FileManager.default.currentDirectoryPath, isDirectory: true)
+    let removedSourceFiles = [
+        "Sources/QuickAIDashboardCore/CodexAppServerProtocol.swift",
+        "Sources/QuickAIDashboardCore/ProcessCodexAppServerHandoffRunner.swift"
+    ]
 
-    func appendHandoff(_ handoff: CodexAppServerHandoff) {
-        lock.lock()
-        defer {
-            lock.unlock()
-        }
-
-        capturedHandoffs.append(handoff)
+    for sourceFile in removedSourceFiles {
+        let exists = FileManager.default.fileExists(
+            atPath: packageRoot.appendingPathComponent(sourceFile).path
+        )
+        expect(!exists, "Codex Desktop app-server handoff source file is removed: \(sourceFile)")
     }
 
-    func appendResult(_ result: CodexAppServerHandoffResult) {
-        lock.lock()
-        defer {
-            lock.unlock()
+    let appSources = [
+        "Sources/QuickAIDashboardApp/AppDelegate.swift",
+        "Sources/QuickAIDashboardApp/WindowCoordinator.swift"
+    ]
+    let forbiddenFragments = [
+        "CodexAppServer",
+        "startCodexAppHandoff",
+        "codex://threads",
+        "codex app-server",
+        "com.openai.codex"
+    ]
+
+    for sourceFile in appSources {
+        let url = packageRoot.appendingPathComponent(sourceFile)
+        let text = (try? String(contentsOf: url, encoding: .utf8)) ?? ""
+        for fragment in forbiddenFragments {
+            expect(!text.contains(fragment), "Codex Desktop handoff fragment '\(fragment)' is removed from \(sourceFile)")
         }
-
-        capturedResults.append(result)
-    }
-
-    func handoffs() -> [CodexAppServerHandoff] {
-        lock.lock()
-        defer {
-            lock.unlock()
-        }
-
-        return capturedHandoffs
-    }
-
-    func results() -> [CodexAppServerHandoffResult] {
-        lock.lock()
-        defer {
-            lock.unlock()
-        }
-
-        return capturedResults
     }
 }
 
@@ -326,58 +320,7 @@ expect(
     CodexCommandBuilder.arguments(prompt: "--help", permissionMode: .semiAutomatic) == ["exec", "--json", "--sandbox", "read-only", "--", "--help"],
     "prompt beginning with dash remains after delimiter"
 )
-
-let appServerInitialize = jsonObject(from: CodexAppServerProtocol.initializeRequest(id: 0))
-expect(jsonValue(appServerInitialize, "id") as? Int == 0, "app-server initialize request uses id")
-expect(jsonValue(appServerInitialize, "method") as? String == "initialize", "app-server initialize request uses method")
-expect(
-    jsonValue(appServerInitialize, "params", "clientInfo", "name") as? String == "quick_ai_dashboard",
-    "app-server initialize request identifies QuickAI Dashboard"
-)
-
-let appServerInitialized = jsonObject(from: CodexAppServerProtocol.initializedNotification())
-expect(jsonValue(appServerInitialized, "method") as? String == "initialized", "app-server initialized notification uses method")
-expect(jsonValue(appServerInitialized, "id") == nil, "app-server initialized notification has no id")
-
-let projectlessThreadStart = jsonObject(
-    from: CodexAppServerProtocol.threadStartRequest(id: 1, permissionMode: .semiAutomatic)
-)
-expect(jsonValue(projectlessThreadStart, "id") as? Int == 1, "app-server thread start request uses id")
-expect(jsonValue(projectlessThreadStart, "method") as? String == "thread/start", "app-server thread start method")
-expect(jsonValue(projectlessThreadStart, "params", "cwd") == nil, "app-server thread start lets the process cwd choose the workspace")
-expect(jsonValue(projectlessThreadStart, "params", "sandbox") as? String == "read-only", "semi-automatic handoff uses read-only sandbox")
-expect(jsonValue(projectlessThreadStart, "params", "approvalPolicy") as? String == "on-request", "semi-automatic handoff asks on request")
-
-let fullAccessThreadStart = jsonObject(
-    from: CodexAppServerProtocol.threadStartRequest(id: 2, permissionMode: .fullAccess)
-)
-expect(jsonValue(fullAccessThreadStart, "params", "sandbox") as? String == "danger-full-access", "full-access handoff uses full sandbox")
-expect(jsonValue(fullAccessThreadStart, "params", "approvalPolicy") as? String == "never", "full-access handoff disables approvals")
-
-let turnStart = jsonObject(
-    from: CodexAppServerProtocol.turnStartRequest(id: 3, threadID: "thread-123", prompt: "Run diagnostics")
-)
-let turnInput = jsonValue(turnStart, "params", "input") as? [[String: Any]]
-expect(jsonValue(turnStart, "method") as? String == "turn/start", "app-server turn start method")
-expect(jsonValue(turnStart, "params", "threadId") as? String == "thread-123", "app-server turn start targets thread id")
-expect(turnInput?.first?["type"] as? String == "text", "app-server turn start sends text input")
-expect(turnInput?.first?["text"] as? String == "Run diagnostics", "app-server turn start sends prompt text")
-
-let approvalDecline = jsonObject(from: CodexAppServerProtocol.declineApprovalResponse(id: 4))
-expect(jsonValue(approvalDecline, "id") as? Int == 4, "app-server approval decline echoes id")
-expect(jsonValue(approvalDecline, "result", "decision") as? String == "decline", "app-server approval decline uses decline decision")
-
-let parsedHandoff = CodexAppServerProtocol.handoff(
-    fromThreadStartResponse: #"{"id":1,"result":{"thread":{"id":"thread-abc","sessionId":"session-abc"}}}"#
-)
-expect(
-    parsedHandoff == CodexAppServerHandoff(threadID: "thread-abc", sessionID: "session-abc"),
-    "app-server parser reads thread id and session id"
-)
-expect(
-    parsedHandoff?.openThreadURL.absoluteString == "codex://threads/session-abc",
-    "app-server handoff deep link prefers session id"
-)
+expectNoCodexDesktopHandoffIntegration()
 
 var splitLineBuffer = LineBuffer()
 expect(splitLineBuffer.append("one\ntw") == ["one"], "line buffer returns complete first line")
@@ -588,84 +531,6 @@ if case let .error(message)? = startFailureCapture.events().first {
     expect(false, "process codex runner start failure emits error")
 }
 _ = startFailureHandle
-
-let appServerCaptureFile = FileManager.default.temporaryDirectory.appendingPathComponent(
-    "quick-ai-dashboard-\(UUID().uuidString)-app-server-input.jsonl"
-)
-let appServerWorkingDirectory = makeTemporaryDirectory(named: "app-server-projectless-cwd")
-let appServerWorkingDirectoryCaptureFile = FileManager.default.temporaryDirectory.appendingPathComponent(
-    "quick-ai-dashboard-\(UUID().uuidString)-app-server-pwd.txt"
-)
-let appServerScriptPath = makeTemporaryScript(
-    named: "app-server-handoff",
-    contents: """
-    capture='\(appServerCaptureFile.path)'
-    pwd > '\(appServerWorkingDirectoryCaptureFile.path)'
-    count=0
-    while IFS= read -r line; do
-      count=$((count + 1))
-      printf '%s\\n' "$line" >> "$capture"
-      if [ "$count" -eq 1 ]; then
-        printf '{"id":0,"result":{"userAgent":"fake","platformFamily":"macos","platformOs":"macos"}}\\n'
-      elif [ "$count" -eq 3 ]; then
-        printf '{"id":1,"result":{"thread":{"id":"thread-fake","sessionId":"session-fake"}}}\\n'
-      elif [ "$count" -eq 4 ]; then
-        printf '{"id":2,"result":{"turn":{"id":"turn-fake"}}}\\n'
-        printf '{"method":"turn/completed","params":{"threadId":"thread-fake","turn":{"id":"turn-fake","status":"completed"}}}\\n'
-        exit 0
-      fi
-    done
-    """
-)
-defer {
-    try? FileManager.default.removeItem(atPath: appServerScriptPath)
-    try? FileManager.default.removeItem(at: appServerCaptureFile)
-    try? FileManager.default.removeItem(at: appServerWorkingDirectory)
-    try? FileManager.default.removeItem(at: appServerWorkingDirectoryCaptureFile)
-}
-
-let appServerHandoffCapture = LockedHandoffCapture()
-let appServerHandoffStarted = DispatchSemaphore(value: 0)
-let appServerHandoffFinished = DispatchSemaphore(value: 0)
-let appServerHandoffRunner = ProcessCodexAppServerHandoffRunner(
-    executableURL: URL(fileURLWithPath: "/bin/sh"),
-    executableArgumentsPrefix: [appServerScriptPath],
-    workingDirectoryURL: appServerWorkingDirectory
-)
-let appServerHandoffHandle = appServerHandoffRunner.start(
-    prompt: "Hello Codex App",
-    permissionMode: .semiAutomatic,
-    onStarted: { handoff in
-        appServerHandoffCapture.appendHandoff(handoff)
-        appServerHandoffStarted.signal()
-    },
-    onFinish: { result in
-        appServerHandoffCapture.appendResult(result)
-        appServerHandoffFinished.signal()
-    }
-)
-let appServerHandoffDidStart = appServerHandoffStarted.wait(timeout: .now() + .seconds(5)) == .success
-expect(appServerHandoffDidStart, "app-server handoff starts fake projectless thread and turn")
-let appServerHandoffDidFinish = appServerHandoffFinished.wait(timeout: .now() + .seconds(5)) == .success
-expect(appServerHandoffDidFinish, "app-server handoff finishes after turn completed notification")
-expect(
-    appServerHandoffCapture.handoffs().first == CodexAppServerHandoff(threadID: "thread-fake", sessionID: "session-fake"),
-    "app-server handoff reports opened thread"
-)
-expect(appServerHandoffCapture.results().first?.succeeded == true, "app-server handoff succeeds after fake turn completion")
-let appServerInputText = (try? String(contentsOf: appServerCaptureFile, encoding: .utf8)) ?? ""
-expect(appServerInputText.contains("\"method\":\"initialize\""), "app-server handoff sends initialize")
-expect(appServerInputText.contains("\"method\":\"initialized\""), "app-server handoff sends initialized notification")
-expect(appServerInputText.contains("\"method\":\"thread/start\""), "app-server handoff sends thread start")
-expect(appServerInputText.contains("\"method\":\"turn/start\""), "app-server handoff sends turn start")
-let appServerWorkingDirectoryText = ((try? String(contentsOf: appServerWorkingDirectoryCaptureFile, encoding: .utf8)) ?? "")
-    .trimmingCharacters(in: .whitespacesAndNewlines)
-expect(
-    URL(fileURLWithPath: appServerWorkingDirectoryText).resolvingSymlinksInPath().path ==
-        appServerWorkingDirectory.resolvingSymlinksInPath().path,
-    "app-server handoff runs codex app-server from the projectless working directory"
-)
-_ = appServerHandoffHandle
 
 let controllerSuccessScriptPath = makeTemporaryScript(
     named: "controller-success",

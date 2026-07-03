@@ -6,7 +6,6 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private let conversationCoordinator: ConversationCoordinator
     private let batteryProvider: IOKitBatteryStatusProvider
     private let codexRunner: ProcessCodexRunner
-    private let codexAppServerHandoffRunner: ProcessCodexAppServerHandoffRunner
     private let windowCoordinator: WindowCoordinator
     private var hotKeyController: HotKeyController?
 
@@ -14,17 +13,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let conversationCoordinator = ConversationCoordinator()
         let batteryProvider = IOKitBatteryStatusProvider()
         let codexRunner = ProcessCodexRunner()
-        let codexAppServerHandoffRunner = ProcessCodexAppServerHandoffRunner()
 
         self.conversationCoordinator = conversationCoordinator
         self.batteryProvider = batteryProvider
         self.codexRunner = codexRunner
-        self.codexAppServerHandoffRunner = codexAppServerHandoffRunner
         self.windowCoordinator = WindowCoordinator(
             conversationCoordinator: conversationCoordinator,
             batteryProvider: batteryProvider,
-            codexRunner: codexRunner,
-            codexAppServerHandoffRunner: codexAppServerHandoffRunner
+            codexRunner: codexRunner
         )
 
         super.init()
