@@ -198,7 +198,6 @@ public enum ConversationWorkspacePolicy {
         calendar: Calendar = Calendar(identifier: .gregorian)
     ) -> String {
         var calendar = calendar
-        calendar.timeZone = calendar.timeZone
         let components = calendar.dateComponents([.year, .month, .day], from: date)
         let year = components.year ?? 1970
         let month = components.month ?? 1

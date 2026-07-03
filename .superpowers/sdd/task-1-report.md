@@ -23,3 +23,13 @@
 
 - None for the implemented task surface.
 - The local SwiftPM toolchain needed the writable cache override to compile in this environment, but the package itself is now green.
+
+## Task 1 Minor Fix Addendum
+
+- Removed a no-op line in `Sources/CodexPlusCore/ConversationModels.swift` inside `ConversationWorkspacePolicy.defaultDirectoryName`:
+  - deleted `calendar.timeZone = calendar.timeZone` while keeping behavior unchanged.
+
+### Test Result
+
+- Ran `swift run CodexPlusCoreTests` in `.worktrees/conversation-management` after the change.
+- Command fails in this environment due to local toolchain/SDK mismatch (`failed to build module `Swift`; SDK is built with a different compiler/toolchain) and cache-path write restrictions (`unable to open /Users/oriki/.cache/clang/ModuleCache/.../SwiftShims-*.pcm`).
