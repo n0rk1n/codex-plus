@@ -370,6 +370,47 @@ func expectNoCodexDesktopHandoffIntegration() {
     }
 }
 
+@MainActor
+func expectCodexDesktopLauncherIntegration() {
+    let packageRoot = URL(fileURLWithPath: FileManager.default.currentDirectoryPath, isDirectory: true)
+    let launcherPath = "Sources/CodexPlusApp/CodexDesktopLauncher.swift"
+    let tilePath = "Sources/CodexPlusApp/Views/CodexDesktopTileView.swift"
+    let compactEntryPath = "Sources/CodexPlusApp/Views/CompactEntryView.swift"
+
+    for sourceFile in [launcherPath, tilePath] {
+        let exists = FileManager.default.fileExists(
+            atPath: packageRoot.appendingPathComponent(sourceFile).path
+        )
+        expect(exists, "Codex Desktop launcher source exists: \(sourceFile)")
+    }
+
+    let launcherText = (try? String(
+        contentsOf: packageRoot.appendingPathComponent(launcherPath),
+        encoding: .utf8
+    )) ?? ""
+    expect(launcherText.contains("NSWorkspace"), "Codex Desktop launcher uses NSWorkspace")
+    expect(
+        launcherText.contains(#""com.openai.codex""#),
+        "Codex Desktop launcher targets the Codex bundle identifier"
+    )
+    expect(launcherText.contains("icon.png"), "Codex Desktop launcher loads a PNG app icon")
+    expect(!launcherText.contains("codex app-server"), "Codex Desktop launcher does not restore app-server handoff")
+    expect(!launcherText.contains("codex://threads"), "Codex Desktop launcher does not restore thread deep-link handoff")
+
+    let tileText = (try? String(
+        contentsOf: packageRoot.appendingPathComponent(tilePath),
+        encoding: .utf8
+    )) ?? ""
+    expect(tileText.contains("CodexDesktopTileView"), "compact entry has a Codex Desktop tile view")
+    expect(tileText.contains("Image(nsImage:"), "Codex Desktop tile renders the PNG image")
+
+    let compactEntryText = (try? String(
+        contentsOf: packageRoot.appendingPathComponent(compactEntryPath),
+        encoding: .utf8
+    )) ?? ""
+    expect(compactEntryText.contains("CodexDesktopTileView"), "compact entry renders Codex Desktop tile above prompt")
+}
+
 expect(PermissionMode.semiAutomatic.displayName == "Semi-Automatic", "semiAutomatic display name")
 expect(PermissionMode.fullAccess.displayName == "Full Access", "fullAccess display name")
 
@@ -415,6 +456,7 @@ expect(
     "prompt beginning with dash remains after delimiter"
 )
 expectNoCodexDesktopHandoffIntegration()
+expectCodexDesktopLauncherIntegration()
 expectCodexPlusNaming()
 
 expect(CodexRunResult(exitCode: 0, stderr: "").succeeded, "codex run result succeeds on exit zero")
@@ -980,18 +1022,18 @@ expect(
     "dashboard tile hit testing ignores space outside centered codex usage"
 )
 
-let compactEntryBounds = CGRect(x: 0, y: 0, width: 420, height: 210)
+let compactEntryBounds = CGRect(x: 0, y: 0, width: 420, height: 296)
 expect(
     !CompactDashboardTileDragPolicy.shouldMoveWindowFromMouseDown(
-        at: CGPoint(x: 110, y: 64),
+        at: CGPoint(x: 210, y: 50),
         panelBounds: compactEntryBounds,
         verticalOrigin: .top
     ),
-    "compact dashboard row blocks window dragging around hidden battery area"
+    "compact Codex Desktop tile blocks window dragging"
 )
 expect(
     !CompactDashboardTileDragPolicy.shouldMoveWindowFromMouseDown(
-        at: CGPoint(x: 290, y: 64),
+        at: CGPoint(x: 210, y: 128),
         panelBounds: compactEntryBounds,
         verticalOrigin: .top
     ),
@@ -999,7 +1041,7 @@ expect(
 )
 expect(
     !CompactDashboardTileDragPolicy.shouldMoveWindowFromMouseDown(
-        at: CGPoint(x: 50, y: 64),
+        at: CGPoint(x: 50, y: 128),
         panelBounds: compactEntryBounds,
         verticalOrigin: .top
     ),
@@ -1007,7 +1049,7 @@ expect(
 )
 expect(
     CompactDashboardTileDragPolicy.shouldMoveWindowFromMouseDown(
-        at: CGPoint(x: 210, y: 152),
+        at: CGPoint(x: 210, y: 236),
         panelBounds: compactEntryBounds,
         verticalOrigin: .top
     ),
@@ -1015,7 +1057,7 @@ expect(
 )
 expect(
     !CompactDashboardTileDragPolicy.shouldMoveWindowFromMouseDown(
-        at: CGPoint(x: 110, y: 146),
+        at: CGPoint(x: 210, y: 168),
         panelBounds: compactEntryBounds,
         verticalOrigin: .bottom
     ),

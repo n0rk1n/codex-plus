@@ -4,6 +4,7 @@ import SwiftUI
 struct CompactEntryView: View {
     let batteryStatus: BatteryStatus
     let codexUsageStatus: CodexUsageStatus
+    let onOpenCodexDesktop: () -> Void
     let onSubmit: (String) -> Void
 
     @FocusState private var isPromptFocused: Bool
@@ -13,10 +14,14 @@ struct CompactEntryView: View {
     @State private var dragTranslation: CGSize = .zero
 
     private let reorderThreshold: CGFloat = 44
+    private let desktopTileHeight: CGFloat = 66
     private let tileRowHeight: CGFloat = 92
 
     var body: some View {
         VStack(spacing: 14) {
+            CodexDesktopTileView(onOpen: onOpenCodexDesktop)
+                .frame(height: desktopTileHeight)
+
             GeometryReader { geometry in
                 ZStack {
                     ForEach(dashboardTileOrder.tiles, id: \.self) { tile in
