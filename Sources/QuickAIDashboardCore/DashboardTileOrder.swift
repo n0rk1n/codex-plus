@@ -44,6 +44,14 @@ public struct DashboardTileOrder: Equatable, Sendable {
         return DashboardTileOrder(tiles: nextTiles)
     }
 
+    public func layoutTiles(excludingDragged draggedTile: DashboardTile?) -> [DashboardTile] {
+        guard let draggedTile else {
+            return tiles
+        }
+
+        return tiles.filter { $0 != draggedTile }
+    }
+
     private static func validated(_ tiles: [DashboardTile]) -> [DashboardTile] {
         guard tiles.count == defaultTiles.count,
               Set(tiles) == Set(defaultTiles)

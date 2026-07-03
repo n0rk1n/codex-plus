@@ -793,6 +793,18 @@ expect(invalidTileOrder.tiles == [.battery, .codexUsage], "dashboard tile order 
 
 let swappedTileOrder = defaultTileOrder.swapping(.battery, with: .codexUsage)
 expect(swappedTileOrder.tiles == [.codexUsage, .battery], "dashboard tile order swaps dragged and target tiles")
+expect(
+    defaultTileOrder.layoutTiles(excludingDragged: nil) == [.battery, .codexUsage],
+    "dashboard tile layout shows all tiles when no tile is dragged"
+)
+expect(
+    defaultTileOrder.layoutTiles(excludingDragged: .battery) == [.codexUsage],
+    "dashboard tile layout removes dragged battery so codex usage can recenter"
+)
+expect(
+    reversedTileOrder.layoutTiles(excludingDragged: .codexUsage) == [.battery],
+    "dashboard tile layout removes dragged codex usage from reversed order"
+)
 
 let compactEntryBounds = ScreenRect(x: 0, y: 0, width: 420, height: 210)
 expect(
