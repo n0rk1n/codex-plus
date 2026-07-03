@@ -197,7 +197,7 @@ public enum ConversationWorkspacePolicy {
         randomSuffix: Int,
         calendar: Calendar = Calendar(identifier: .gregorian)
     ) -> String {
-        var calendar = calendar
+        let calendar = calendar
         let components = calendar.dateComponents([.year, .month, .day], from: date)
         let year = components.year ?? 1970
         let month = components.month ?? 1

@@ -33,3 +33,10 @@
 
 - Ran `swift run CodexPlusCoreTests` in `.worktrees/conversation-management` after the change.
 - Command fails in this environment due to local toolchain/SDK mismatch (`failed to build module `Swift`; SDK is built with a different compiler/toolchain) and cache-path write restrictions (`unable to open /Users/oriki/.cache/clang/ModuleCache/.../SwiftShims-*.pcm`).
+
+## Task 1 Warning Fix Addendum
+
+- Updated `Sources/CodexPlusCore/ConversationModels.swift` in `ConversationWorkspacePolicy.defaultDirectoryName`:
+  - changed `var calendar = calendar` → `let calendar = calendar` to remove the compiler warning without altering runtime behavior.
+- Re-ran `swift run CodexPlusCoreTests`:
+  - still blocked by the same local Swift toolchain/SDK mismatch (`failed to build module 'Swift'`) and module cache write permissions.
