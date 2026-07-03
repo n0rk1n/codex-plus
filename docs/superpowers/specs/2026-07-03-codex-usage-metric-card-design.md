@@ -36,4 +36,4 @@ When usage data is missing, either side shows `--%` with inactive styling. The c
 
 ## Testing
 
-Core parsing and monitoring tests remain unchanged. Add focused view-logic coverage for the display values and colors if practical in the current SwiftPM test target; otherwise verify with `swift run QuickAIDashboardCoreTests`, `swift build`, and a GUI smoke launch.
+Core parsing and monitoring tests remain unchanged. Add focused view-logic coverage for the display values and colors if practical in the current SwiftPM test target; otherwise verify with `swift run CodexPlusCoreTests`, `swift build`, and a GUI smoke launch.

@@ -1,5 +1,5 @@
 import AppKit
-import QuickAIDashboardCore
+import CodexPlusCore
 import SwiftUI
 
 final class DraggableHostingView<Content: View>: NSHostingView<Content> {

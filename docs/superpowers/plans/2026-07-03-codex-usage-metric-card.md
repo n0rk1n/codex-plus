@@ -13,8 +13,8 @@
 ### Task 1: Core Display Text
 
 **Files:**
-- Modify: `Sources/QuickAIDashboardCore/CodexUsageStatus.swift`
-- Modify: `Tests/QuickAIDashboardCoreTests/main.swift`
+- Modify: `Sources/CodexPlusCore/CodexUsageStatus.swift`
+- Modify: `Tests/CodexPlusCoreTests/main.swift`
 
 - [ ] **Step 1: Write the failing test**
 
@@ -27,7 +27,7 @@ expect(unknownCodexUsage.displayPercentText(for: .weekly) == "--%", "codex usage
 
 - [ ] **Step 2: Run test to verify it fails**
 
-Run: `swift run QuickAIDashboardCoreTests`
+Run: `swift run CodexPlusCoreTests`
 
 Expected: compile failure because `displayPercentText(for:)` does not exist.
 
@@ -47,14 +47,14 @@ public func displayPercentText(for window: CodexUsageWindow) -> String {
 
 - [ ] **Step 4: Run test to verify it passes**
 
-Run: `swift run QuickAIDashboardCoreTests`
+Run: `swift run CodexPlusCoreTests`
 
-Expected: `QuickAIDashboardCoreTests passed`.
+Expected: `CodexPlusCoreTests passed`.
 
 ### Task 2: SwiftUI Metric Card
 
 **Files:**
-- Modify: `Sources/QuickAIDashboardApp/Views/CodexUsageRingTileView.swift`
+- Modify: `Sources/CodexPlusApp/Views/CodexUsageRingTileView.swift`
 
 - [ ] **Step 1: Replace ring layout with two columns**
 
@@ -112,16 +112,16 @@ Expected: build succeeds.
 ### Task 3: Verification and Commit
 
 **Files:**
-- Modify: `Sources/QuickAIDashboardCore/CodexUsageStatus.swift`
-- Modify: `Sources/QuickAIDashboardApp/Views/CodexUsageRingTileView.swift`
-- Modify: `Tests/QuickAIDashboardCoreTests/main.swift`
+- Modify: `Sources/CodexPlusCore/CodexUsageStatus.swift`
+- Modify: `Sources/CodexPlusApp/Views/CodexUsageRingTileView.swift`
+- Modify: `Tests/CodexPlusCoreTests/main.swift`
 
 - [ ] **Step 1: Run full verification**
 
 Run:
 
 ```bash
-swift run QuickAIDashboardCoreTests
+swift run CodexPlusCoreTests
 swift build
 git diff --check
 ```
@@ -130,13 +130,13 @@ Expected: tests pass, build succeeds, diff check has no output.
 
 - [ ] **Step 2: GUI smoke launch**
 
-Run: `swift run QuickAIDashboardApp`
+Run: `swift run CodexPlusApp`
 
 Expected: app launches without immediate crash. Stop the run after smoke verification.
 
 - [ ] **Step 3: Commit**
 
 ```bash
-git add Sources/QuickAIDashboardCore/CodexUsageStatus.swift Sources/QuickAIDashboardApp/Views/CodexUsageRingTileView.swift Tests/QuickAIDashboardCoreTests/main.swift
+git add Sources/CodexPlusCore/CodexUsageStatus.swift Sources/CodexPlusApp/Views/CodexUsageRingTileView.swift Tests/CodexPlusCoreTests/main.swift
 git commit -m "feat: simplify codex usage tile"
 ```

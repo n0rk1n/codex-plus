@@ -70,7 +70,7 @@ public struct ProcessCodexRunner: Sendable {
         let stdoutBuffer = LockedOutputLineBuffer(maxBytes: maxBufferedOutputBytes)
         let stderrBuffer = LockedDataBuffer(maxBytes: maxBufferedOutputBytes)
         let outputGroup = DispatchGroup()
-        let finishQueue = DispatchQueue(label: "QuickAIDashboardCore.ProcessCodexRunner.finish")
+        let finishQueue = DispatchQueue(label: "CodexPlusCore.ProcessCodexRunner.finish")
         let stdoutReader = StreamReader(fileHandle: stdoutPipe.fileHandleForReading)
         let stderrReader = StreamReader(fileHandle: stderrPipe.fileHandleForReading)
         let eventParser = parser

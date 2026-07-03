@@ -1,10 +1,10 @@
-# Quick AI Mac Dashboard Implementation Plan
+# Codex+ Mac Dashboard Implementation Plan
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Build a native macOS MVP with a Liquid Glass quick AI entry, one battery tile, Codex CLI JSONL streaming, side-window conversation behavior, and per-conversation permission reset.
 
-**Architecture:** Use a Swift Package with a testable `QuickAIDashboardCore` library and a `QuickAIDashboardApp` executable. Keep pure state, battery mapping, Codex event parsing, and conversation coordination in the library; keep AppKit/SwiftUI windowing and visual treatment in the app target.
+**Architecture:** Use a Swift Package with a testable `CodexPlusCore` library and a `CodexPlusApp` executable. Keep pure state, battery mapping, Codex event parsing, and conversation coordination in the library; keep AppKit/SwiftUI windowing and visual treatment in the app target.
 
 **Tech Stack:** Swift 6.3, Swift Package Manager, custom executable Swift test harness, SwiftUI, AppKit, IOKit power source APIs, Carbon global hotkey APIs, Foundation `Process` for `codex exec --json`.
 
@@ -19,62 +19,62 @@ The approved MVP is one coherent subsystem: a quick AI overlay with one battery 
 This Mac has Command Line Tools only. `XCTest` and Swift Testing are unavailable, so every `swift test` instruction in this plan is superseded by the executable harness command:
 
 ```bash
-swift run QuickAIDashboardCoreTests
+swift run CodexPlusCoreTests
 ```
 
-New tests should be added to `Tests/QuickAIDashboardCoreTests/main.swift` or helper files in that executable target. Keep the same red-green discipline: first run the harness and observe the expected failure, then implement, then run the harness again until it passes. Continue to run `swift build` for compilation checks.
+New tests should be added to `Tests/CodexPlusCoreTests/main.swift` or helper files in that executable target. Keep the same red-green discipline: first run the harness and observe the expected failure, then implement, then run the harness again until it passes. Continue to run `swift build` for compilation checks.
 
 ## File Structure
 
 - Create: `Package.swift`
   - Defines a library target, app executable target, and XCTest target.
-- Create: `Sources/QuickAIDashboardCore/BatteryStatus.swift`
+- Create: `Sources/CodexPlusCore/BatteryStatus.swift`
   - Battery domain model and IOKit-backed provider.
-- Create: `Sources/QuickAIDashboardCore/ConversationModels.swift`
+- Create: `Sources/CodexPlusCore/ConversationModels.swift`
   - Permission, conversation state, side, session, and UI event models.
-- Create: `Sources/QuickAIDashboardCore/CodexEventParser.swift`
+- Create: `Sources/CodexPlusCore/CodexEventParser.swift`
   - Converts `codex exec --json` JSONL lines into displayable events.
-- Create: `Sources/QuickAIDashboardCore/CodexCommandBuilder.swift`
+- Create: `Sources/CodexPlusCore/CodexCommandBuilder.swift`
   - Produces exact `codex exec` arguments for semi-automatic and Full Access modes.
-- Create: `Sources/QuickAIDashboardCore/ConversationCoordinator.swift`
+- Create: `Sources/CodexPlusCore/ConversationCoordinator.swift`
   - Owns in-memory conversation lifecycle, shortcut recall rules, and permission reset.
-- Create: `Sources/QuickAIDashboardCore/LineBuffer.swift`
+- Create: `Sources/CodexPlusCore/LineBuffer.swift`
   - Buffers process stdout chunks into complete lines.
-- Create: `Sources/QuickAIDashboardCore/ProcessCodexRunner.swift`
+- Create: `Sources/CodexPlusCore/ProcessCodexRunner.swift`
   - Runs `codex exec --json`, streams stdout/stderr, supports stop.
-- Create: `Sources/QuickAIDashboardApp/main.swift`
+- Create: `Sources/CodexPlusApp/main.swift`
   - Starts an accessory-style `NSApplication`.
-- Create: `Sources/QuickAIDashboardApp/AppDelegate.swift`
+- Create: `Sources/CodexPlusApp/AppDelegate.swift`
   - Wires services, hotkey, window coordinator, and runner.
-- Create: `Sources/QuickAIDashboardApp/HotKeyController.swift`
+- Create: `Sources/CodexPlusApp/HotKeyController.swift`
   - Registers Control-Option-Space through Carbon.
-- Create: `Sources/QuickAIDashboardApp/WindowCoordinator.swift`
+- Create: `Sources/CodexPlusApp/WindowCoordinator.swift`
   - Shows compact panel, expands side window, remembers side, hides on mouse exit.
-- Create: `Sources/QuickAIDashboardApp/GlassPanel.swift`
+- Create: `Sources/CodexPlusApp/GlassPanel.swift`
   - Borderless, transparent, key-capable `NSPanel`.
-- Create: `Sources/QuickAIDashboardApp/Views/LiquidGlassContainer.swift`
+- Create: `Sources/CodexPlusApp/Views/LiquidGlassContainer.swift`
   - Shared translucent material wrapper.
-- Create: `Sources/QuickAIDashboardApp/Views/BatteryTileView.swift`
+- Create: `Sources/CodexPlusApp/Views/BatteryTileView.swift`
   - Square battery tile.
-- Create: `Sources/QuickAIDashboardApp/Views/CompactEntryView.swift`
+- Create: `Sources/CodexPlusApp/Views/CompactEntryView.swift`
   - Two-layer quick entry with focused input.
-- Create: `Sources/QuickAIDashboardApp/Views/ConversationView.swift`
+- Create: `Sources/CodexPlusApp/Views/ConversationView.swift`
   - Header controls, event stream, footer input.
-- Create: `Sources/QuickAIDashboardApp/Views/ConversationEventRow.swift`
+- Create: `Sources/CodexPlusApp/Views/ConversationEventRow.swift`
   - Renders one conversation event.
-- Create: `Tests/QuickAIDashboardCoreTests/BatteryStatusTests.swift`
-- Create: `Tests/QuickAIDashboardCoreTests/CodexEventParserTests.swift`
-- Create: `Tests/QuickAIDashboardCoreTests/CodexCommandBuilderTests.swift`
-- Create: `Tests/QuickAIDashboardCoreTests/ConversationCoordinatorTests.swift`
-- Create: `Tests/QuickAIDashboardCoreTests/LineBufferTests.swift`
+- Create: `Tests/CodexPlusCoreTests/BatteryStatusTests.swift`
+- Create: `Tests/CodexPlusCoreTests/CodexEventParserTests.swift`
+- Create: `Tests/CodexPlusCoreTests/CodexCommandBuilderTests.swift`
+- Create: `Tests/CodexPlusCoreTests/ConversationCoordinatorTests.swift`
+- Create: `Tests/CodexPlusCoreTests/LineBufferTests.swift`
 
 ## Task 1: Scaffold Swift Package
 
 **Files:**
 - Create: `Package.swift`
-- Create: `Sources/QuickAIDashboardCore/ConversationModels.swift`
-- Create: `Sources/QuickAIDashboardApp/main.swift`
-- Create: `Tests/QuickAIDashboardCoreTests/ConversationModelsSmokeTests.swift`
+- Create: `Sources/CodexPlusCore/ConversationModels.swift`
+- Create: `Sources/CodexPlusApp/main.swift`
+- Create: `Tests/CodexPlusCoreTests/ConversationModelsSmokeTests.swift`
 
 - [ ] **Step 1: Create the package manifest**
 
@@ -86,32 +86,32 @@ Create `Package.swift`:
 import PackageDescription
 
 let package = Package(
-    name: "QuickAIDashboard",
+    name: "CodexPlus",
     platforms: [
         .macOS(.v14)
     ],
     products: [
-        .library(name: "QuickAIDashboardCore", targets: ["QuickAIDashboardCore"]),
-        .executable(name: "QuickAIDashboardApp", targets: ["QuickAIDashboardApp"])
+        .library(name: "CodexPlusCore", targets: ["CodexPlusCore"]),
+        .executable(name: "CodexPlusApp", targets: ["CodexPlusApp"])
     ],
     targets: [
         .target(
-            name: "QuickAIDashboardCore",
+            name: "CodexPlusCore",
             linkerSettings: [
                 .linkedFramework("IOKit")
             ]
         ),
         .executableTarget(
-            name: "QuickAIDashboardApp",
-            dependencies: ["QuickAIDashboardCore"],
+            name: "CodexPlusApp",
+            dependencies: ["CodexPlusCore"],
             linkerSettings: [
                 .linkedFramework("Carbon"),
                 .linkedFramework("AppKit")
             ]
         ),
         .testTarget(
-            name: "QuickAIDashboardCoreTests",
-            dependencies: ["QuickAIDashboardCore"]
+            name: "CodexPlusCoreTests",
+            dependencies: ["CodexPlusCore"]
         )
     ]
 )
@@ -119,7 +119,7 @@ let package = Package(
 
 - [ ] **Step 2: Add initial core model file**
 
-Create `Sources/QuickAIDashboardCore/ConversationModels.swift`:
+Create `Sources/CodexPlusCore/ConversationModels.swift`:
 
 ```swift
 import Foundation
@@ -188,23 +188,23 @@ public struct ConversationSession: Equatable, Identifiable, Sendable {
 
 - [ ] **Step 3: Add temporary executable entry point**
 
-Create `Sources/QuickAIDashboardApp/main.swift`:
+Create `Sources/CodexPlusApp/main.swift`:
 
 ```swift
 import Foundation
-import QuickAIDashboardCore
+import CodexPlusCore
 
 let mode = PermissionMode.semiAutomatic
-print("QuickAIDashboardApp bootstrap: \(mode.displayName)")
+print("CodexPlusApp bootstrap: \(mode.displayName)")
 ```
 
 - [ ] **Step 4: Add a smoke test**
 
-Create `Tests/QuickAIDashboardCoreTests/ConversationModelsSmokeTests.swift`:
+Create `Tests/CodexPlusCoreTests/ConversationModelsSmokeTests.swift`:
 
 ```swift
 import XCTest
-@testable import QuickAIDashboardCore
+@testable import CodexPlusCore
 
 final class ConversationModelsSmokeTests: XCTestCase {
     func testPermissionModeDisplayName() {
@@ -242,16 +242,16 @@ git commit -m "feat: scaffold quick AI dashboard package"
 ## Task 2: Battery Status Model And Provider
 
 **Files:**
-- Create: `Sources/QuickAIDashboardCore/BatteryStatus.swift`
-- Create: `Tests/QuickAIDashboardCoreTests/BatteryStatusTests.swift`
+- Create: `Sources/CodexPlusCore/BatteryStatus.swift`
+- Create: `Tests/CodexPlusCoreTests/BatteryStatusTests.swift`
 
 - [ ] **Step 1: Write failing battery mapping tests**
 
-Create `Tests/QuickAIDashboardCoreTests/BatteryStatusTests.swift`:
+Create `Tests/CodexPlusCoreTests/BatteryStatusTests.swift`:
 
 ```swift
 import XCTest
-@testable import QuickAIDashboardCore
+@testable import CodexPlusCore
 
 final class BatteryStatusTests: XCTestCase {
     func testMapsChargingBattery() {
@@ -316,7 +316,7 @@ Expected: FAIL because `BatteryStatus` is not defined.
 
 - [ ] **Step 3: Implement battery status and native provider**
 
-Create `Sources/QuickAIDashboardCore/BatteryStatus.swift`:
+Create `Sources/CodexPlusCore/BatteryStatus.swift`:
 
 ```swift
 import Foundation
@@ -427,25 +427,25 @@ Expected: all tests pass.
 - [ ] **Step 6: Commit**
 
 ```bash
-git add Sources/QuickAIDashboardCore/BatteryStatus.swift Tests/QuickAIDashboardCoreTests/BatteryStatusTests.swift
+git add Sources/CodexPlusCore/BatteryStatus.swift Tests/CodexPlusCoreTests/BatteryStatusTests.swift
 git commit -m "feat: add battery status provider"
 ```
 
 ## Task 3: Codex Event Parsing And Command Building
 
 **Files:**
-- Create: `Sources/QuickAIDashboardCore/CodexEventParser.swift`
-- Create: `Sources/QuickAIDashboardCore/CodexCommandBuilder.swift`
-- Create: `Tests/QuickAIDashboardCoreTests/CodexEventParserTests.swift`
-- Create: `Tests/QuickAIDashboardCoreTests/CodexCommandBuilderTests.swift`
+- Create: `Sources/CodexPlusCore/CodexEventParser.swift`
+- Create: `Sources/CodexPlusCore/CodexCommandBuilder.swift`
+- Create: `Tests/CodexPlusCoreTests/CodexEventParserTests.swift`
+- Create: `Tests/CodexPlusCoreTests/CodexCommandBuilderTests.swift`
 
 - [ ] **Step 1: Write failing parser tests**
 
-Create `Tests/QuickAIDashboardCoreTests/CodexEventParserTests.swift`:
+Create `Tests/CodexPlusCoreTests/CodexEventParserTests.swift`:
 
 ```swift
 import XCTest
-@testable import QuickAIDashboardCore
+@testable import CodexPlusCore
 
 final class CodexEventParserTests: XCTestCase {
     func testParsesThreadStarted() {
@@ -474,11 +474,11 @@ final class CodexEventParserTests: XCTestCase {
 
 - [ ] **Step 2: Write failing command builder tests**
 
-Create `Tests/QuickAIDashboardCoreTests/CodexCommandBuilderTests.swift`:
+Create `Tests/CodexPlusCoreTests/CodexCommandBuilderTests.swift`:
 
 ```swift
 import XCTest
-@testable import QuickAIDashboardCore
+@testable import CodexPlusCore
 
 final class CodexCommandBuilderTests: XCTestCase {
     func testSemiAutomaticUsesReadOnlySandbox() {
@@ -527,7 +527,7 @@ Expected: FAIL because parser and command builder are not defined.
 
 - [ ] **Step 4: Implement parser**
 
-Create `Sources/QuickAIDashboardCore/CodexEventParser.swift`:
+Create `Sources/CodexPlusCore/CodexEventParser.swift`:
 
 ```swift
 import Foundation
@@ -624,7 +624,7 @@ public enum CodexEventParser {
 
 - [ ] **Step 5: Implement command builder**
 
-Create `Sources/QuickAIDashboardCore/CodexCommandBuilder.swift`:
+Create `Sources/CodexPlusCore/CodexCommandBuilder.swift`:
 
 ```swift
 import Foundation
@@ -675,20 +675,20 @@ Expected: all tests pass.
 Commit:
 
 ```bash
-git add Sources/QuickAIDashboardCore/CodexEventParser.swift Sources/QuickAIDashboardCore/CodexCommandBuilder.swift Tests/QuickAIDashboardCoreTests/CodexEventParserTests.swift Tests/QuickAIDashboardCoreTests/CodexCommandBuilderTests.swift
+git add Sources/CodexPlusCore/CodexEventParser.swift Sources/CodexPlusCore/CodexCommandBuilder.swift Tests/CodexPlusCoreTests/CodexEventParserTests.swift Tests/CodexPlusCoreTests/CodexCommandBuilderTests.swift
 git commit -m "feat: parse codex json events"
 ```
 
 ## Task 4: Conversation Coordination And Permission Reset
 
 **Files:**
-- Modify: `Sources/QuickAIDashboardCore/ConversationModels.swift`
-- Create: `Sources/QuickAIDashboardCore/ConversationCoordinator.swift`
-- Create: `Tests/QuickAIDashboardCoreTests/ConversationCoordinatorTests.swift`
+- Modify: `Sources/CodexPlusCore/ConversationModels.swift`
+- Create: `Sources/CodexPlusCore/ConversationCoordinator.swift`
+- Create: `Tests/CodexPlusCoreTests/ConversationCoordinatorTests.swift`
 
 - [ ] **Step 1: Replace conversation models with event-capable models**
 
-Replace `Sources/QuickAIDashboardCore/ConversationModels.swift` with:
+Replace `Sources/CodexPlusCore/ConversationModels.swift` with:
 
 ```swift
 import Foundation
@@ -790,11 +790,11 @@ public enum ShortcutDecision: Equatable, Sendable {
 
 - [ ] **Step 2: Write failing coordinator tests**
 
-Create `Tests/QuickAIDashboardCoreTests/ConversationCoordinatorTests.swift`:
+Create `Tests/CodexPlusCoreTests/ConversationCoordinatorTests.swift`:
 
 ```swift
 import XCTest
-@testable import QuickAIDashboardCore
+@testable import CodexPlusCore
 
 @MainActor
 final class ConversationCoordinatorTests: XCTestCase {
@@ -862,7 +862,7 @@ Expected: FAIL because `ConversationCoordinator` is not defined.
 
 - [ ] **Step 4: Implement coordinator**
 
-Create `Sources/QuickAIDashboardCore/ConversationCoordinator.swift`:
+Create `Sources/CodexPlusCore/ConversationCoordinator.swift`:
 
 ```swift
 import Combine
@@ -1013,24 +1013,24 @@ Expected: all tests pass.
 Commit:
 
 ```bash
-git add Sources/QuickAIDashboardCore/ConversationModels.swift Sources/QuickAIDashboardCore/ConversationCoordinator.swift Tests/QuickAIDashboardCoreTests/ConversationCoordinatorTests.swift
+git add Sources/CodexPlusCore/ConversationModels.swift Sources/CodexPlusCore/ConversationCoordinator.swift Tests/CodexPlusCoreTests/ConversationCoordinatorTests.swift
 git commit -m "feat: coordinate conversation lifecycle"
 ```
 
 ## Task 5: Line Buffer And Process Codex Runner
 
 **Files:**
-- Create: `Sources/QuickAIDashboardCore/LineBuffer.swift`
-- Create: `Sources/QuickAIDashboardCore/ProcessCodexRunner.swift`
-- Create: `Tests/QuickAIDashboardCoreTests/LineBufferTests.swift`
+- Create: `Sources/CodexPlusCore/LineBuffer.swift`
+- Create: `Sources/CodexPlusCore/ProcessCodexRunner.swift`
+- Create: `Tests/CodexPlusCoreTests/LineBufferTests.swift`
 
 - [ ] **Step 1: Write failing line buffer tests**
 
-Create `Tests/QuickAIDashboardCoreTests/LineBufferTests.swift`:
+Create `Tests/CodexPlusCoreTests/LineBufferTests.swift`:
 
 ```swift
 import XCTest
-@testable import QuickAIDashboardCore
+@testable import CodexPlusCore
 
 final class LineBufferTests: XCTestCase {
     func testReturnsCompleteLinesAndKeepsPartialLine() {
@@ -1065,7 +1065,7 @@ Expected: FAIL because `LineBuffer` is not defined.
 
 - [ ] **Step 3: Implement line buffer**
 
-Create `Sources/QuickAIDashboardCore/LineBuffer.swift`:
+Create `Sources/CodexPlusCore/LineBuffer.swift`:
 
 ```swift
 import Foundation
@@ -1101,7 +1101,7 @@ public struct LineBuffer: Sendable {
 
 - [ ] **Step 4: Implement Codex runner**
 
-Create `Sources/QuickAIDashboardCore/ProcessCodexRunner.swift`:
+Create `Sources/CodexPlusCore/ProcessCodexRunner.swift`:
 
 ```swift
 import Foundation
@@ -1248,22 +1248,22 @@ Expected: all tests pass.
 Commit:
 
 ```bash
-git add Sources/QuickAIDashboardCore/LineBuffer.swift Sources/QuickAIDashboardCore/ProcessCodexRunner.swift Tests/QuickAIDashboardCoreTests/LineBufferTests.swift
+git add Sources/CodexPlusCore/LineBuffer.swift Sources/CodexPlusCore/ProcessCodexRunner.swift Tests/CodexPlusCoreTests/LineBufferTests.swift
 git commit -m "feat: stream codex process output"
 ```
 
 ## Task 6: App Bootstrap, Hotkey, And Window Shell
 
 **Files:**
-- Replace: `Sources/QuickAIDashboardApp/main.swift`
-- Create: `Sources/QuickAIDashboardApp/AppDelegate.swift`
-- Create: `Sources/QuickAIDashboardApp/HotKeyController.swift`
-- Create: `Sources/QuickAIDashboardApp/GlassPanel.swift`
-- Create: `Sources/QuickAIDashboardApp/WindowCoordinator.swift`
+- Replace: `Sources/CodexPlusApp/main.swift`
+- Create: `Sources/CodexPlusApp/AppDelegate.swift`
+- Create: `Sources/CodexPlusApp/HotKeyController.swift`
+- Create: `Sources/CodexPlusApp/GlassPanel.swift`
+- Create: `Sources/CodexPlusApp/WindowCoordinator.swift`
 
 - [ ] **Step 1: Replace executable entry point**
 
-Replace `Sources/QuickAIDashboardApp/main.swift` with:
+Replace `Sources/CodexPlusApp/main.swift` with:
 
 ```swift
 import AppKit
@@ -1277,11 +1277,11 @@ app.run()
 
 - [ ] **Step 2: Add app delegate**
 
-Create `Sources/QuickAIDashboardApp/AppDelegate.swift`:
+Create `Sources/CodexPlusApp/AppDelegate.swift`:
 
 ```swift
 import AppKit
-import QuickAIDashboardCore
+import CodexPlusCore
 
 @MainActor
 final class AppDelegate: NSObject, NSApplicationDelegate {
@@ -1312,7 +1312,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
 - [ ] **Step 3: Add global hotkey controller**
 
-Create `Sources/QuickAIDashboardApp/HotKeyController.swift`:
+Create `Sources/CodexPlusApp/HotKeyController.swift`:
 
 ```swift
 import Carbon
@@ -1392,7 +1392,7 @@ final class HotKeyController {
 
 - [ ] **Step 4: Add key-capable glass panel**
 
-Create `Sources/QuickAIDashboardApp/GlassPanel.swift`:
+Create `Sources/CodexPlusApp/GlassPanel.swift`:
 
 ```swift
 import AppKit
@@ -1426,12 +1426,12 @@ final class GlassPanel: NSPanel {
 
 - [ ] **Step 5: Add temporary window coordinator shell**
 
-Create `Sources/QuickAIDashboardApp/WindowCoordinator.swift`:
+Create `Sources/CodexPlusApp/WindowCoordinator.swift`:
 
 ```swift
 import AppKit
 import SwiftUI
-import QuickAIDashboardCore
+import CodexPlusCore
 
 @MainActor
 final class WindowCoordinator {
@@ -1472,7 +1472,7 @@ final class WindowCoordinator {
         let panel = compactPanel ?? GlassPanel(contentRect: NSRect(origin: origin, size: size))
         panel.setFrame(NSRect(origin: origin, size: size), display: true)
         panel.contentView = NSHostingView(
-            rootView: Text("Quick AI Dashboard").padding()
+            rootView: Text("Codex+").padding()
         )
         compactPanel = panel
         panel.makeKeyAndOrderFront(nil)
@@ -1519,22 +1519,22 @@ Expected: all tests pass.
 - [ ] **Step 8: Commit**
 
 ```bash
-git add Sources/QuickAIDashboardApp
+git add Sources/CodexPlusApp
 git commit -m "feat: add mac app window shell"
 ```
 
 ## Task 7: Liquid Glass SwiftUI Views
 
 **Files:**
-- Create: `Sources/QuickAIDashboardApp/Views/LiquidGlassContainer.swift`
-- Create: `Sources/QuickAIDashboardApp/Views/BatteryTileView.swift`
-- Create: `Sources/QuickAIDashboardApp/Views/ConversationEventRow.swift`
-- Create: `Sources/QuickAIDashboardApp/Views/CompactEntryView.swift`
-- Create: `Sources/QuickAIDashboardApp/Views/ConversationView.swift`
+- Create: `Sources/CodexPlusApp/Views/LiquidGlassContainer.swift`
+- Create: `Sources/CodexPlusApp/Views/BatteryTileView.swift`
+- Create: `Sources/CodexPlusApp/Views/ConversationEventRow.swift`
+- Create: `Sources/CodexPlusApp/Views/CompactEntryView.swift`
+- Create: `Sources/CodexPlusApp/Views/ConversationView.swift`
 
 - [ ] **Step 1: Add shared Liquid Glass container**
 
-Create `Sources/QuickAIDashboardApp/Views/LiquidGlassContainer.swift`:
+Create `Sources/CodexPlusApp/Views/LiquidGlassContainer.swift`:
 
 ```swift
 import SwiftUI
@@ -1562,11 +1562,11 @@ struct LiquidGlassContainer<Content: View>: View {
 
 - [ ] **Step 2: Add battery tile view**
 
-Create `Sources/QuickAIDashboardApp/Views/BatteryTileView.swift`:
+Create `Sources/CodexPlusApp/Views/BatteryTileView.swift`:
 
 ```swift
 import SwiftUI
-import QuickAIDashboardCore
+import CodexPlusCore
 
 struct BatteryTileView: View {
     let status: BatteryStatus
@@ -1630,11 +1630,11 @@ struct BatteryTileView: View {
 
 - [ ] **Step 3: Add conversation event row**
 
-Create `Sources/QuickAIDashboardApp/Views/ConversationEventRow.swift`:
+Create `Sources/CodexPlusApp/Views/ConversationEventRow.swift`:
 
 ```swift
 import SwiftUI
-import QuickAIDashboardCore
+import CodexPlusCore
 
 struct ConversationEventRow: View {
     let event: ConversationDisplayEvent
@@ -1705,11 +1705,11 @@ struct ConversationEventRow: View {
 
 - [ ] **Step 4: Add compact entry view**
 
-Create `Sources/QuickAIDashboardApp/Views/CompactEntryView.swift`:
+Create `Sources/CodexPlusApp/Views/CompactEntryView.swift`:
 
 ```swift
 import SwiftUI
-import QuickAIDashboardCore
+import CodexPlusCore
 
 struct CompactEntryView: View {
     let batteryStatus: BatteryStatus
@@ -1755,11 +1755,11 @@ struct CompactEntryView: View {
 
 - [ ] **Step 5: Add conversation view**
 
-Create `Sources/QuickAIDashboardApp/Views/ConversationView.swift`:
+Create `Sources/CodexPlusApp/Views/ConversationView.swift`:
 
 ```swift
 import SwiftUI
-import QuickAIDashboardCore
+import CodexPlusCore
 
 struct ConversationView: View {
     let session: ConversationSession
@@ -1887,23 +1887,23 @@ Expected: build succeeds.
 - [ ] **Step 7: Commit**
 
 ```bash
-git add Sources/QuickAIDashboardApp/Views
+git add Sources/CodexPlusApp/Views
 git commit -m "feat: add liquid glass swiftui views"
 ```
 
 ## Task 8: Wire Views, Codex Runner, Hide, Pin, And Side Switching
 
 **Files:**
-- Modify: `Sources/QuickAIDashboardApp/WindowCoordinator.swift`
+- Modify: `Sources/CodexPlusApp/WindowCoordinator.swift`
 
 - [ ] **Step 1: Replace window coordinator**
 
-Replace `Sources/QuickAIDashboardApp/WindowCoordinator.swift` with:
+Replace `Sources/CodexPlusApp/WindowCoordinator.swift` with:
 
 ```swift
 import AppKit
 import SwiftUI
-import QuickAIDashboardCore
+import CodexPlusCore
 
 @MainActor
 final class WindowCoordinator {
@@ -2141,21 +2141,21 @@ Expected: all tests pass.
 - [ ] **Step 4: Commit**
 
 ```bash
-git add Sources/QuickAIDashboardApp/WindowCoordinator.swift
+git add Sources/CodexPlusApp/WindowCoordinator.swift
 git commit -m "feat: wire quick entry conversation flow"
 ```
 
 ## Task 9: Manual Smoke Script And Final Verification Notes
 
 **Files:**
-- Create: `docs/superpowers/manual-tests/2026-07-02-quick-ai-dashboard-smoke.md`
+- Create: `docs/superpowers/manual-tests/2026-07-02-codex-plus-smoke.md`
 
 - [ ] **Step 1: Create manual smoke checklist**
 
-Create `docs/superpowers/manual-tests/2026-07-02-quick-ai-dashboard-smoke.md`:
+Create `docs/superpowers/manual-tests/2026-07-02-codex-plus-smoke.md`:
 
 ```markdown
-# Quick AI Dashboard Manual Smoke Test
+# Codex+ Manual Smoke Test
 
 Date: 2026-07-02
 
@@ -2171,7 +2171,7 @@ Date: 2026-07-02
 
 ## App Launch
 
-- Command: `swift run QuickAIDashboardApp`
+- Command: `swift run CodexPlusApp`
 - Expected: app launches as an accessory app without opening a dock window.
 
 ## Global Shortcut
@@ -2227,7 +2227,7 @@ Expected: both commands exit 0.
 - [ ] **Step 3: Commit**
 
 ```bash
-git add docs/superpowers/manual-tests/2026-07-02-quick-ai-dashboard-smoke.md
+git add docs/superpowers/manual-tests/2026-07-02-codex-plus-smoke.md
 git commit -m "test: document dashboard smoke test"
 ```
 
@@ -2245,9 +2245,9 @@ swift build
 2. Launch:
 
 ```bash
-swift run QuickAIDashboardApp
+swift run CodexPlusApp
 ```
 
-3. Perform every step in `docs/superpowers/manual-tests/2026-07-02-quick-ai-dashboard-smoke.md`.
+3. Perform every step in `docs/superpowers/manual-tests/2026-07-02-codex-plus-smoke.md`.
 4. Confirm `git status --short` is clean.
 5. Report the exact test/build output and any manual smoke gaps.

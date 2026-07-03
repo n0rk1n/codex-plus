@@ -13,8 +13,8 @@
 ### Task 1: Codex Usage Monitor Default Interval
 
 **Files:**
-- Modify: `Sources/QuickAIDashboardCore/CodexUsageMonitor.swift`
-- Modify: `Tests/QuickAIDashboardCoreTests/main.swift`
+- Modify: `Sources/CodexPlusCore/CodexUsageMonitor.swift`
+- Modify: `Tests/CodexPlusCoreTests/main.swift`
 
 - [ ] **Step 1: Write the failing test**
 
@@ -29,7 +29,7 @@ expect(
 
 - [ ] **Step 2: Run test to verify it fails**
 
-Run: `swift run QuickAIDashboardCoreTests`
+Run: `swift run CodexPlusCoreTests`
 
 Expected: compile failure because `defaultRefreshInterval` does not exist.
 
@@ -55,14 +55,14 @@ interval: TimeInterval = CodexUsageMonitor.defaultRefreshInterval
 
 - [ ] **Step 4: Run test to verify it passes**
 
-Run: `swift run QuickAIDashboardCoreTests`
+Run: `swift run CodexPlusCoreTests`
 
-Expected: `QuickAIDashboardCoreTests passed`.
+Expected: `CodexPlusCoreTests passed`.
 
 ### Task 2: Background Lifecycle
 
 **Files:**
-- Modify: `Sources/QuickAIDashboardApp/WindowCoordinator.swift`
+- Modify: `Sources/CodexPlusApp/WindowCoordinator.swift`
 
 - [ ] **Step 1: Start usage monitor during coordinator initialization**
 
@@ -101,7 +101,7 @@ Expected: build succeeds.
 ### Task 3: Wide Codex Usage Tile
 
 **Files:**
-- Modify: `Sources/QuickAIDashboardApp/Views/CodexUsageRingTileView.swift`
+- Modify: `Sources/CodexPlusApp/Views/CodexUsageRingTileView.swift`
 
 - [ ] **Step 1: Change fixed tile size**
 
@@ -140,17 +140,17 @@ Expected: build succeeds.
 ### Task 4: Verification and Commit
 
 **Files:**
-- Modify: `Sources/QuickAIDashboardCore/CodexUsageMonitor.swift`
-- Modify: `Sources/QuickAIDashboardApp/WindowCoordinator.swift`
-- Modify: `Sources/QuickAIDashboardApp/Views/CodexUsageRingTileView.swift`
-- Modify: `Tests/QuickAIDashboardCoreTests/main.swift`
+- Modify: `Sources/CodexPlusCore/CodexUsageMonitor.swift`
+- Modify: `Sources/CodexPlusApp/WindowCoordinator.swift`
+- Modify: `Sources/CodexPlusApp/Views/CodexUsageRingTileView.swift`
+- Modify: `Tests/CodexPlusCoreTests/main.swift`
 
 - [ ] **Step 1: Run full verification**
 
 Run:
 
 ```bash
-swift run QuickAIDashboardCoreTests
+swift run CodexPlusCoreTests
 swift build
 git diff --check
 ```
@@ -159,13 +159,13 @@ Expected: tests pass, build succeeds, diff check has no output.
 
 - [ ] **Step 2: GUI smoke launch**
 
-Run: `swift run QuickAIDashboardApp`
+Run: `swift run CodexPlusApp`
 
 Expected: app launches without immediate crash. Stop the run after smoke verification.
 
 - [ ] **Step 3: Commit**
 
 ```bash
-git add Sources/QuickAIDashboardCore/CodexUsageMonitor.swift Sources/QuickAIDashboardApp/WindowCoordinator.swift Sources/QuickAIDashboardApp/Views/CodexUsageRingTileView.swift Tests/QuickAIDashboardCoreTests/main.swift
+git add Sources/CodexPlusCore/CodexUsageMonitor.swift Sources/CodexPlusApp/WindowCoordinator.swift Sources/CodexPlusApp/Views/CodexUsageRingTileView.swift Tests/CodexPlusCoreTests/main.swift
 git commit -m "feat: refresh codex usage in background"
 ```

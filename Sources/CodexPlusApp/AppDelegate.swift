@@ -1,5 +1,5 @@
 import AppKit
-import QuickAIDashboardCore
+import CodexPlusCore
 
 @MainActor
 final class AppDelegate: NSObject, NSApplicationDelegate {
@@ -37,7 +37,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             try hotKeyController.register()
             self.hotKeyController = hotKeyController
         } catch {
-            NSLog("QuickAIDashboard hotkey registration failed: \(error)")
+            NSLog("CodexPlus hotkey registration failed: \(error)")
             presentHotKeyRegistrationFailure(error)
         }
     }
@@ -47,7 +47,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
         let alert = NSAlert()
         alert.alertStyle = .critical
-        alert.messageText = "Quick AI Dashboard could not register Control-Option-Command-Space."
+        alert.messageText = "Codex+ could not register Control-Option-Command-Space."
         alert.informativeText = "Error: \(error)"
         alert.runModal()
 

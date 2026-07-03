@@ -1,4 +1,4 @@
-# Quick AI Dashboard MVP Smoke Test - 2026-07-02
+# Codex+ MVP Smoke Test - 2026-07-02
 
 Run from the repository root.
 
@@ -8,13 +8,13 @@ Run from the repository root.
   - Run: `swift build`
   - Expect: build completes successfully.
 - [ ] Unit/core harness
-  - Run: `swift run QuickAIDashboardCoreTests`
+  - Run: `swift run CodexPlusCoreTests`
   - Expect: custom test harness completes successfully.
 
 ## Manual Smoke
 
 - [ ] App launch
-  - Run: `swift run QuickAIDashboardApp`
+  - Run: `swift run CodexPlusApp`
   - Expect: app launches as an accessory app without a Dock window.
 - [ ] Global shortcut
   - Press: Control-Option-Space

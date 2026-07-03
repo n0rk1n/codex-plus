@@ -1,5 +1,5 @@
 import Foundation
-import QuickAIDashboardCore
+import CodexPlusCore
 
 var failures: [String] = []
 var assertionCount = 0
@@ -148,7 +148,7 @@ final class BlockingCodexUsageProvider: CodexUsageProviding, @unchecked Sendable
 @MainActor
 func makeTemporaryScript(named name: String, contents: String) -> String {
     let url = FileManager.default.temporaryDirectory.appendingPathComponent(
-        "quick-ai-dashboard-\(UUID().uuidString)-\(name).sh"
+        "codex-plus-\(UUID().uuidString)-\(name).sh"
     )
 
     do {
@@ -163,7 +163,7 @@ func makeTemporaryScript(named name: String, contents: String) -> String {
 @MainActor
 func makeTemporaryDirectory(named name: String) -> URL {
     let url = FileManager.default.temporaryDirectory.appendingPathComponent(
-        "quick-ai-dashboard-\(UUID().uuidString)-\(name)",
+        "codex-plus-\(UUID().uuidString)-\(name)",
         isDirectory: true
     )
 
@@ -241,11 +241,52 @@ func jsonValue(_ object: [String: Any], _ path: String...) -> Any? {
 }
 
 @MainActor
+func expectCodexPlusNaming() {
+    let packageRoot = URL(fileURLWithPath: FileManager.default.currentDirectoryPath, isDirectory: true)
+    let expectedPaths = [
+        "Sources/CodexPlusCore",
+        "Sources/CodexPlusApp",
+        "Tests/CodexPlusCoreTests"
+    ]
+
+    for expectedPath in expectedPaths {
+        let exists = FileManager.default.fileExists(
+            atPath: packageRoot.appendingPathComponent(expectedPath).path
+        )
+        expect(exists, "Codex+ project path exists: \(expectedPath)")
+    }
+
+    let packageText = (try? String(contentsOf: packageRoot.appendingPathComponent("Package.swift"), encoding: .utf8)) ?? ""
+    expect(packageText.contains(#"name: "codex-plus""#), "Swift package uses codex-plus slug name")
+    expect(packageText.contains(#"CodexPlusCore"#), "Swift package uses CodexPlusCore module name")
+    expect(packageText.contains(#"CodexPlusApp"#), "Swift package uses CodexPlusApp executable name")
+    expect(packageText.contains(#"CodexPlusCoreTests"#), "Swift package uses CodexPlusCoreTests executable name")
+
+    let legacyFragments = [
+        "Quick" + "AIDashboard",
+        "Quick" + " AI " + "Dashboard",
+        "quick" + "-ai-" + "dashboard"
+    ]
+    let filesToScan = [
+        packageRoot.appendingPathComponent("Package.swift"),
+        packageRoot.appendingPathComponent("Sources/CodexPlusCore/CodexUsageMonitor.swift"),
+        packageRoot.appendingPathComponent("Sources/CodexPlusApp/AppDelegate.swift")
+    ]
+
+    for fileURL in filesToScan {
+        let text = (try? String(contentsOf: fileURL, encoding: .utf8)) ?? ""
+        for fragment in legacyFragments {
+            expect(!text.contains(fragment), "legacy project name '\(fragment)' is removed from \(fileURL.lastPathComponent)")
+        }
+    }
+}
+
+@MainActor
 func expectNoCodexDesktopHandoffIntegration() {
     let packageRoot = URL(fileURLWithPath: FileManager.default.currentDirectoryPath, isDirectory: true)
     let removedSourceFiles = [
-        "Sources/QuickAIDashboardCore/CodexAppServerProtocol.swift",
-        "Sources/QuickAIDashboardCore/ProcessCodexAppServerHandoffRunner.swift"
+        "Sources/CodexPlusCore/CodexAppServerProtocol.swift",
+        "Sources/CodexPlusCore/ProcessCodexAppServerHandoffRunner.swift"
     ]
 
     for sourceFile in removedSourceFiles {
@@ -256,8 +297,8 @@ func expectNoCodexDesktopHandoffIntegration() {
     }
 
     let appSources = [
-        "Sources/QuickAIDashboardApp/AppDelegate.swift",
-        "Sources/QuickAIDashboardApp/WindowCoordinator.swift"
+        "Sources/CodexPlusApp/AppDelegate.swift",
+        "Sources/CodexPlusApp/WindowCoordinator.swift"
     ]
     let forbiddenFragments = [
         "CodexAppServer",
@@ -321,6 +362,7 @@ expect(
     "prompt beginning with dash remains after delimiter"
 )
 expectNoCodexDesktopHandoffIntegration()
+expectCodexPlusNaming()
 
 var splitLineBuffer = LineBuffer()
 expect(splitLineBuffer.append("one\ntw") == ["one"], "line buffer returns complete first line")
@@ -499,7 +541,7 @@ expect(
 _ = longStderrHandle
 
 let missingExecutableURL = FileManager.default.temporaryDirectory.appendingPathComponent(
-    "quick-ai-dashboard-missing-\(UUID().uuidString)"
+    "codex-plus-missing-\(UUID().uuidString)"
 )
 let startFailureCapture = LockedRunCapture()
 let startFailureFinish = DispatchSemaphore(value: 0)
@@ -1434,9 +1476,9 @@ if case let .technicalGroup(id, events) = timelineItems[3] {
 }
 
 if failures.isEmpty {
-    print("QuickAIDashboardCoreTests passed: \(assertionCount) assertions")
+    print("CodexPlusCoreTests passed: \(assertionCount) assertions")
 } else {
-    print("QuickAIDashboardCoreTests failed: \(failures.count) of \(assertionCount) assertions failed")
+    print("CodexPlusCoreTests failed: \(failures.count) of \(assertionCount) assertions failed")
 
     for failure in failures {
         print("- \(failure)")

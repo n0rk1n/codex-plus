@@ -1,5 +1,5 @@
 import AppKit
-import QuickAIDashboardCore
+import CodexPlusCore
 import SwiftUI
 
 @MainActor

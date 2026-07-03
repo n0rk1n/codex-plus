@@ -1,4 +1,4 @@
-import QuickAIDashboardCore
+import CodexPlusCore
 import SwiftUI
 
 struct CompactEntryView: View {

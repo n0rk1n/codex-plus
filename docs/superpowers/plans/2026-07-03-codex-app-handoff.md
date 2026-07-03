@@ -13,25 +13,25 @@
 ### Task 1: Protocol And Runner
 
 **Files:**
-- Create: `Sources/QuickAIDashboardCore/CodexAppServerProtocol.swift`
-- Create: `Sources/QuickAIDashboardCore/ProcessCodexAppServerHandoffRunner.swift`
-- Test: `Tests/QuickAIDashboardCoreTests/main.swift`
+- Create: `Sources/CodexPlusCore/CodexAppServerProtocol.swift`
+- Create: `Sources/CodexPlusCore/ProcessCodexAppServerHandoffRunner.swift`
+- Test: `Tests/CodexPlusCoreTests/main.swift`
 
 - [ ] Write tests for JSON-RPC messages: `initialize`, `thread/start`, `turn/start`, and request-denial responses.
-- [ ] Run `swift run QuickAIDashboardCoreTests` and confirm the new tests fail because the new types do not exist.
+- [ ] Run `swift run CodexPlusCoreTests` and confirm the new tests fail because the new types do not exist.
 - [ ] Implement protocol helpers and a process runner that starts `codex app-server`, creates a projectless thread, starts a turn, emits a deep link, and keeps the process alive until `turn/completed` or failure.
-- [ ] Run `swift run QuickAIDashboardCoreTests` and confirm the new runner tests pass.
+- [ ] Run `swift run CodexPlusCoreTests` and confirm the new runner tests pass.
 
 ### Task 2: App Integration
 
 **Files:**
-- Modify: `Sources/QuickAIDashboardApp/AppDelegate.swift`
-- Modify: `Sources/QuickAIDashboardApp/WindowCoordinator.swift`
+- Modify: `Sources/CodexPlusApp/AppDelegate.swift`
+- Modify: `Sources/CodexPlusApp/WindowCoordinator.swift`
 
 - [ ] Replace compact prompt submission with the Codex App handoff runner.
 - [ ] Keep multiple active handoff handles keyed by UUID so one prompt does not cancel another.
 - [ ] Open the returned deep link with `NSWorkspace`; if URL opening fails, launch `codex app` as a fallback and surface an internal error conversation.
-- [ ] Run `swift build` and `swift run QuickAIDashboardCoreTests`.
+- [ ] Run `swift build` and `swift run CodexPlusCoreTests`.
 
 ### Task 3: Verification
 

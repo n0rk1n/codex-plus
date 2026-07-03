@@ -6,29 +6,29 @@
 
 **Architecture:** Add a small Core usage domain that reads the latest Codex `token_count.rate_limits` event from local JSONL files, converts it into a display-ready status, and exposes it through a timer-backed monitor matching the existing battery monitor pattern. The App layer renders that status in one double-ring tile beside the battery tile and does no JSON parsing or threshold math.
 
-**Tech Stack:** Swift 6, SwiftPM, SwiftUI, AppKit host windows, Foundation JSON parsing, existing `QuickAIDashboardCoreTests` executable test harness.
+**Tech Stack:** Swift 6, SwiftPM, SwiftUI, AppKit host windows, Foundation JSON parsing, existing `CodexPlusCoreTests` executable test harness.
 
 ---
 
 ## File Structure
 
-- Create `Sources/QuickAIDashboardCore/CodexUsageStatus.swift`
+- Create `Sources/CodexPlusCore/CodexUsageStatus.swift`
   - Owns `CodexUsageWindow`, `CodexUsageRingColor`, and `CodexUsageStatus`.
   - Keeps percentage clamping and RGB color interpolation deterministic and testable.
-- Create `Sources/QuickAIDashboardCore/LocalCodexUsageProvider.swift`
+- Create `Sources/CodexPlusCore/LocalCodexUsageProvider.swift`
   - Owns `CodexUsageProviding` and `LocalCodexUsageProvider`.
   - Reads local Codex session JSONL files, ignores malformed lines, and returns the newest usable usage event.
-- Create `Sources/QuickAIDashboardCore/CodexUsageMonitor.swift`
+- Create `Sources/CodexPlusCore/CodexUsageMonitor.swift`
   - Timer wrapper matching `BatteryStatusMonitor`.
-- Create `Sources/QuickAIDashboardApp/Views/CodexUsageRingTileView.swift`
+- Create `Sources/CodexPlusApp/Views/CodexUsageRingTileView.swift`
   - SwiftUI-only rendering of the double ring tile.
-- Modify `Sources/QuickAIDashboardApp/Views/CompactEntryHostView.swift`
+- Modify `Sources/CodexPlusApp/Views/CompactEntryHostView.swift`
   - Observe `CodexUsageMonitor` and pass usage status to compact entry.
-- Modify `Sources/QuickAIDashboardApp/Views/CompactEntryView.swift`
+- Modify `Sources/CodexPlusApp/Views/CompactEntryView.swift`
   - Add the Codex usage tile beside the battery tile.
-- Modify `Sources/QuickAIDashboardApp/WindowCoordinator.swift`
+- Modify `Sources/CodexPlusApp/WindowCoordinator.swift`
   - Own, start, and wire the usage monitor using `LocalCodexUsageProvider`.
-- Modify `Tests/QuickAIDashboardCoreTests/main.swift`
+- Modify `Tests/CodexPlusCoreTests/main.swift`
   - Add focused tests for status color logic, JSONL parsing, newest event selection, malformed lines, unknown status, and monitor refresh.
 
 ---
@@ -36,12 +36,12 @@
 ## Task 1: Core Usage Status And Color Bands
 
 **Files:**
-- Create: `Sources/QuickAIDashboardCore/CodexUsageStatus.swift`
-- Modify: `Tests/QuickAIDashboardCoreTests/main.swift`
+- Create: `Sources/CodexPlusCore/CodexUsageStatus.swift`
+- Modify: `Tests/CodexPlusCoreTests/main.swift`
 
 - [ ] **Step 1: Write the failing color/status tests**
 
-Add these tests near the battery monitor tests in `Tests/QuickAIDashboardCoreTests/main.swift`:
+Add these tests near the battery monitor tests in `Tests/CodexPlusCoreTests/main.swift`:
 
 ```swift
 let unknownCodexUsage = CodexUsageStatus.unknown
@@ -75,14 +75,14 @@ expect(clampedCodexUsage.weeklyPercent == 100, "codex usage clamps high percent 
 Run:
 
 ```bash
-swift run QuickAIDashboardCoreTests
+swift run CodexPlusCoreTests
 ```
 
 Expected: FAIL because `CodexUsageStatus`, `CodexUsageWindow`, and `CodexUsageRingColor` are not defined.
 
 - [ ] **Step 3: Implement the minimal status model**
 
-Create `Sources/QuickAIDashboardCore/CodexUsageStatus.swift`:
+Create `Sources/CodexPlusCore/CodexUsageStatus.swift`:
 
 ```swift
 import Foundation
@@ -199,7 +199,7 @@ public struct CodexUsageStatus: Equatable, Sendable {
 Run:
 
 ```bash
-swift run QuickAIDashboardCoreTests
+swift run CodexPlusCoreTests
 ```
 
 Expected: PASS with the assertion count increased by 12.
@@ -207,7 +207,7 @@ Expected: PASS with the assertion count increased by 12.
 - [ ] **Step 5: Commit Task 1**
 
 ```bash
-git add Sources/QuickAIDashboardCore/CodexUsageStatus.swift Tests/QuickAIDashboardCoreTests/main.swift
+git add Sources/CodexPlusCore/CodexUsageStatus.swift Tests/CodexPlusCoreTests/main.swift
 git commit -m "feat: add codex usage status model"
 ```
 
@@ -216,18 +216,18 @@ git commit -m "feat: add codex usage status model"
 ## Task 2: Local Codex Usage Provider
 
 **Files:**
-- Create: `Sources/QuickAIDashboardCore/LocalCodexUsageProvider.swift`
-- Modify: `Tests/QuickAIDashboardCoreTests/main.swift`
+- Create: `Sources/CodexPlusCore/LocalCodexUsageProvider.swift`
+- Modify: `Tests/CodexPlusCoreTests/main.swift`
 
 - [ ] **Step 1: Add temporary JSONL helpers and failing provider tests**
 
-Add this helper below `makeTemporaryScript` in `Tests/QuickAIDashboardCoreTests/main.swift`:
+Add this helper below `makeTemporaryScript` in `Tests/CodexPlusCoreTests/main.swift`:
 
 ```swift
 @MainActor
 func makeTemporaryDirectory(named name: String) -> URL {
     let url = FileManager.default.temporaryDirectory.appendingPathComponent(
-        "quick-ai-dashboard-\(UUID().uuidString)-\(name)",
+        "codex-plus-\(UUID().uuidString)-\(name)",
         isDirectory: true
     )
 
@@ -306,14 +306,14 @@ expect(emptyUsageProvider.currentStatus() == .unknown, "codex usage provider ret
 Run:
 
 ```bash
-swift run QuickAIDashboardCoreTests
+swift run CodexPlusCoreTests
 ```
 
 Expected: FAIL because `LocalCodexUsageProvider` and `CodexUsageProviding` are not defined.
 
 - [ ] **Step 3: Implement JSONL parsing and newest-event selection**
 
-Create `Sources/QuickAIDashboardCore/LocalCodexUsageProvider.swift`:
+Create `Sources/CodexPlusCore/LocalCodexUsageProvider.swift`:
 
 ```swift
 import Foundation
@@ -476,7 +476,7 @@ public struct LocalCodexUsageProvider: CodexUsageProviding {
 Run:
 
 ```bash
-swift run QuickAIDashboardCoreTests
+swift run CodexPlusCoreTests
 ```
 
 Expected: PASS with assertion count increased by 4 from Task 2.
@@ -484,7 +484,7 @@ Expected: PASS with assertion count increased by 4 from Task 2.
 - [ ] **Step 5: Commit Task 2**
 
 ```bash
-git add Sources/QuickAIDashboardCore/LocalCodexUsageProvider.swift Tests/QuickAIDashboardCoreTests/main.swift
+git add Sources/CodexPlusCore/LocalCodexUsageProvider.swift Tests/CodexPlusCoreTests/main.swift
 git commit -m "feat: read codex usage from sessions"
 ```
 
@@ -493,12 +493,12 @@ git commit -m "feat: read codex usage from sessions"
 ## Task 3: Codex Usage Monitor
 
 **Files:**
-- Create: `Sources/QuickAIDashboardCore/CodexUsageMonitor.swift`
-- Modify: `Tests/QuickAIDashboardCoreTests/main.swift`
+- Create: `Sources/CodexPlusCore/CodexUsageMonitor.swift`
+- Modify: `Tests/CodexPlusCoreTests/main.swift`
 
 - [ ] **Step 1: Add a sequence provider and failing monitor tests**
 
-Add this test helper near `SequenceBatteryProvider` in `Tests/QuickAIDashboardCoreTests/main.swift`:
+Add this test helper near `SequenceBatteryProvider` in `Tests/CodexPlusCoreTests/main.swift`:
 
 ```swift
 final class SequenceCodexUsageProvider: CodexUsageProviding, @unchecked Sendable {
@@ -550,14 +550,14 @@ expect(
 Run:
 
 ```bash
-swift run QuickAIDashboardCoreTests
+swift run CodexPlusCoreTests
 ```
 
 Expected: FAIL because `CodexUsageMonitor` is not defined.
 
 - [ ] **Step 3: Implement the monitor**
 
-Create `Sources/QuickAIDashboardCore/CodexUsageMonitor.swift`:
+Create `Sources/CodexPlusCore/CodexUsageMonitor.swift`:
 
 ```swift
 import Combine
@@ -617,7 +617,7 @@ public final class CodexUsageMonitor: ObservableObject {
 Run:
 
 ```bash
-swift run QuickAIDashboardCoreTests
+swift run CodexPlusCoreTests
 ```
 
 Expected: PASS with assertion count increased by 3 from Task 3.
@@ -625,7 +625,7 @@ Expected: PASS with assertion count increased by 3 from Task 3.
 - [ ] **Step 5: Commit Task 3**
 
 ```bash
-git add Sources/QuickAIDashboardCore/CodexUsageMonitor.swift Tests/QuickAIDashboardCoreTests/main.swift
+git add Sources/CodexPlusCore/CodexUsageMonitor.swift Tests/CodexPlusCoreTests/main.swift
 git commit -m "feat: monitor codex usage status"
 ```
 
@@ -634,16 +634,16 @@ git commit -m "feat: monitor codex usage status"
 ## Task 4: Double-Ring Usage Tile UI
 
 **Files:**
-- Create: `Sources/QuickAIDashboardApp/Views/CodexUsageRingTileView.swift`
-- Modify: `Sources/QuickAIDashboardApp/Views/CompactEntryView.swift`
-- Modify: `Sources/QuickAIDashboardApp/Views/CompactEntryHostView.swift`
+- Create: `Sources/CodexPlusApp/Views/CodexUsageRingTileView.swift`
+- Modify: `Sources/CodexPlusApp/Views/CompactEntryView.swift`
+- Modify: `Sources/CodexPlusApp/Views/CompactEntryHostView.swift`
 
 - [ ] **Step 1: Create the SwiftUI ring tile**
 
-Create `Sources/QuickAIDashboardApp/Views/CodexUsageRingTileView.swift`:
+Create `Sources/CodexPlusApp/Views/CodexUsageRingTileView.swift`:
 
 ```swift
-import QuickAIDashboardCore
+import CodexPlusCore
 import SwiftUI
 
 struct CodexUsageRingTileView: View {
@@ -757,10 +757,10 @@ private struct UsageRing: View {
 
 - [ ] **Step 2: Thread usage status through compact entry views**
 
-Update `Sources/QuickAIDashboardApp/Views/CompactEntryHostView.swift` to:
+Update `Sources/CodexPlusApp/Views/CompactEntryHostView.swift` to:
 
 ```swift
-import QuickAIDashboardCore
+import CodexPlusCore
 import SwiftUI
 
 struct CompactEntryHostView: View {
@@ -778,7 +778,7 @@ struct CompactEntryHostView: View {
 }
 ```
 
-Update the top of `Sources/QuickAIDashboardApp/Views/CompactEntryView.swift` to include the new status:
+Update the top of `Sources/CodexPlusApp/Views/CompactEntryView.swift` to include the new status:
 
 ```swift
 struct CompactEntryView: View {
@@ -816,12 +816,12 @@ Task 4 intentionally leaves App wiring incomplete so Task 5 can own the coordina
 ## Task 5: Wire Usage Monitor Into Window Coordinator
 
 **Files:**
-- Modify: `Sources/QuickAIDashboardApp/WindowCoordinator.swift`
+- Modify: `Sources/CodexPlusApp/WindowCoordinator.swift`
 - Uses existing changes from Task 4.
 
 - [ ] **Step 1: Add monitor ownership**
 
-In `Sources/QuickAIDashboardApp/WindowCoordinator.swift`, add this property beside `batteryMonitor`:
+In `Sources/CodexPlusApp/WindowCoordinator.swift`, add this property beside `batteryMonitor`:
 
 ```swift
 private let codexUsageMonitor: CodexUsageMonitor
@@ -872,7 +872,7 @@ Expected: PASS.
 Run:
 
 ```bash
-swift run QuickAIDashboardCoreTests
+swift run CodexPlusCoreTests
 ```
 
 Expected: PASS with all assertions passing.
@@ -880,7 +880,7 @@ Expected: PASS with all assertions passing.
 - [ ] **Step 6: Commit Tasks 4 and 5 together**
 
 ```bash
-git add Sources/QuickAIDashboardApp/Views/CodexUsageRingTileView.swift Sources/QuickAIDashboardApp/Views/CompactEntryHostView.swift Sources/QuickAIDashboardApp/Views/CompactEntryView.swift Sources/QuickAIDashboardApp/WindowCoordinator.swift
+git add Sources/CodexPlusApp/Views/CodexUsageRingTileView.swift Sources/CodexPlusApp/Views/CompactEntryHostView.swift Sources/CodexPlusApp/Views/CompactEntryView.swift Sources/CodexPlusApp/WindowCoordinator.swift
 git commit -m "feat: show codex usage rings"
 ```
 
@@ -897,14 +897,14 @@ git commit -m "feat: show codex usage rings"
 Run:
 
 ```bash
-swift run QuickAIDashboardCoreTests
+swift run CodexPlusCoreTests
 swift build
 git diff --check
 ```
 
 Expected:
 
-- `QuickAIDashboardCoreTests` passes.
+- `CodexPlusCoreTests` passes.
 - `swift build` exits 0.
 - `git diff --check` prints no whitespace errors.
 
@@ -927,7 +927,7 @@ Expected:
 Run the app in the usual local way:
 
 ```bash
-swift run QuickAIDashboardApp
+swift run CodexPlusApp
 ```
 
 Expected:

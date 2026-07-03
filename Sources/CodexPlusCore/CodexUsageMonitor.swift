@@ -9,7 +9,7 @@ public final class CodexUsageMonitor: ObservableObject {
 
     private let provider: any CodexUsageProviding
     private let interval: TimeInterval
-    private let refreshQueue = DispatchQueue(label: "QuickAIDashboardCore.CodexUsageMonitor.refresh", qos: .utility)
+    private let refreshQueue = DispatchQueue(label: "CodexPlusCore.CodexUsageMonitor.refresh", qos: .utility)
     private var timer: Timer?
     private var refreshID = UUID()
 

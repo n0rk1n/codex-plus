@@ -3,7 +3,7 @@ import Foundation
 @MainActor
 public final class CodexRunController {
     private let runner: ProcessCodexRunner
-    private let callbackQueue = DispatchQueue(label: "QuickAIDashboardCore.CodexRunController.callbacks")
+    private let callbackQueue = DispatchQueue(label: "CodexPlusCore.CodexRunController.callbacks")
 
     private var activeRunHandle: CodexRunHandle?
     private var activeRunID: UUID?

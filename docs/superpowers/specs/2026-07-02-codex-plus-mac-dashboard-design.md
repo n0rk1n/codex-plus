@@ -1,4 +1,4 @@
-# Quick AI Mac Dashboard MVP Design
+# Codex+ Mac Dashboard MVP Design
 
 Date: 2026-07-02
 

@@ -13,8 +13,8 @@
 ### Task 1: Core Tile Order Model
 
 **Files:**
-- Create: `Sources/QuickAIDashboardCore/DashboardTileOrder.swift`
-- Modify: `Tests/QuickAIDashboardCoreTests/main.swift`
+- Create: `Sources/CodexPlusCore/DashboardTileOrder.swift`
+- Modify: `Tests/CodexPlusCoreTests/main.swift`
 
 - [ ] **Step 1: Write failing tests**
 
@@ -37,7 +37,7 @@ expect(swappedTileOrder.tiles == [.codexUsage, .battery], "dashboard tile order 
 
 - [ ] **Step 2: Run test to verify it fails**
 
-Run: `swift run QuickAIDashboardCoreTests`
+Run: `swift run CodexPlusCoreTests`
 
 Expected: compile failure because `DashboardTileOrder` and `DashboardTile` do not exist.
 
@@ -106,14 +106,14 @@ public struct DashboardTileOrder: Equatable, Sendable {
 
 - [ ] **Step 4: Run test to verify it passes**
 
-Run: `swift run QuickAIDashboardCoreTests`
+Run: `swift run CodexPlusCoreTests`
 
-Expected: `QuickAIDashboardCoreTests passed`.
+Expected: `CodexPlusCoreTests passed`.
 
 ### Task 2: Drag Gesture and Persistence
 
 **Files:**
-- Modify: `Sources/QuickAIDashboardApp/Views/CompactEntryView.swift`
+- Modify: `Sources/CodexPlusApp/Views/CompactEntryView.swift`
 
 - [ ] **Step 1: Add persistent order and drag state**
 
@@ -216,16 +216,16 @@ Expected: build succeeds.
 ### Task 3: Verification and Commit
 
 **Files:**
-- Create: `Sources/QuickAIDashboardCore/DashboardTileOrder.swift`
-- Modify: `Sources/QuickAIDashboardApp/Views/CompactEntryView.swift`
-- Modify: `Tests/QuickAIDashboardCoreTests/main.swift`
+- Create: `Sources/CodexPlusCore/DashboardTileOrder.swift`
+- Modify: `Sources/CodexPlusApp/Views/CompactEntryView.swift`
+- Modify: `Tests/CodexPlusCoreTests/main.swift`
 
 - [ ] **Step 1: Run full verification**
 
 Run:
 
 ```bash
-swift run QuickAIDashboardCoreTests
+swift run CodexPlusCoreTests
 swift build
 git diff --check
 ```
@@ -234,13 +234,13 @@ Expected: tests pass, build succeeds, diff check has no output.
 
 - [ ] **Step 2: GUI smoke launch**
 
-Run: `swift run QuickAIDashboardApp`
+Run: `swift run CodexPlusApp`
 
 Expected: app launches without immediate crash. Stop the run after smoke verification.
 
 - [ ] **Step 3: Commit**
 
 ```bash
-git add Sources/QuickAIDashboardCore/DashboardTileOrder.swift Sources/QuickAIDashboardApp/Views/CompactEntryView.swift Tests/QuickAIDashboardCoreTests/main.swift
+git add Sources/CodexPlusCore/DashboardTileOrder.swift Sources/CodexPlusApp/Views/CompactEntryView.swift Tests/CodexPlusCoreTests/main.swift
 git commit -m "feat: reorder dashboard tiles"
 ```
