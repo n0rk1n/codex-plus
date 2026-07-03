@@ -6,6 +6,7 @@ import SwiftUI
 final class WindowCoordinator: NSObject, NSWindowDelegate {
     private let conversationCoordinator: ConversationCoordinator
     private let batteryMonitor: BatteryStatusMonitor
+    private let codexUsageMonitor: CodexUsageMonitor
     private let runController: CodexRunController
     private let permissionPrompter = PermissionPrompter()
 
@@ -27,6 +28,7 @@ final class WindowCoordinator: NSObject, NSWindowDelegate {
     ) {
         self.conversationCoordinator = conversationCoordinator
         self.batteryMonitor = BatteryStatusMonitor(provider: batteryProvider)
+        self.codexUsageMonitor = CodexUsageMonitor(provider: LocalCodexUsageProvider())
         self.runController = CodexRunController(runner: codexRunner)
 
         super.init()
@@ -60,10 +62,12 @@ final class WindowCoordinator: NSObject, NSWindowDelegate {
         let panel = compactPanel ?? makePanel(frame: frame)
 
         batteryMonitor.start()
+        codexUsageMonitor.start()
         panel.setFrame(frame, display: true)
         panel.contentView = DraggableHostingView(
             rootView: CompactEntryHostView(
                 batteryMonitor: batteryMonitor,
+                codexUsageMonitor: codexUsageMonitor,
                 onSubmit: { [weak self] prompt in
                     Task { @MainActor in
                         self?.startConversation(prompt: prompt)

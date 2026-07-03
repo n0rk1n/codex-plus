@@ -3,6 +3,7 @@ import SwiftUI
 
 struct CompactEntryView: View {
     let batteryStatus: BatteryStatus
+    let codexUsageStatus: CodexUsageStatus
     let onSubmit: (String) -> Void
 
     @FocusState private var isPromptFocused: Bool
@@ -10,8 +11,9 @@ struct CompactEntryView: View {
 
     var body: some View {
         VStack(spacing: 14) {
-            HStack {
+            HStack(spacing: 12) {
                 BatteryTileView(status: batteryStatus)
+                CodexUsageRingTileView(status: codexUsageStatus)
             }
             .frame(maxWidth: .infinity)
 
