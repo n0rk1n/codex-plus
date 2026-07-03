@@ -825,6 +825,18 @@ expect(
     ],
     "dashboard tile layout recenters the remaining codex tile while battery is dragged"
 )
+expect(
+    DashboardTileLayoutPolicy.acceptsDragChange(activeTile: nil, gestureTile: .battery),
+    "dashboard tile drag accepts the first gesture tile"
+)
+expect(
+    DashboardTileLayoutPolicy.acceptsDragChange(activeTile: .battery, gestureTile: .battery),
+    "dashboard tile drag keeps accepting the active gesture tile"
+)
+expect(
+    !DashboardTileLayoutPolicy.acceptsDragChange(activeTile: .battery, gestureTile: .codexUsage),
+    "dashboard tile drag rejects a different tile while battery is active"
+)
 
 let compactEntryBounds = ScreenRect(x: 0, y: 0, width: 420, height: 210)
 expect(

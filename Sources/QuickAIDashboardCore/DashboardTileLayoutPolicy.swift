@@ -43,4 +43,12 @@ public enum DashboardTileLayoutPolicy {
             return CompactDashboardTileDragPolicy.codexUsageTileWidth
         }
     }
+
+    public static func acceptsDragChange(activeTile: DashboardTile?, gestureTile: DashboardTile) -> Bool {
+        guard let activeTile else {
+            return true
+        }
+
+        return activeTile == gestureTile
+    }
 }

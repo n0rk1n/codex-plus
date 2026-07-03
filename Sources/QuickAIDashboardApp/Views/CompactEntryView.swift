@@ -29,6 +29,7 @@ struct CompactEntryView: View {
                             .opacity(draggedTile == tile ? 0.92 : 1)
                             .zIndex(draggedTile == tile ? 1 : 0)
                             .contentShape(Rectangle())
+                            .allowsHitTesting(draggedTile == nil || draggedTile == tile)
                             .highPriorityGesture(dragGesture(for: tile))
                     }
                 }
@@ -85,12 +86,20 @@ struct CompactEntryView: View {
     }
 
     private func dragGesture(for tile: DashboardTile) -> some Gesture {
-        DragGesture(minimumDistance: 8)
+        DragGesture(minimumDistance: 1)
             .onChanged { value in
+                guard DashboardTileLayoutPolicy.acceptsDragChange(activeTile: draggedTile, gestureTile: tile) else {
+                    return
+                }
+
                 draggedTile = tile
                 dragTranslation = CGSize(width: value.translation.width, height: 0)
             }
             .onEnded { value in
+                guard draggedTile == tile else {
+                    return
+                }
+
                 reorderIfNeeded(tile: tile, translationWidth: value.translation.width)
                 draggedTile = nil
                 dragTranslation = .zero
