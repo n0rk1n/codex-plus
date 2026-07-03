@@ -721,6 +721,10 @@ let firstTitle = titleGenerator.nextTitle(existingTitles: [])
 let secondTitle = titleGenerator.nextTitle(existingTitles: [firstTitle])
 expect(firstTitle == "对话_4821", "conversation title uses random suffix")
 expect(secondTitle == "对话_9130", "conversation title retries on collision")
+expect(
+    ConversationTitleGenerator.title(randomSuffix: 7) == "对话_0007",
+    "conversation title uses shared padding format"
+)
 
 let defaultSession = ConversationSession(prompt: "default title")
 let defaultSessionTitleSuffix = String(defaultSession.title.dropFirst("对话_".count))

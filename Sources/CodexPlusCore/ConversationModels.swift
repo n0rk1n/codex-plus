@@ -83,7 +83,7 @@ public struct ConversationSession: Equatable, Identifiable, Sendable {
 
     public init(
         id: UUID = UUID(),
-        title: String = String(format: "对话_%04d", Int.random(in: 1000...9999)),
+        title: String = ConversationTitleGenerator.title(randomSuffix: Int.random(in: 1000...9999)),
         prompt: String,
         workspacePath: String = ".",
         state: ConversationRunState = .idle,
@@ -238,11 +238,15 @@ public struct ConversationTitleGenerator: Sendable {
 
         while true {
             let suffix = nextSuffix()
-            let title = "对话_\(String(format: "%04d", suffix))"
+            let title = Self.title(randomSuffix: suffix)
             if !existing.contains(title) {
                 return title
             }
         }
+    }
+
+    public static func title(randomSuffix: Int) -> String {
+        "对话_\(String(format: "%04d", randomSuffix))"
     }
 
     private mutating func nextSuffix() -> Int {
