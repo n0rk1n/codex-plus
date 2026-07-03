@@ -805,6 +805,26 @@ expect(
     reversedTileOrder.layoutTiles(excludingDragged: .codexUsage) == [.battery],
     "dashboard tile layout removes dragged codex usage from reversed order"
 )
+expect(
+    DashboardTileLayoutPolicy.placements(for: defaultTileOrder.tiles) == [
+        DashboardTilePlacement(tile: .battery, centerX: -75, width: 92),
+        DashboardTilePlacement(tile: .codexUsage, centerX: 52, width: 138)
+    ],
+    "dashboard tile layout places default tiles at stable visual centers"
+)
+expect(
+    DashboardTileLayoutPolicy.placements(for: reversedTileOrder.tiles) == [
+        DashboardTilePlacement(tile: .codexUsage, centerX: -52, width: 138),
+        DashboardTilePlacement(tile: .battery, centerX: 75, width: 92)
+    ],
+    "dashboard tile layout places reversed tiles at stable visual centers"
+)
+expect(
+    DashboardTileLayoutPolicy.placements(for: defaultTileOrder.layoutTiles(excludingDragged: .battery)) == [
+        DashboardTilePlacement(tile: .codexUsage, centerX: 0, width: 138)
+    ],
+    "dashboard tile layout recenters the remaining codex tile while battery is dragged"
+)
 
 let compactEntryBounds = ScreenRect(x: 0, y: 0, width: 420, height: 210)
 expect(

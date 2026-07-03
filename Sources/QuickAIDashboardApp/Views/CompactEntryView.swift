@@ -13,23 +13,26 @@ struct CompactEntryView: View {
     @State private var dragTranslation: CGSize = .zero
 
     private let reorderThreshold: CGFloat = 44
-    private let tileSpacing: CGFloat = 12
     private let tileRowHeight: CGFloat = 92
 
     var body: some View {
         VStack(spacing: 14) {
-            ZStack {
-                ForEach(dashboardTileOrder.tiles, id: \.self) { tile in
-                    tileView(for: tile)
-                        .offset(x: tileOffset(for: tile))
-                        .scaleEffect(draggedTile == tile ? 1.03 : 1)
-                        .opacity(draggedTile == tile ? 0.92 : 1)
-                        .zIndex(draggedTile == tile ? 1 : 0)
-                        .contentShape(Rectangle())
-                        .highPriorityGesture(dragGesture(for: tile))
+            GeometryReader { geometry in
+                ZStack {
+                    ForEach(dashboardTileOrder.tiles, id: \.self) { tile in
+                        tileView(for: tile)
+                            .position(
+                                x: (geometry.size.width / 2) + tileOffset(for: tile),
+                                y: tileRowHeight / 2
+                            )
+                            .scaleEffect(draggedTile == tile ? 1.03 : 1)
+                            .opacity(draggedTile == tile ? 0.92 : 1)
+                            .zIndex(draggedTile == tile ? 1 : 0)
+                            .contentShape(Rectangle())
+                            .highPriorityGesture(dragGesture(for: tile))
+                    }
                 }
             }
-            .frame(maxWidth: .infinity)
             .frame(height: tileRowHeight)
             .animation(.snappy(duration: 0.18), value: draggedTile)
             .animation(.snappy(duration: 0.18), value: dashboardTileOrderRaw)
@@ -53,38 +56,18 @@ struct CompactEntryView: View {
 
     private func tileOffset(for tile: DashboardTile) -> CGFloat {
         if draggedTile == tile {
-            return baseOffset(for: tile, in: dashboardTileOrder.tiles) + dragTranslation.width
+            return placementOffset(for: tile, in: dashboardTileOrder.tiles) + dragTranslation.width
         }
 
-        return baseOffset(
+        return placementOffset(
             for: tile,
             in: dashboardTileOrder.layoutTiles(excludingDragged: draggedTile)
         )
     }
 
-    private func baseOffset(for tile: DashboardTile, in tiles: [DashboardTile]) -> CGFloat {
-        guard let tileIndex = tiles.firstIndex(of: tile) else {
-            return 0
-        }
-
-        let totalWidth = tiles.reduce(CGFloat(0)) { partialResult, tile in
-            partialResult + tileWidth(for: tile)
-        } + CGFloat(max(0, tiles.count - 1)) * tileSpacing
-        let leadingX = -totalWidth / 2
-        let precedingWidth = tiles.prefix(tileIndex).reduce(CGFloat(0)) { partialResult, tile in
-            partialResult + tileWidth(for: tile) + tileSpacing
-        }
-
-        return leadingX + precedingWidth + (tileWidth(for: tile) / 2)
-    }
-
-    private func tileWidth(for tile: DashboardTile) -> CGFloat {
-        switch tile {
-        case .battery:
-            return CGFloat(CompactDashboardTileDragPolicy.batteryTileWidth)
-        case .codexUsage:
-            return CGFloat(CompactDashboardTileDragPolicy.codexUsageTileWidth)
-        }
+    private func placementOffset(for tile: DashboardTile, in tiles: [DashboardTile]) -> CGFloat {
+        let placement = DashboardTileLayoutPolicy.placements(for: tiles).first { $0.tile == tile }
+        return CGFloat(placement?.centerX ?? 0)
     }
 
     private var dashboardTileOrder: DashboardTileOrder {
