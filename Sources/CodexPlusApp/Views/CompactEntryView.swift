@@ -151,6 +151,5 @@ struct CompactEntryView: View {
         }
 
         onSubmit(trimmedPrompt)
-        prompt = ""
     }
 }

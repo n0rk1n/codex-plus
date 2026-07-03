@@ -983,6 +983,20 @@ expect(
     "shortcut recalls existing draft when draft exists"
 )
 
+let draftPromptCoordinator = ConversationCoordinator(titleGenerator: ConversationTitleGenerator(randomSuffixes: [1113]))
+draftPromptCoordinator.beginDraft(selectedWorkspacePath: "/tmp/draft")
+draftPromptCoordinator.setDraftPrompt("Retry this prompt")
+draftPromptCoordinator.setDraftError("Unable to prepare workspace")
+expect(
+    draftPromptCoordinator.snapshot.draft?.prompt == "Retry this prompt",
+    "draft error preserves the entered prompt"
+)
+draftPromptCoordinator.setDraftWorkspacePath("/tmp/other-draft")
+expect(
+    draftPromptCoordinator.snapshot.draft?.prompt == "Retry this prompt",
+    "changing draft workspace preserves the entered prompt"
+)
+
 let archivedShortcutCoordinator = ConversationCoordinator(titleGenerator: ConversationTitleGenerator(randomSuffixes: [6101]))
 let archivedShortcutConversation = archivedShortcutCoordinator.startConversation(prompt: "archive", workspacePath: "/tmp/archive-shortcut")
 archivedShortcutCoordinator.archiveConversation(archivedShortcutConversation.id)
@@ -1075,6 +1089,53 @@ let onlyArchiveResult = allArchivedCoordinator.archiveConversation(onlyConversat
 expect(onlyArchiveResult?.activeConversationID == nil, "archiving last conversation clears active conversation")
 expect(allArchivedCoordinator.snapshot.workspaces.isEmpty, "archiving last conversation removes workspace tab")
 expect(allArchivedCoordinator.activeConversation == nil, "no active conversation remains after last archive")
+
+let draftArchiveCoordinator = ConversationCoordinator(titleGenerator: ConversationTitleGenerator(randomSuffixes: [7101, 7102]))
+let draftArchiveFirst = draftArchiveCoordinator.startConversation(
+    prompt: "first",
+    workspacePath: "/tmp/draft-archive-first",
+    now: Date(timeIntervalSince1970: 60)
+)
+let draftArchiveSecond = draftArchiveCoordinator.startConversation(
+    prompt: "second",
+    workspacePath: "/tmp/draft-archive-second",
+    now: Date(timeIntervalSince1970: 70)
+)
+let expectedRemainingWorkspaceID = draftArchiveCoordinator.snapshot.workspaces.first { workspace in
+    workspace.path == ConversationWorkspacePolicy.normalizedPath("/tmp/draft-archive-second")
+}?.id
+draftArchiveCoordinator.selectConversation(draftArchiveFirst.id)
+draftArchiveCoordinator.beginDraft(selectedWorkspacePath: "/tmp/custom-draft")
+draftArchiveCoordinator.setDraftPrompt("Keep this draft prompt")
+let draftArchiveResult = draftArchiveCoordinator.archiveConversation(
+    draftArchiveFirst.id,
+    now: Date(timeIntervalSince1970: 80)
+)
+expect(
+    draftArchiveResult?.activeWorkspaceID == expectedRemainingWorkspaceID,
+    "archiving the draft workspace retargets the active workspace to a remaining workspace"
+)
+expect(
+    draftArchiveCoordinator.activeWorkspaceID == expectedRemainingWorkspaceID,
+    "coordinator repairs the active workspace when draft mode archives its only conversation"
+)
+expect(
+    draftArchiveCoordinator.activeConversationID == nil,
+    "draft mode keeps no active conversation after archiving the draft workspace conversation"
+)
+expect(
+    draftArchiveCoordinator.snapshot.draft?.prompt == "Keep this draft prompt",
+    "draft mode preserves the pending prompt after archiving the active workspace conversation"
+)
+expect(
+    draftArchiveCoordinator.snapshot.workspaces.map(\.path) ==
+        [ConversationWorkspacePolicy.normalizedPath("/tmp/draft-archive-second")],
+    "archiving the only conversation in the active draft workspace removes that workspace and keeps the remaining one"
+)
+expect(
+    draftArchiveCoordinator.visibleConversations(in: expectedRemainingWorkspaceID ?? UUID()).map(\.id) == [draftArchiveSecond.id],
+    "remaining workspace conversations stay visible after draft archive repair"
+)
 
 let isolatedEventsCoordinator = ConversationCoordinator(titleGenerator: ConversationTitleGenerator(randomSuffixes: [8001, 8002]))
 let isolatedFirst = isolatedEventsCoordinator.startConversation(prompt: "one", workspacePath: "/tmp/events")

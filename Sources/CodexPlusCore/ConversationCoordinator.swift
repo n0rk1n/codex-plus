@@ -85,18 +85,26 @@ public final class ConversationCoordinator: ObservableObject {
         return .openFreshEntry
     }
 
-    public func beginDraft(selectedWorkspacePath: String? = nil) {
+    public func beginDraft(selectedWorkspacePath: String? = nil, prompt: String = "") {
         draft = ConversationDraft(
-            selectedWorkspacePath: selectedWorkspacePath.map(ConversationWorkspacePolicy.normalizedPath)
+            selectedWorkspacePath: selectedWorkspacePath.map(ConversationWorkspacePolicy.normalizedPath),
+            prompt: prompt
         )
         activeConversationID = nil
     }
 
     public func setDraftWorkspacePath(_ path: String?) {
-        draft = ConversationDraft(
-            selectedWorkspacePath: path.map(ConversationWorkspacePolicy.normalizedPath),
-            errorMessage: nil
-        )
+        var nextDraft = draft ?? ConversationDraft()
+        nextDraft.selectedWorkspacePath = path.map(ConversationWorkspacePolicy.normalizedPath)
+        nextDraft.errorMessage = nil
+        draft = nextDraft
+    }
+
+    public func setDraftPrompt(_ prompt: String) {
+        var nextDraft = draft ?? ConversationDraft()
+        nextDraft.prompt = prompt
+        nextDraft.errorMessage = nil
+        draft = nextDraft
     }
 
     public func setDraftError(_ message: String) {
@@ -251,6 +259,8 @@ public final class ConversationCoordinator: ObservableObject {
             return nil
         }
 
+        let archivedWorkspaceID = workspaces[workspaceIndex].id
+        let wasDraftActive = draft != nil && activeConversationID == nil
         let neighborID = archiveFallbackNeighbor(
             archivedID: id,
             conversationIDs: workspaces[workspaceIndex].conversationIDs
@@ -272,7 +282,17 @@ public final class ConversationCoordinator: ObservableObject {
             } else {
                 activeWorkspaceID = nil
                 activeConversationID = nil
-                draft = ConversationDraft()
+                draft = nil
+            }
+        } else if workspaces.isEmpty {
+            activeWorkspaceID = nil
+            activeConversationID = nil
+            draft = nil
+        } else if activeWorkspaceID == archivedWorkspaceID {
+            let nextWorkspaceID = workspaces.max(by: { $0.lastActivityAt < $1.lastActivityAt })?.id
+            activeWorkspaceID = nextWorkspaceID
+            if !wasDraftActive {
+                activeConversationID = nextWorkspaceID.flatMap { visibleConversations(in: $0).first?.id }
             }
         }
 

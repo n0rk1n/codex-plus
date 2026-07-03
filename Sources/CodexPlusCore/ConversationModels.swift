@@ -134,10 +134,16 @@ public struct WorkspaceSessionGroup: Equatable, Identifiable, Sendable {
 
 public struct ConversationDraft: Equatable, Sendable {
     public var selectedWorkspacePath: String?
+    public var prompt: String
     public var errorMessage: String?
 
-    public init(selectedWorkspacePath: String? = nil, errorMessage: String? = nil) {
+    public init(
+        selectedWorkspacePath: String? = nil,
+        prompt: String = "",
+        errorMessage: String? = nil
+    ) {
         self.selectedWorkspacePath = selectedWorkspacePath
+        self.prompt = prompt
         self.errorMessage = errorMessage
     }
 }
@@ -169,6 +175,10 @@ public struct ConversationCoordinatorSnapshot: Equatable, Sendable {
         }
 
         return conversations.first { $0.id == activeConversationID && !$0.isArchived }
+    }
+
+    public var hasVisibleConversations: Bool {
+        conversations.contains { !$0.isArchived }
     }
 }
 

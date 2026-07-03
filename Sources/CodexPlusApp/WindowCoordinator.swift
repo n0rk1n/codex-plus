@@ -121,23 +121,34 @@ final class WindowCoordinator: NSObject, NSWindowDelegate {
     }
 
     private func startConversation(prompt: String) {
+        let trimmedPrompt = prompt.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmedPrompt.isEmpty else {
+            return
+        }
+
+        conversationCoordinator.setDraftPrompt(trimmedPrompt)
         let workspacePath: String
 
         do {
             workspacePath = try resolveDraftWorkspacePath()
         } catch {
             conversationCoordinator.setDraftError("Unable to prepare workspace: \(error.localizedDescription)")
-            refreshSidePanelContent()
+            if let sidePanel, sidePanel.isVisible {
+                refreshSidePanelContent(on: sidePanel)
+            } else {
+                prepareCenteredSidePanelFrame()
+                showSidePanel()
+            }
             return
         }
 
         let session = conversationCoordinator.startConversation(
-            prompt: prompt,
+            prompt: trimmedPrompt,
             workspacePath: workspacePath
         )
         prepareCenteredSidePanelFrame()
         showSidePanel()
-        startCodexRun(prompt: prompt, sessionID: session.id, workspacePath: session.workspacePath)
+        startCodexRun(prompt: trimmedPrompt, sessionID: session.id, workspacePath: session.workspacePath)
     }
 
     private func openDraftFromCompactEntry() {
@@ -466,7 +477,7 @@ final class WindowCoordinator: NSObject, NSWindowDelegate {
 
         _ = conversationCoordinator.archiveConversation(id)
 
-        if conversationCoordinator.activeConversation == nil {
+        if !conversationCoordinator.snapshot.hasVisibleConversations {
             returnToCompactEntry()
         } else {
             refreshSidePanelContent()

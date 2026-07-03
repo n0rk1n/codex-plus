@@ -63,7 +63,11 @@ struct ConversationDraftView: View {
             }
         }
         .onAppear {
+            syncPromptFromDraft()
             isPromptFocused = true
+        }
+        .onChange(of: draft?.prompt ?? "") {
+            syncPromptFromDraft()
         }
     }
 
@@ -82,6 +86,14 @@ struct ConversationDraftView: View {
         }
 
         onSubmit(trimmedPrompt)
-        prompt = ""
+    }
+
+    private func syncPromptFromDraft() {
+        let draftPrompt = draft?.prompt ?? ""
+        guard draftPrompt != prompt else {
+            return
+        }
+
+        prompt = draftPrompt
     }
 }

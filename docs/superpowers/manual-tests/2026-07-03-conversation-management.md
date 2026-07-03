@@ -15,6 +15,8 @@ Date: 2026-07-03
 - Archive a running conversation and confirm; confirm only that conversation stops and disappears from active tabs.
 - Archive a completed conversation and confirm it disappears without a confirmation prompt.
 - Archive the selected middle conversation in a three-tab workspace; confirm the neighbor with newest activity is selected.
+- Open a draft while workspace A is selected, archive the only conversation in workspace A, and confirm the panel stays in draft mode with workspace B selected when another workspace remains.
+- From compact entry or draft view, choose a workspace, delete or rename that folder outside the app, submit a prompt, and confirm the draft panel shows the workspace error while keeping the original prompt text visible for retry.
 - Drag workspace tabs and confirm their order changes.
 - Drag conversation tabs inside one workspace and confirm their order changes.
 - Archive all conversations and confirm the panel animates back to compact entry.
