@@ -925,64 +925,59 @@ expect(invalidBattery.percentage == nil, "invalid battery percentage")
 expect(invalidBattery.state == .unknown, "invalid battery state")
 
 let defaultTileOrder = DashboardTileOrder(rawValue: nil)
-expect(defaultTileOrder.tiles == [.battery, .codexUsage], "dashboard tile order defaults to battery then codex usage")
-expect(defaultTileOrder.rawValue == "battery,codexUsage", "dashboard tile order serializes default order")
+expect(defaultTileOrder.tiles == [.codexUsage], "dashboard tile order hides battery by default")
+expect(defaultTileOrder.rawValue == "codexUsage", "dashboard tile order serializes visible default order")
+
+let legacyTileOrder = DashboardTileOrder(rawValue: "battery,codexUsage")
+expect(legacyTileOrder.tiles == [.codexUsage], "dashboard tile order hides battery from persisted legacy order")
 
 let reversedTileOrder = DashboardTileOrder(rawValue: "codexUsage,battery")
-expect(reversedTileOrder.tiles == [.codexUsage, .battery], "dashboard tile order reads reversed persisted order")
+expect(reversedTileOrder.tiles == [.codexUsage], "dashboard tile order hides battery from reversed persisted order")
 
 let invalidTileOrder = DashboardTileOrder(rawValue: "battery,battery,unknown")
-expect(invalidTileOrder.tiles == [.battery, .codexUsage], "dashboard tile order falls back when persisted order is invalid")
+expect(invalidTileOrder.tiles == [.codexUsage], "dashboard tile order falls back to visible tiles when persisted order is invalid")
 
-let swappedTileOrder = defaultTileOrder.swapping(.battery, with: .codexUsage)
-expect(swappedTileOrder.tiles == [.codexUsage, .battery], "dashboard tile order swaps dragged and target tiles")
+let swappedTileOrder = defaultTileOrder.swapping(.codexUsage, with: .battery)
+expect(swappedTileOrder.tiles == [.codexUsage], "dashboard tile order ignores swaps with hidden battery tile")
 expect(
-    defaultTileOrder.layoutTiles(excludingDragged: nil) == [.battery, .codexUsage],
-    "dashboard tile layout shows all tiles when no tile is dragged"
+    defaultTileOrder.layoutTiles(excludingDragged: nil) == [.codexUsage],
+    "dashboard tile layout shows the visible codex usage tile"
 )
 expect(
     defaultTileOrder.layoutTiles(excludingDragged: .battery) == [.codexUsage],
-    "dashboard tile layout removes dragged battery so codex usage can recenter"
+    "dashboard tile layout ignores hidden battery drag exclusions"
 )
 expect(
-    reversedTileOrder.layoutTiles(excludingDragged: .codexUsage) == [.battery],
-    "dashboard tile layout removes dragged codex usage from reversed order"
+    defaultTileOrder.layoutTiles(excludingDragged: .codexUsage) == [],
+    "dashboard tile layout removes dragged codex usage tile"
 )
 expect(
     DashboardTileLayoutPolicy.placements(for: defaultTileOrder.tiles) == [
-        DashboardTilePlacement(tile: .battery, centerX: -75, width: 92),
-        DashboardTilePlacement(tile: .codexUsage, centerX: 52, width: 138)
-    ],
-    "dashboard tile layout places default tiles at stable visual centers"
-)
-expect(
-    DashboardTileLayoutPolicy.placements(for: reversedTileOrder.tiles) == [
-        DashboardTilePlacement(tile: .codexUsage, centerX: -52, width: 138),
-        DashboardTilePlacement(tile: .battery, centerX: 75, width: 92)
-    ],
-    "dashboard tile layout places reversed tiles at stable visual centers"
-)
-expect(
-    DashboardTileLayoutPolicy.placements(for: defaultTileOrder.layoutTiles(excludingDragged: .battery)) == [
         DashboardTilePlacement(tile: .codexUsage, centerX: 0, width: 138)
     ],
-    "dashboard tile layout recenters the remaining codex tile while battery is dragged"
+    "dashboard tile layout centers the visible codex usage tile"
 )
 expect(
-    DashboardTileLayoutPolicy.tile(atX: 135, rowWidth: 420, tiles: defaultTileOrder.tiles) == .battery,
-    "dashboard tile hit testing selects battery at its visual center"
+    DashboardTileLayoutPolicy.placements(for: legacyTileOrder.tiles) == [
+        DashboardTilePlacement(tile: .codexUsage, centerX: 0, width: 138)
+    ],
+    "dashboard tile layout centers codex usage after hiding persisted battery"
 )
 expect(
-    DashboardTileLayoutPolicy.tile(atX: 262, rowWidth: 420, tiles: defaultTileOrder.tiles) == .codexUsage,
-    "dashboard tile hit testing selects codex usage at its visual center"
+    DashboardTileLayoutPolicy.placements(for: defaultTileOrder.layoutTiles(excludingDragged: .codexUsage)) == [],
+    "dashboard tile layout has no placements while codex usage is dragged away"
 )
 expect(
-    DashboardTileLayoutPolicy.tile(atX: 187, rowWidth: 420, tiles: defaultTileOrder.tiles) == nil,
-    "dashboard tile hit testing ignores the gap between tiles"
+    DashboardTileLayoutPolicy.tile(atX: 110, rowWidth: 420, tiles: defaultTileOrder.tiles) == nil,
+    "dashboard tile hit testing ignores the hidden battery area"
 )
 expect(
-    DashboardTileLayoutPolicy.tile(atX: 158, rowWidth: 420, tiles: reversedTileOrder.tiles) == .codexUsage,
-    "dashboard tile hit testing follows reversed visual order"
+    DashboardTileLayoutPolicy.tile(atX: 210, rowWidth: 420, tiles: defaultTileOrder.tiles) == .codexUsage,
+    "dashboard tile hit testing selects centered codex usage"
+)
+expect(
+    DashboardTileLayoutPolicy.tile(atX: 280, rowWidth: 420, tiles: defaultTileOrder.tiles) == nil,
+    "dashboard tile hit testing ignores space outside centered codex usage"
 )
 
 let compactEntryBounds = CGRect(x: 0, y: 0, width: 420, height: 210)
@@ -992,7 +987,7 @@ expect(
         panelBounds: compactEntryBounds,
         verticalOrigin: .top
     ),
-    "compact battery tile blocks window dragging"
+    "compact dashboard row blocks window dragging around hidden battery area"
 )
 expect(
     !CompactDashboardTileDragPolicy.shouldMoveWindowFromMouseDown(

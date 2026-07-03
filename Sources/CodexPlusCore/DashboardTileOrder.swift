@@ -6,7 +6,7 @@ public enum DashboardTile: String, CaseIterable, Equatable, Hashable, Sendable {
 }
 
 public struct DashboardTileOrder: Equatable, Sendable {
-    public static let defaultTiles: [DashboardTile] = [.battery, .codexUsage]
+    public static let defaultTiles: [DashboardTile] = [.codexUsage]
 
     public let tiles: [DashboardTile]
 
