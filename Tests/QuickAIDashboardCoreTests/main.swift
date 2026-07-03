@@ -93,6 +93,31 @@ func makeTemporaryScript(named name: String, contents: String) -> String {
 }
 
 @MainActor
+func makeTemporaryDirectory(named name: String) -> URL {
+    let url = FileManager.default.temporaryDirectory.appendingPathComponent(
+        "quick-ai-dashboard-\(UUID().uuidString)-\(name)",
+        isDirectory: true
+    )
+
+    do {
+        try FileManager.default.createDirectory(at: url, withIntermediateDirectories: true)
+    } catch {
+        expect(false, "temporary directory \(name) can be created")
+    }
+
+    return url
+}
+
+@MainActor
+func writeText(_ text: String, to url: URL) {
+    do {
+        try text.write(to: url, atomically: true, encoding: .utf8)
+    } catch {
+        expect(false, "temporary text file \(url.lastPathComponent) can be written")
+    }
+}
+
+@MainActor
 func waitUntil(timeout: TimeInterval, condition: () -> Bool) -> Bool {
     let deadline = Date().addingTimeInterval(timeout)
 
@@ -703,6 +728,53 @@ expect(redCodexUsage.ringColor(for: .weekly) == .highUsageRed, "codex usage at o
 let clampedCodexUsage = CodexUsageStatus(fiveHourPercent: -5, weeklyPercent: 140, observedAt: nil)
 expect(clampedCodexUsage.fiveHourPercent == 0, "codex usage clamps low percent to zero")
 expect(clampedCodexUsage.weeklyPercent == 100, "codex usage clamps high percent to one hundred")
+
+let codexUsageSessionsDirectory = makeTemporaryDirectory(named: "codex-usage-sessions")
+let codexUsageArchivesDirectory = makeTemporaryDirectory(named: "codex-usage-archives")
+defer {
+    try? FileManager.default.removeItem(at: codexUsageSessionsDirectory)
+    try? FileManager.default.removeItem(at: codexUsageArchivesDirectory)
+}
+
+let olderUsageFile = codexUsageArchivesDirectory.appendingPathComponent("older.jsonl")
+writeText(
+    """
+    {"timestamp":"2026-07-03T01:00:00Z","type":"event_msg","payload":{"type":"token_count","rate_limits":{"primary":{"used_percent":30,"window_minutes":300},"secondary":{"used_percent":40,"window_minutes":10080}}}}
+    """,
+    to: olderUsageFile
+)
+
+let newerUsageFile = codexUsageSessionsDirectory.appendingPathComponent("newer.jsonl")
+writeText(
+    """
+    {not json
+    {"timestamp":"2026-07-03T02:00:00Z","type":"event_msg","payload":{"type":"token_count","rate_limits":{"primary":{"used_percent":65,"window_minutes":300},"secondary":{"used_percent":55,"window_minutes":10080}}}}
+    {"timestamp":"2026-07-03T03:00:00Z","type":"event_msg","payload":{"type":"agent_message","message":"ignored"}}
+    """,
+    to: newerUsageFile
+)
+
+let codexUsageProvider = LocalCodexUsageProvider(
+    sessionDirectories: [codexUsageSessionsDirectory],
+    archiveDirectories: [codexUsageArchivesDirectory]
+)
+let codexUsageStatus = codexUsageProvider.currentStatus()
+expect(codexUsageStatus.fiveHourPercent == 65, "codex usage provider reads newest five-hour percent")
+expect(codexUsageStatus.weeklyPercent == 55, "codex usage provider reads newest weekly percent")
+expect(
+    codexUsageStatus.observedAt == ISO8601DateFormatter().date(from: "2026-07-03T02:00:00Z"),
+    "codex usage provider preserves newest usage timestamp"
+)
+
+let emptyUsageDirectory = makeTemporaryDirectory(named: "codex-usage-empty")
+defer {
+    try? FileManager.default.removeItem(at: emptyUsageDirectory)
+}
+let emptyUsageProvider = LocalCodexUsageProvider(
+    sessionDirectories: [emptyUsageDirectory],
+    archiveDirectories: []
+)
+expect(emptyUsageProvider.currentStatus() == .unknown, "codex usage provider returns unknown without usage data")
 
 let batteryMonitorProvider = SequenceBatteryProvider([
     BatteryStatus(percentage: 20, state: .discharging),
