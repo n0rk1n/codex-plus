@@ -812,12 +812,12 @@ expect(
     "compact codex usage tile blocks window dragging"
 )
 expect(
-    CompactDashboardTileDragPolicy.shouldMoveWindowFromMouseDown(
+    !CompactDashboardTileDragPolicy.shouldMoveWindowFromMouseDown(
         at: ScreenPoint(x: 50, y: 64),
         panelBounds: compactEntryBounds,
         verticalOrigin: .top
     ),
-    "compact tile row outside the dashboard cards still allows window dragging"
+    "compact dashboard row outside the cards blocks window dragging"
 )
 expect(
     CompactDashboardTileDragPolicy.shouldMoveWindowFromMouseDown(
@@ -825,7 +825,7 @@ expect(
         panelBounds: compactEntryBounds,
         verticalOrigin: .top
     ),
-    "compact prompt area still allows window dragging"
+    "compact prompt area allows window dragging"
 )
 expect(
     !CompactDashboardTileDragPolicy.shouldMoveWindowFromMouseDown(
@@ -834,6 +834,14 @@ expect(
         verticalOrigin: .bottom
     ),
     "compact tile drag policy supports bottom-left AppKit coordinates"
+)
+expect(
+    CompactDashboardTileDragPolicy.shouldMoveWindowFromMouseDown(
+        at: ScreenPoint(x: 210, y: 50),
+        panelBounds: compactEntryBounds,
+        verticalOrigin: .bottom
+    ),
+    "compact prompt drag policy supports bottom-left AppKit coordinates"
 )
 
 let unknownCodexUsage = CodexUsageStatus.unknown

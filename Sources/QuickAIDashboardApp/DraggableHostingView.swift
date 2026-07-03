@@ -3,23 +3,46 @@ import QuickAIDashboardCore
 import SwiftUI
 
 final class DraggableHostingView<Content: View>: NSHostingView<Content> {
-    var blocksWindowDragOnCompactDashboardTiles = false
-
-    override var mouseDownCanMoveWindow: Bool {
-        guard blocksWindowDragOnCompactDashboardTiles else {
-            return true
-        }
-
-        return CompactDashboardTileDragPolicy.shouldMoveWindowFromMouseDown(
-            at: currentLocalMousePoint(),
-            panelBounds: currentLocalBounds(),
-            verticalOrigin: isFlipped ? .top : .bottom
-        )
+    enum WindowDragMode {
+        case automatic
+        case compactPrompt
     }
 
-    private func currentLocalMousePoint() -> ScreenPoint {
-        let windowPoint = NSApp.currentEvent?.locationInWindow ?? window?.mouseLocationOutsideOfEventStream ?? .zero
-        let localPoint = convert(windowPoint, from: nil)
+    var windowDragMode = WindowDragMode.automatic
+
+    override var mouseDownCanMoveWindow: Bool {
+        switch windowDragMode {
+        case .automatic:
+            return true
+        case .compactPrompt:
+            return false
+        }
+    }
+
+    override func mouseDown(with event: NSEvent) {
+        guard shouldPerformManualWindowDrag(for: event) else {
+            super.mouseDown(with: event)
+            return
+        }
+
+        window?.performDrag(with: event)
+    }
+
+    private func shouldPerformManualWindowDrag(for event: NSEvent) -> Bool {
+        switch windowDragMode {
+        case .automatic:
+            return false
+        case .compactPrompt:
+            return CompactDashboardTileDragPolicy.shouldMoveWindowFromMouseDown(
+                at: localPoint(from: event),
+                panelBounds: currentLocalBounds(),
+                verticalOrigin: isFlipped ? .top : .bottom
+            )
+        }
+    }
+
+    private func localPoint(from event: NSEvent) -> ScreenPoint {
+        let localPoint = convert(event.locationInWindow, from: nil)
 
         return ScreenPoint(x: Double(localPoint.x), y: Double(localPoint.y))
     }
