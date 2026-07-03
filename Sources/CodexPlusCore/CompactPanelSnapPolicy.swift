@@ -1,21 +1,23 @@
+import CoreGraphics
+
 public enum CompactPanelSnapPolicy {
     public static let defaultSnapDistance = 24.0
 
     public static func snappedFrame(
-        for panelFrame: ScreenRect,
-        in screenFrame: ScreenRect,
+        for panelFrame: CGRect,
+        in screenFrame: CGRect,
         snapDistance: Double = defaultSnapDistance
-    ) -> ScreenRect {
-        let screenMidX = screenFrame.x + (screenFrame.width / 2)
-        let panelMidX = panelFrame.x + (panelFrame.width / 2)
+    ) -> CGRect {
+        let screenMidX = screenFrame.midX
+        let panelMidX = panelFrame.midX
 
-        guard abs(panelMidX - screenMidX) <= snapDistance else {
+        guard abs(panelMidX - screenMidX) <= CGFloat(snapDistance) else {
             return panelFrame
         }
 
-        return ScreenRect(
+        return CGRect(
             x: screenMidX - (panelFrame.width / 2),
-            y: panelFrame.y,
+            y: panelFrame.minY,
             width: panelFrame.width,
             height: panelFrame.height
         )

@@ -1,4 +1,5 @@
 import Foundation
+import CoreGraphics
 import CodexPlusCore
 
 var failures: [String] = []
@@ -263,6 +264,44 @@ func jsonValue(_ object: [String: Any], _ path: String...) -> Any? {
 }
 
 @MainActor
+func explicitPackageProductNames(packageRoot: URL) -> [String] {
+    let process = Process()
+    process.executableURL = URL(fileURLWithPath: "/usr/bin/env")
+    process.arguments = ["swift", "package", "dump-package"]
+    process.currentDirectoryURL = packageRoot
+
+    let outputPipe = Pipe()
+    process.standardOutput = outputPipe
+    process.standardError = Pipe()
+
+    do {
+        try process.run()
+    } catch {
+        expect(false, "swift package dump-package can run")
+        return []
+    }
+
+    process.waitUntilExit()
+    guard process.terminationStatus == 0 else {
+        expect(false, "swift package dump-package exits successfully")
+        return []
+    }
+
+    let data = outputPipe.fileHandleForReading.readDataToEndOfFile()
+    guard
+        let object = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+        let products = object["products"] as? [[String: Any]]
+    else {
+        expect(false, "swift package dump-package output contains products JSON")
+        return []
+    }
+
+    return products.compactMap { product in
+        product["name"] as? String
+    }
+}
+
+@MainActor
 func expectCodexPlusNaming() {
     let packageRoot = URL(fileURLWithPath: FileManager.default.currentDirectoryPath, isDirectory: true)
     let expectedPaths = [
@@ -279,10 +318,24 @@ func expectCodexPlusNaming() {
     }
 
     let packageText = (try? String(contentsOf: packageRoot.appendingPathComponent("Package.swift"), encoding: .utf8)) ?? ""
+    let coreBatteryText = (try? String(
+        contentsOf: packageRoot.appendingPathComponent("Sources/CodexPlusCore/BatteryStatus.swift"),
+        encoding: .utf8
+    )) ?? ""
+    let appBatteryProviderPath = packageRoot.appendingPathComponent(
+        "Sources/CodexPlusApp/IOKitBatteryStatusProvider.swift"
+    )
+
     expect(packageText.contains(#"name: "codex-plus""#), "Swift package uses codex-plus slug name")
-    expect(packageText.contains(#"CodexPlusCore"#), "Swift package uses CodexPlusCore module name")
-    expect(packageText.contains(#"CodexPlusApp"#), "Swift package uses CodexPlusApp executable name")
-    expect(packageText.contains(#"CodexPlusCoreTests"#), "Swift package uses CodexPlusCoreTests executable name")
+    expect(
+        explicitPackageProductNames(packageRoot: packageRoot) == ["CodexPlusApp"],
+        "Swift package explicitly exposes only CodexPlusApp"
+    )
+    expect(!coreBatteryText.contains("IOKit"), "CodexPlusCore BatteryStatus does not import or reference IOKit")
+    expect(
+        FileManager.default.fileExists(atPath: appBatteryProviderPath.path),
+        "CodexPlusApp owns IOKitBatteryStatusProvider"
+    )
 
     let legacyFragments = [
         "Quick" + "AIDashboard",
@@ -339,6 +392,58 @@ func expectNoCodexDesktopHandoffIntegration() {
     }
 }
 
+@MainActor
+func expectCodexDesktopLauncherIntegration() {
+    let packageRoot = URL(fileURLWithPath: FileManager.default.currentDirectoryPath, isDirectory: true)
+    let launcherPath = "Sources/CodexPlusApp/CodexDesktopLauncher.swift"
+    let tilePath = "Sources/CodexPlusApp/Views/CodexDesktopTileView.swift"
+    let compactEntryPath = "Sources/CodexPlusApp/Views/CompactEntryView.swift"
+    let compactControllerPath = "Sources/CodexPlusApp/CompactPanelController.swift"
+
+    for sourceFile in [launcherPath, tilePath] {
+        let exists = FileManager.default.fileExists(
+            atPath: packageRoot.appendingPathComponent(sourceFile).path
+        )
+        expect(exists, "Codex Desktop launcher source exists: \(sourceFile)")
+    }
+
+    let launcherText = (try? String(
+        contentsOf: packageRoot.appendingPathComponent(launcherPath),
+        encoding: .utf8
+    )) ?? ""
+    expect(launcherText.contains("NSWorkspace"), "Codex Desktop launcher uses NSWorkspace")
+    expect(
+        launcherText.contains(#""com.openai.codex""#),
+        "Codex Desktop launcher targets the Codex bundle identifier"
+    )
+    expect(launcherText.contains("icon.png"), "Codex Desktop launcher loads a PNG app icon")
+    expect(!launcherText.contains("codex app-server"), "Codex Desktop launcher does not restore app-server handoff")
+    expect(!launcherText.contains("codex://threads"), "Codex Desktop launcher does not restore thread deep-link handoff")
+
+    let tileText = (try? String(
+        contentsOf: packageRoot.appendingPathComponent(tilePath),
+        encoding: .utf8
+    )) ?? ""
+    expect(tileText.contains("CodexDesktopTileView"), "compact entry has a Codex Desktop tile view")
+    expect(tileText.contains("Image(nsImage:"), "Codex Desktop tile renders the PNG image")
+
+    let compactEntryText = (try? String(
+        contentsOf: packageRoot.appendingPathComponent(compactEntryPath),
+        encoding: .utf8
+    )) ?? ""
+    expect(compactEntryText.contains("CodexDesktopTileView"), "compact entry renders Codex Desktop tile above prompt")
+    expect(compactEntryText.contains("case .codexDesktop"), "Codex Desktop tile is part of dashboard tile row")
+
+    let compactControllerText = (try? String(
+        contentsOf: packageRoot.appendingPathComponent(compactControllerPath),
+        encoding: .utf8
+    )) ?? ""
+    expect(
+        compactControllerText.contains("openCodexDesktopAndDismiss"),
+        "Codex Desktop tile click dismisses compact panel after opening Codex"
+    )
+}
+
 expect(PermissionMode.semiAutomatic.displayName == "Semi-Automatic", "semiAutomatic display name")
 expect(PermissionMode.fullAccess.displayName == "Full Access", "fullAccess display name")
 
@@ -384,17 +489,8 @@ expect(
     "prompt beginning with dash remains after delimiter"
 )
 expectNoCodexDesktopHandoffIntegration()
+expectCodexDesktopLauncherIntegration()
 expectCodexPlusNaming()
-
-var splitLineBuffer = LineBuffer()
-expect(splitLineBuffer.append("one\ntw") == ["one"], "line buffer returns complete first line")
-expect(splitLineBuffer.append("o\nthree\n") == ["two", "three"], "line buffer completes partial and next line")
-expect(splitLineBuffer.flush() == nil, "line buffer flush returns nil when empty")
-
-var partialLineBuffer = LineBuffer()
-expect(partialLineBuffer.append("partial").isEmpty, "line buffer keeps trailing partial line")
-expect(partialLineBuffer.flush() == "partial", "line buffer flush returns partial line")
-expect(partialLineBuffer.flush() == nil, "line buffer flush clears partial line")
 
 expect(CodexRunResult(exitCode: 0, stderr: "").succeeded, "codex run result succeeds on exit zero")
 expect(!CodexRunResult(exitCode: 1, stderr: "boom").succeeded, "codex run result fails on nonzero exit")
@@ -572,7 +668,7 @@ let startFailureRunner = ProcessCodexRunner(
     executableArgumentsPrefix: [],
     parser: { line in .agentMessage(line) }
 )
-let startFailureHandle = startFailureRunner.run(
+let startFailureHandle: ProcessCodexRunHandle = startFailureRunner.run(
     prompt: "ignored",
     permissionMode: .semiAutomatic,
     onEvent: { event in
@@ -1241,55 +1337,61 @@ expect(invalidBattery.percentage == nil, "invalid battery percentage")
 expect(invalidBattery.state == .unknown, "invalid battery state")
 
 let defaultTileOrder = DashboardTileOrder(rawValue: nil)
-expect(defaultTileOrder.tiles == [.battery, .codexUsage, .dailyTokens], "dashboard tile order defaults to battery, codex usage, then daily tokens")
-expect(defaultTileOrder.rawValue == "battery,codexUsage,dailyTokens", "dashboard tile order serializes default order")
+expect(defaultTileOrder.tiles == [.codexDesktop, .codexUsage, .dailyTokens], "dashboard tile order defaults to Codex Desktop, usage, then daily tokens")
+expect(defaultTileOrder.rawValue == "codexDesktop,codexUsage,dailyTokens", "dashboard tile order serializes visible default order")
 
-let reversedTileOrder = DashboardTileOrder(rawValue: "dailyTokens,codexUsage,battery")
-expect(reversedTileOrder.tiles == [.dailyTokens, .codexUsage, .battery], "dashboard tile order reads reversed persisted order")
+let legacyTileOrder = DashboardTileOrder(rawValue: "battery,codexUsage")
+expect(legacyTileOrder.tiles == [.codexDesktop, .codexUsage, .dailyTokens], "dashboard tile order migrates persisted battery to visible tiles")
+
+let twoTileLegacyOrder = DashboardTileOrder(rawValue: "codexDesktop,codexUsage")
+expect(twoTileLegacyOrder.tiles == [.codexDesktop, .codexUsage, .dailyTokens], "dashboard tile order adds daily tokens to two-tile persisted order")
+
+let reversedTileOrder = DashboardTileOrder(rawValue: "dailyTokens,codexUsage,codexDesktop")
+expect(reversedTileOrder.tiles == [.dailyTokens, .codexUsage, .codexDesktop], "dashboard tile order reads reversed persisted order")
 
 let invalidTileOrder = DashboardTileOrder(rawValue: "battery,battery,unknown")
-expect(invalidTileOrder.tiles == [.battery, .codexUsage, .dailyTokens], "dashboard tile order falls back when persisted order is invalid")
+expect(invalidTileOrder.tiles == [.codexDesktop, .codexUsage, .dailyTokens], "dashboard tile order falls back to visible tiles when persisted order is invalid")
 
-let swappedTileOrder = defaultTileOrder.swapping(.battery, with: .codexUsage)
-expect(swappedTileOrder.tiles == [.codexUsage, .battery, .dailyTokens], "dashboard tile order swaps dragged and target tiles")
+let swappedTileOrder = defaultTileOrder.swapping(.codexDesktop, with: .codexUsage)
+expect(swappedTileOrder.tiles == [.codexUsage, .codexDesktop, .dailyTokens], "dashboard tile order swaps Codex Desktop and usage tiles")
 expect(
-    defaultTileOrder.layoutTiles(excludingDragged: nil) == [.battery, .codexUsage, .dailyTokens],
-    "dashboard tile layout shows all tiles when no tile is dragged"
+    defaultTileOrder.layoutTiles(excludingDragged: nil) == [.codexDesktop, .codexUsage, .dailyTokens],
+    "dashboard tile layout shows visible tiles"
 )
 expect(
-    defaultTileOrder.layoutTiles(excludingDragged: .battery) == [.codexUsage, .dailyTokens],
-    "dashboard tile layout removes dragged battery so remaining tiles can recenter"
+    defaultTileOrder.layoutTiles(excludingDragged: .codexDesktop) == [.codexUsage, .dailyTokens],
+    "dashboard tile layout removes dragged Codex Desktop tile"
 )
 expect(
-    reversedTileOrder.layoutTiles(excludingDragged: .codexUsage) == [.dailyTokens, .battery],
+    reversedTileOrder.layoutTiles(excludingDragged: .codexUsage) == [.dailyTokens, .codexDesktop],
     "dashboard tile layout removes dragged codex usage from reversed order"
 )
 expect(
     DashboardTileLayoutPolicy.placements(for: defaultTileOrder.tiles) == [
-        DashboardTilePlacement(tile: .battery, centerX: -150, width: 92),
+        DashboardTilePlacement(tile: .codexDesktop, centerX: -150, width: 92),
         DashboardTilePlacement(tile: .codexUsage, centerX: -23, width: 138),
         DashboardTilePlacement(tile: .dailyTokens, centerX: 127, width: 138)
     ],
-    "dashboard tile layout places default tiles at stable visual centers"
+    "dashboard tile layout places Codex Desktop left of usage"
 )
 expect(
     DashboardTileLayoutPolicy.placements(for: reversedTileOrder.tiles) == [
         DashboardTilePlacement(tile: .dailyTokens, centerX: -127, width: 138),
         DashboardTilePlacement(tile: .codexUsage, centerX: 23, width: 138),
-        DashboardTilePlacement(tile: .battery, centerX: 150, width: 92)
+        DashboardTilePlacement(tile: .codexDesktop, centerX: 150, width: 92)
     ],
     "dashboard tile layout places reversed tiles at stable visual centers"
 )
 expect(
-    DashboardTileLayoutPolicy.placements(for: defaultTileOrder.layoutTiles(excludingDragged: .battery)) == [
+    DashboardTileLayoutPolicy.placements(for: defaultTileOrder.layoutTiles(excludingDragged: .codexDesktop)) == [
         DashboardTilePlacement(tile: .codexUsage, centerX: -75, width: 138),
         DashboardTilePlacement(tile: .dailyTokens, centerX: 75, width: 138)
     ],
-    "dashboard tile layout recenters the remaining tiles while battery is dragged"
+    "dashboard tile layout recenters the remaining tiles while Codex Desktop is dragged"
 )
 expect(
-    DashboardTileLayoutPolicy.tile(atX: 80, rowWidth: 460, tiles: defaultTileOrder.tiles) == .battery,
-    "dashboard tile hit testing selects battery at its visual center"
+    DashboardTileLayoutPolicy.tile(atX: 80, rowWidth: 460, tiles: defaultTileOrder.tiles) == .codexDesktop,
+    "dashboard tile hit testing selects Codex Desktop at its visual center"
 )
 expect(
     DashboardTileLayoutPolicy.tile(atX: 207, rowWidth: 460, tiles: defaultTileOrder.tiles) == .codexUsage,
@@ -1308,18 +1410,18 @@ expect(
     "dashboard tile hit testing follows reversed visual order"
 )
 
-let compactEntryBounds = ScreenRect(x: 0, y: 0, width: 460, height: 210)
+let compactEntryBounds = CGRect(x: 0, y: 0, width: 460, height: 210)
 expect(
     !CompactDashboardTileDragPolicy.shouldMoveWindowFromMouseDown(
-        at: ScreenPoint(x: 80, y: 64),
+        at: CGPoint(x: 80, y: 64),
         panelBounds: compactEntryBounds,
         verticalOrigin: .top
     ),
-    "compact battery tile blocks window dragging"
+    "compact Codex Desktop tile blocks window dragging"
 )
 expect(
     !CompactDashboardTileDragPolicy.shouldMoveWindowFromMouseDown(
-        at: ScreenPoint(x: 207, y: 64),
+        at: CGPoint(x: 207, y: 64),
         panelBounds: compactEntryBounds,
         verticalOrigin: .top
     ),
@@ -1327,7 +1429,7 @@ expect(
 )
 expect(
     !CompactDashboardTileDragPolicy.shouldMoveWindowFromMouseDown(
-        at: ScreenPoint(x: 357, y: 64),
+        at: CGPoint(x: 357, y: 64),
         panelBounds: compactEntryBounds,
         verticalOrigin: .top
     ),
@@ -1335,7 +1437,7 @@ expect(
 )
 expect(
     !CompactDashboardTileDragPolicy.shouldMoveWindowFromMouseDown(
-        at: ScreenPoint(x: 20, y: 64),
+        at: CGPoint(x: 20, y: 64),
         panelBounds: compactEntryBounds,
         verticalOrigin: .top
     ),
@@ -1343,7 +1445,7 @@ expect(
 )
 expect(
     CompactDashboardTileDragPolicy.shouldMoveWindowFromMouseDown(
-        at: ScreenPoint(x: 230, y: 152),
+        at: CGPoint(x: 230, y: 152),
         panelBounds: compactEntryBounds,
         verticalOrigin: .top
     ),
@@ -1351,7 +1453,7 @@ expect(
 )
 expect(
     !CompactDashboardTileDragPolicy.shouldMoveWindowFromMouseDown(
-        at: ScreenPoint(x: 80, y: 146),
+        at: CGPoint(x: 80, y: 146),
         panelBounds: compactEntryBounds,
         verticalOrigin: .bottom
     ),
@@ -1359,24 +1461,24 @@ expect(
 )
 expect(
     CompactDashboardTileDragPolicy.shouldMoveWindowFromMouseDown(
-        at: ScreenPoint(x: 230, y: 50),
+        at: CGPoint(x: 230, y: 50),
         panelBounds: compactEntryBounds,
         verticalOrigin: .bottom
     ),
     "compact prompt drag policy supports bottom-left AppKit coordinates"
 )
 
-let compactSnapScreen = ScreenRect(x: 0, y: 0, width: 1440, height: 900)
-let compactNearMidlineFrame = ScreenRect(x: 520, y: 300, width: 420, height: 210)
+let compactSnapScreen = CGRect(x: 0, y: 0, width: 1440, height: 900)
+let compactNearMidlineFrame = CGRect(x: 520, y: 300, width: 420, height: 210)
 expect(
     CompactPanelSnapPolicy.snappedFrame(
         for: compactNearMidlineFrame,
         in: compactSnapScreen
-    ) == ScreenRect(x: 510, y: 300, width: 420, height: 210),
+    ) == CGRect(x: 510, y: 300, width: 420, height: 210),
     "compact panel snaps its center to the screen midline when near it"
 )
 
-let compactFarFromMidlineFrame = ScreenRect(x: 560, y: 300, width: 420, height: 210)
+let compactFarFromMidlineFrame = CGRect(x: 560, y: 300, width: 420, height: 210)
 expect(
     CompactPanelSnapPolicy.snappedFrame(
         for: compactFarFromMidlineFrame,
@@ -1385,13 +1487,13 @@ expect(
     "compact panel moves freely after leaving the midline snap distance"
 )
 
-let offsetSnapScreen = ScreenRect(x: 100, y: 0, width: 1000, height: 800)
-let offsetNearMidlineFrame = ScreenRect(x: 380, y: 260, width: 420, height: 210)
+let offsetSnapScreen = CGRect(x: 100, y: 0, width: 1000, height: 800)
+let offsetNearMidlineFrame = CGRect(x: 380, y: 260, width: 420, height: 210)
 expect(
     CompactPanelSnapPolicy.snappedFrame(
         for: offsetNearMidlineFrame,
         in: offsetSnapScreen
-    ) == ScreenRect(x: 390, y: 260, width: 420, height: 210),
+    ) == CGRect(x: 390, y: 260, width: 420, height: 210),
     "compact panel snap uses the active screen midline"
 )
 
@@ -1878,7 +1980,7 @@ expect(
     "codex usage monitor stop prevents in-flight refresh from updating status"
 )
 
-let compactPanelFrame = ScreenRect(x: 100, y: 100, width: 420, height: 210)
+let compactPanelFrame = CGRect(x: 100, y: 100, width: 420, height: 210)
 expect(
     CompactEntryDismissPolicy.shouldDismissForKeyDown(keyCode: CompactEntryDismissPolicy.escapeKeyCode),
     "compact dismiss policy dismisses on escape"
@@ -1889,37 +1991,37 @@ expect(
 )
 expect(
     !CompactEntryDismissPolicy.shouldDismissForMouseDown(
-        at: ScreenPoint(x: 200, y: 150),
+        at: CGPoint(x: 200, y: 150),
         panelFrame: compactPanelFrame
     ),
     "compact dismiss policy keeps visible for inside clicks"
 )
 expect(
     CompactEntryDismissPolicy.shouldDismissForMouseDown(
-        at: ScreenPoint(x: 20, y: 150),
+        at: CGPoint(x: 20, y: 150),
         panelFrame: compactPanelFrame
     ),
     "compact dismiss policy dismisses for outside clicks"
 )
 
-let placementScreen = ScreenRect(x: 0, y: 0, width: 1440, height: 900)
+let placementScreen = CGRect(x: 0, y: 0, width: 1440, height: 900)
 expect(
     PanelPlacementPolicy.placement(
-        for: ScreenRect(x: 10, y: 0, width: 460, height: 900),
+        for: CGRect(x: 10, y: 0, width: 460, height: 900),
         in: placementScreen
     ) == .attached(.left),
     "panel placement attaches near left edge"
 )
 expect(
     PanelPlacementPolicy.placement(
-        for: ScreenRect(x: 970, y: 0, width: 460, height: 900),
+        for: CGRect(x: 970, y: 0, width: 460, height: 900),
         in: placementScreen
     ) == .attached(.right),
     "panel placement attaches near right edge"
 )
 expect(
     PanelPlacementPolicy.placement(
-        for: ScreenRect(x: 420, y: 120, width: 460, height: 600),
+        for: CGRect(x: 420, y: 120, width: 460, height: 600),
         in: placementScreen
     ) == .free,
     "panel placement stays free away from edges"
@@ -1927,20 +2029,20 @@ expect(
 
 expect(
     ConversationPanelLayoutPolicy.initialCenteredFrame(
-        in: ScreenRect(x: 0, y: 0, width: 1500, height: 1000)
-    ) == ScreenRect(x: 330, y: 90, width: 840, height: 820),
+        in: CGRect(x: 0, y: 0, width: 1500, height: 1000)
+    ) == CGRect(x: 330, y: 90, width: 840, height: 820),
     "conversation panel initial frame is centered and sized for the main reading area"
 )
 expect(
     ConversationPanelLayoutPolicy.initialCenteredFrame(
-        in: ScreenRect(x: 0, y: 0, width: 3000, height: 2000)
-    ) == ScreenRect(x: 1070, y: 540, width: 860, height: 920),
+        in: CGRect(x: 0, y: 0, width: 3000, height: 2000)
+    ) == CGRect(x: 1070, y: 540, width: 860, height: 920),
     "conversation panel initial frame caps large desktop sizes"
 )
 expect(
     ConversationPanelLayoutPolicy.initialCenteredFrame(
-        in: ScreenRect(x: 0, y: 0, width: 700, height: 600)
-    ) == ScreenRect(x: 90, y: 24, width: 520, height: 552),
+        in: CGRect(x: 0, y: 0, width: 700, height: 600)
+    ) == CGRect(x: 90, y: 24, width: 520, height: 552),
     "conversation panel initial frame keeps margins on compact screens"
 )
 

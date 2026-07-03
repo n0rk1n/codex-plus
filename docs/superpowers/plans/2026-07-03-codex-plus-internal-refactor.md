@@ -58,7 +58,7 @@
   - Remove direct `LineBuffer` assertions.
   - Add compile coverage for concrete `ProcessCodexRunHandle`.
 
-SwiftPM note: after removing `CodexPlusCoreTests` from `products`, do not use `swift run CodexPlusCoreTests` as the final test command because `swift run` builds executable products. Use `swift build --target CodexPlusCoreTests` followed by `.build/debug/CodexPlusCoreTests` as the internal test command.
+SwiftPM note: `Package.swift` should declare only `CodexPlusApp` in its explicit `products` array. SwiftPM still synthesizes a runnable product for root executable targets, so keep using `swift run CodexPlusCoreTests` as the internal test command. Use `swift package dump-package` when verifying explicit manifest products; `swift package describe` includes synthesized runnable products.
 
 ---
 
@@ -279,8 +279,7 @@ struct IOKitBatteryStatusProvider: BatteryStatusProviding {
 Run:
 
 ```bash
-swift build --target CodexPlusCoreTests
-.build/debug/CodexPlusCoreTests
+swift run CodexPlusCoreTests
 ```
 
 Expected: the build succeeds and the test executable prints `CodexPlusCoreTests passed:` with a passing assertion count.
@@ -290,10 +289,10 @@ Expected: the build succeeds and the test executable prints `CodexPlusCoreTests 
 Run:
 
 ```bash
-swift package describe --type json
+swift package dump-package
 ```
 
-Expected: `CodexPlusCore` has no `linkerSettings` entry for `IOKit`. `CodexPlusApp` remains the only product in the `products` array.
+Expected: `CodexPlusCore` has no `linkerSettings` entry for `IOKit`. `CodexPlusApp` is the only explicit product in the `products` array.
 
 - [ ] **Step 7: Commit package boundary changes**
 
@@ -684,8 +683,7 @@ Delete `screenRect(from:)` and `nsRect(from:)` from `WindowCoordinator.swift`.
 Run:
 
 ```bash
-swift build --target CodexPlusCoreTests
-.build/debug/CodexPlusCoreTests
+swift run CodexPlusCoreTests
 swift build -c release
 ```
 
@@ -809,8 +807,7 @@ Expected: no matches.
 Run:
 
 ```bash
-swift build --target CodexPlusCoreTests
-.build/debug/CodexPlusCoreTests
+swift run CodexPlusCoreTests
 ```
 
 Expected: the test executable passes.
@@ -1139,8 +1136,7 @@ if compactPanelController.recordMove(of: panel) {
 Run:
 
 ```bash
-swift build --target CodexPlusCoreTests
-.build/debug/CodexPlusCoreTests
+swift run CodexPlusCoreTests
 swift build -c release
 ```
 
@@ -1666,8 +1662,7 @@ private func setPreferredSide(_ side: SideAttachment)
 Run:
 
 ```bash
-swift build --target CodexPlusCoreTests
-.build/debug/CodexPlusCoreTests
+swift run CodexPlusCoreTests
 swift build -c release
 ```
 
@@ -1752,8 +1747,7 @@ private static func timestamp(from value: String?) -> Date? {
 Run:
 
 ```bash
-swift build --target CodexPlusCoreTests
-.build/debug/CodexPlusCoreTests
+swift run CodexPlusCoreTests
 ```
 
 Expected: usage provider tests still pass, including whole-second and fractional-second timestamp selection.
@@ -1779,8 +1773,7 @@ git commit -m "perf: reuse usage timestamp formatters"
 Run:
 
 ```bash
-swift build --target CodexPlusCoreTests
-.build/debug/CodexPlusCoreTests
+swift run CodexPlusCoreTests
 ```
 
 Expected: the executable exits 0 and prints `CodexPlusCoreTests passed:`.
@@ -1810,10 +1803,10 @@ Expected: output includes `.build/release/CodexPlusApp`; compare the size to the
 Run:
 
 ```bash
-swift package describe --type json
+swift package dump-package
 ```
 
-Expected: the `products` array contains only `CodexPlusApp`. `CodexPlusCore` and `CodexPlusCoreTests` appear only under `targets`.
+Expected: the explicit `products` array contains only `CodexPlusApp`. `CodexPlusCore` and `CodexPlusCoreTests` appear only under `targets`.
 
 - [ ] **Step 5: Verify no stale abstractions remain**
 

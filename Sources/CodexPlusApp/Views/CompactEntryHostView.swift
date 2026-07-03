@@ -6,6 +6,7 @@ struct CompactEntryHostView: View {
     @ObservedObject var codexUsageMonitor: CodexUsageMonitor
     @ObservedObject var dailyTokenUsageMonitor: DailyTokenUsageMonitor
     let onOpenDraft: (String) -> Void
+    let onOpenCodexDesktop: () -> Void
     let onSubmit: (String) -> Void
 
     var body: some View {
@@ -14,6 +15,7 @@ struct CompactEntryHostView: View {
             codexUsageStatus: codexUsageMonitor.status,
             dailyTokenStatus: dailyTokenUsageMonitor.status,
             onOpenDraft: onOpenDraft,
+            onOpenCodexDesktop: onOpenCodexDesktop,
             onSubmit: onSubmit
         )
     }

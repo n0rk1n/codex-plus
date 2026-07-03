@@ -1,6 +1,3 @@
-import Foundation
-import IOKit.ps
-
 public enum BatteryChargingState: String, Equatable, Sendable {
     case charging
     case discharging
@@ -41,11 +38,11 @@ public struct BatteryStatus: Equatable, Sendable {
             return BatteryStatus(percentage: percentage, state: .charging)
         }
 
-        if powerSourceState == (kIOPSBatteryPowerValue as String) || powerSourceState == "Battery Power" {
+        if powerSourceState == "Battery Power" {
             return BatteryStatus(percentage: percentage, state: .discharging)
         }
 
-        if powerSourceState == (kIOPSACPowerValue as String) || powerSourceState == "AC Power" {
+        if powerSourceState == "AC Power" {
             return BatteryStatus(percentage: percentage, state: .pluggedIn)
         }
 
@@ -55,31 +52,4 @@ public struct BatteryStatus: Equatable, Sendable {
 
 public protocol BatteryStatusProviding: Sendable {
     func currentStatus() -> BatteryStatus
-}
-
-public struct IOKitBatteryStatusProvider: BatteryStatusProviding {
-    public init() {}
-
-    public func currentStatus() -> BatteryStatus {
-        guard
-            let info = IOPSCopyPowerSourcesInfo()?.takeRetainedValue(),
-            let list = IOPSCopyPowerSourcesList(info)?.takeRetainedValue() as? [CFTypeRef],
-            let firstSource = list.first,
-            let description = IOPSGetPowerSourceDescription(info, firstSource)?.takeUnretainedValue() as? [String: Any]
-        else {
-            return .unknown
-        }
-
-        let current = description[kIOPSCurrentCapacityKey as String] as? Int
-        let max = description[kIOPSMaxCapacityKey as String] as? Int
-        let charging = description[kIOPSIsChargingKey as String] as? Bool
-        let sourceState = description[kIOPSPowerSourceStateKey as String] as? String
-
-        return BatteryStatus.from(
-            currentCapacity: current,
-            maxCapacity: max,
-            isCharging: charging,
-            powerSourceState: sourceState
-        )
-    }
 }

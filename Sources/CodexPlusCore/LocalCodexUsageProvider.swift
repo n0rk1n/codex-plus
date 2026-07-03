@@ -66,6 +66,30 @@ public struct LocalCodexUsageProvider: CodexUsageProviding {
         }
     }
 
+    private final class TimestampParser: @unchecked Sendable {
+        static let shared = TimestampParser()
+
+        private let lock = NSLock()
+        private let wholeSecondFormatter = ISO8601DateFormatter()
+        private let fractionalSecondFormatter: ISO8601DateFormatter
+
+        private init() {
+            let formatter = ISO8601DateFormatter()
+            formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+            self.fractionalSecondFormatter = formatter
+        }
+
+        func date(from value: String) -> Date? {
+            lock.lock()
+            defer {
+                lock.unlock()
+            }
+
+            return wholeSecondFormatter.date(from: value) ??
+                fractionalSecondFormatter.date(from: value)
+        }
+    }
+
     private static let readChunkSize = 64 * 1024
     private static let lineFeed: UInt8 = 10
     private static let carriageReturn: UInt8 = 13
@@ -264,13 +288,6 @@ public struct LocalCodexUsageProvider: CodexUsageProviding {
             return nil
         }
 
-        let wholeSecondFormatter = ISO8601DateFormatter()
-        if let date = wholeSecondFormatter.date(from: value) {
-            return date
-        }
-
-        let fractionalSecondFormatter = ISO8601DateFormatter()
-        fractionalSecondFormatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
-        return fractionalSecondFormatter.date(from: value)
+        return TimestampParser.shared.date(from: value)
     }
 }

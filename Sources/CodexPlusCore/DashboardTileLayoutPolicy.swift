@@ -39,6 +39,8 @@ public enum DashboardTileLayoutPolicy {
         switch tile {
         case .battery:
             return CompactDashboardTileDragPolicy.batteryTileWidth
+        case .codexDesktop:
+            return CompactDashboardTileDragPolicy.codexDesktopTileWidth
         case .codexUsage:
             return CompactDashboardTileDragPolicy.codexUsageTileWidth
         case .dailyTokens:

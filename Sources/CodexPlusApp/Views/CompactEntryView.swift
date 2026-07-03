@@ -6,6 +6,7 @@ struct CompactEntryView: View {
     let codexUsageStatus: CodexUsageStatus
     let dailyTokenStatus: DailyTokenStatus
     let onOpenDraft: (String) -> Void
+    let onOpenCodexDesktop: () -> Void
     let onSubmit: (String) -> Void
 
     @FocusState private var isPromptFocused: Bool
@@ -94,6 +95,8 @@ struct CompactEntryView: View {
         switch tile {
         case .battery:
             BatteryTileView(status: batteryStatus)
+        case .codexDesktop:
+            CodexDesktopTileView(onOpen: onOpenCodexDesktop)
         case .codexUsage:
             CodexUsageRingTileView(status: codexUsageStatus)
         case .dailyTokens:
@@ -154,5 +157,6 @@ struct CompactEntryView: View {
         }
 
         onSubmit(trimmedPrompt)
+        prompt = ""
     }
 }

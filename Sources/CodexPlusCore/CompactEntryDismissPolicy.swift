@@ -1,41 +1,4 @@
-public struct ScreenPoint: Equatable, Sendable {
-    public let x: Double
-    public let y: Double
-
-    public init(x: Double, y: Double) {
-        self.x = x
-        self.y = y
-    }
-}
-
-public struct ScreenRect: Equatable, Sendable {
-    public let x: Double
-    public let y: Double
-    public let width: Double
-    public let height: Double
-
-    public init(x: Double, y: Double, width: Double, height: Double) {
-        self.x = x
-        self.y = y
-        self.width = width
-        self.height = height
-    }
-
-    public func contains(_ point: ScreenPoint) -> Bool {
-        point.x >= x &&
-            point.x <= x + width &&
-            point.y >= y &&
-            point.y <= y + height
-    }
-
-    public var minX: Double {
-        x
-    }
-
-    public var maxX: Double {
-        x + width
-    }
-}
+import CoreGraphics
 
 public enum CompactEntryDismissPolicy {
     public static let escapeKeyCode: UInt16 = 53
@@ -44,8 +7,8 @@ public enum CompactEntryDismissPolicy {
         keyCode == escapeKeyCode
     }
 
-    public static func shouldDismissForMouseDown(at point: ScreenPoint, panelFrame: ScreenRect) -> Bool {
-        !panelFrame.contains(point)
+    public static func shouldDismissForMouseDown(at point: CGPoint, panelFrame: CGRect) -> Bool {
+        !panelFrame.containsInclusively(point)
     }
 }
 
@@ -58,10 +21,12 @@ public enum PanelPlacementPolicy {
     public static let defaultSnapDistance = 36.0
 
     public static func placement(
-        for panelFrame: ScreenRect,
-        in screenFrame: ScreenRect,
+        for panelFrame: CGRect,
+        in screenFrame: CGRect,
         snapDistance: Double = defaultSnapDistance
     ) -> PanelPlacement {
+        let snapDistance = CGFloat(snapDistance)
+
         if abs(panelFrame.minX - screenFrame.minX) <= snapDistance {
             return .attached(.left)
         }
@@ -71,5 +36,14 @@ public enum PanelPlacementPolicy {
         }
 
         return .free
+    }
+}
+
+private extension CGRect {
+    func containsInclusively(_ point: CGPoint) -> Bool {
+        point.x >= minX &&
+            point.x <= maxX &&
+            point.y >= minY &&
+            point.y <= maxY
     }
 }

@@ -3,7 +3,7 @@ import Foundation
 @MainActor
 public final class CodexRunController {
     private struct ActiveRun {
-        var handle: CodexRunHandle
+        var handle: ProcessCodexRunHandle
         var runID: UUID
         var sessionID: UUID
         var eventHandler: (CodexEvent, UUID) -> Void
