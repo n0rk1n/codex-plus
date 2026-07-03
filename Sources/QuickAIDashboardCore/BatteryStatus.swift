@@ -5,6 +5,7 @@ public enum BatteryChargingState: String, Equatable, Sendable {
     case charging
     case discharging
     case full
+    case pluggedIn
     case unknown
 }
 
@@ -42,6 +43,10 @@ public struct BatteryStatus: Equatable, Sendable {
 
         if powerSourceState == (kIOPSBatteryPowerValue as String) || powerSourceState == "Battery Power" {
             return BatteryStatus(percentage: percentage, state: .discharging)
+        }
+
+        if powerSourceState == (kIOPSACPowerValue as String) || powerSourceState == "AC Power" {
+            return BatteryStatus(percentage: percentage, state: .pluggedIn)
         }
 
         return BatteryStatus(percentage: percentage, state: .unknown)

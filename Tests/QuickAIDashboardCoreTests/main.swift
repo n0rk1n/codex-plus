@@ -661,6 +661,15 @@ let dischargingBattery = BatteryStatus.from(
 expect(dischargingBattery.percentage == 66, "discharging battery percentage")
 expect(dischargingBattery.state == .discharging, "discharging battery state")
 
+let pluggedInBattery = BatteryStatus.from(
+    currentCapacity: 95,
+    maxCapacity: 100,
+    isCharging: false,
+    powerSourceState: "AC Power"
+)
+expect(pluggedInBattery.percentage == 95, "plugged in battery percentage")
+expect(pluggedInBattery.state == .pluggedIn, "plugged in battery state")
+
 let invalidBattery = BatteryStatus.from(
     currentCapacity: nil,
     maxCapacity: 0,

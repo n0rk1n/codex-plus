@@ -45,6 +45,8 @@ struct BatteryTileView: View {
             return "Discharging"
         case .full:
             return "Full"
+        case .pluggedIn:
+            return "Plugged In"
         case .unknown:
             return "Unknown"
         }
@@ -58,6 +60,8 @@ struct BatteryTileView: View {
             return "battery.75percent"
         case .full:
             return "battery.100percent"
+        case .pluggedIn:
+            return "powerplug"
         case .unknown:
             return "battery.0percent"
         }
@@ -65,7 +69,7 @@ struct BatteryTileView: View {
 
     private var foregroundStyle: Color {
         switch status.state {
-        case .charging, .full:
+        case .charging, .full, .pluggedIn:
             return .green
         case .discharging:
             return .primary
