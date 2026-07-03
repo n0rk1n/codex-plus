@@ -77,6 +77,28 @@ final class SequenceBatteryProvider: BatteryStatusProviding, @unchecked Sendable
     }
 }
 
+final class SequenceCodexUsageProvider: CodexUsageProviding, @unchecked Sendable {
+    private let lock = NSLock()
+    private var statuses: [CodexUsageStatus]
+
+    init(_ statuses: [CodexUsageStatus]) {
+        self.statuses = statuses
+    }
+
+    func currentStatus() -> CodexUsageStatus {
+        lock.lock()
+        defer {
+            lock.unlock()
+        }
+
+        guard !statuses.isEmpty else {
+            return .unknown
+        }
+
+        return statuses.removeFirst()
+    }
+}
+
 @MainActor
 func makeTemporaryScript(named name: String, contents: String) -> String {
     let url = FileManager.default.temporaryDirectory.appendingPathComponent(
@@ -909,6 +931,23 @@ batteryMonitor.refresh()
 expect(
     batteryMonitor.status == BatteryStatus(percentage: 21, state: .charging),
     "battery monitor refresh updates status from provider"
+)
+
+let codexUsageMonitorProvider = SequenceCodexUsageProvider([
+    CodexUsageStatus(fiveHourPercent: 11, weeklyPercent: 22, observedAt: nil),
+    CodexUsageStatus(fiveHourPercent: 33, weeklyPercent: 44, observedAt: nil)
+])
+let codexUsageMonitor = CodexUsageMonitor(provider: codexUsageMonitorProvider)
+expect(codexUsageMonitor.status == .unknown, "codex usage monitor starts unknown before refresh")
+codexUsageMonitor.refresh()
+expect(
+    codexUsageMonitor.status == CodexUsageStatus(fiveHourPercent: 11, weeklyPercent: 22, observedAt: nil),
+    "codex usage monitor refresh reads provider status"
+)
+codexUsageMonitor.refresh()
+expect(
+    codexUsageMonitor.status == CodexUsageStatus(fiveHourPercent: 33, weeklyPercent: 44, observedAt: nil),
+    "codex usage monitor refresh updates status from provider"
 )
 
 let compactPanelFrame = ScreenRect(x: 100, y: 100, width: 420, height: 210)
