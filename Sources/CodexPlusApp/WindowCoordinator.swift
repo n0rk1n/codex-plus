@@ -208,7 +208,6 @@ final class WindowCoordinator: NSObject, NSWindowDelegate {
 
         if let session = conversationCoordinator.activeConversation {
             sidePanelController.moveToPreferredSide(session: session, actions: sidePanelActions())
-            refreshSidePanelContent()
         }
     }
 
