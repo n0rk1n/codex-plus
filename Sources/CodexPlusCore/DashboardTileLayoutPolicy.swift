@@ -41,6 +41,8 @@ public enum DashboardTileLayoutPolicy {
             return CompactDashboardTileDragPolicy.batteryTileWidth
         case .codexUsage:
             return CompactDashboardTileDragPolicy.codexUsageTileWidth
+        case .dailyTokens:
+            return CompactDashboardTileDragPolicy.dailyTokensTileWidth
         }
     }
 
