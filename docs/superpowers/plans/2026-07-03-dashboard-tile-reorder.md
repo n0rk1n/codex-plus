@@ -48,7 +48,7 @@ Create `DashboardTileOrder.swift`:
 ```swift
 import Foundation
 
-public enum DashboardTile: String, CaseIterable, Equatable, Sendable {
+public enum DashboardTile: String, CaseIterable, Equatable, Hashable, Sendable {
     case battery
     case codexUsage
 }

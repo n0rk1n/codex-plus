@@ -781,6 +781,19 @@ let invalidBattery = BatteryStatus.from(
 expect(invalidBattery.percentage == nil, "invalid battery percentage")
 expect(invalidBattery.state == .unknown, "invalid battery state")
 
+let defaultTileOrder = DashboardTileOrder(rawValue: nil)
+expect(defaultTileOrder.tiles == [.battery, .codexUsage], "dashboard tile order defaults to battery then codex usage")
+expect(defaultTileOrder.rawValue == "battery,codexUsage", "dashboard tile order serializes default order")
+
+let reversedTileOrder = DashboardTileOrder(rawValue: "codexUsage,battery")
+expect(reversedTileOrder.tiles == [.codexUsage, .battery], "dashboard tile order reads reversed persisted order")
+
+let invalidTileOrder = DashboardTileOrder(rawValue: "battery,battery,unknown")
+expect(invalidTileOrder.tiles == [.battery, .codexUsage], "dashboard tile order falls back when persisted order is invalid")
+
+let swappedTileOrder = defaultTileOrder.swapping(.battery, with: .codexUsage)
+expect(swappedTileOrder.tiles == [.codexUsage, .battery], "dashboard tile order swaps dragged and target tiles")
+
 let unknownCodexUsage = CodexUsageStatus.unknown
 expect(unknownCodexUsage.fiveHourPercent == nil, "unknown codex usage has no five-hour percent")
 expect(unknownCodexUsage.weeklyPercent == nil, "unknown codex usage has no weekly percent")
