@@ -22,6 +22,5 @@ struct LiquidGlassContainer<Content: View>: View {
                 RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
                     .strokeBorder(Color.white.opacity(0.28), lineWidth: 1)
             }
-            .shadow(color: Color.black.opacity(0.16), radius: 18, x: 0, y: 10)
     }
 }
