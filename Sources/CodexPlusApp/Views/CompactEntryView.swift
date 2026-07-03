@@ -4,6 +4,7 @@ import SwiftUI
 struct CompactEntryView: View {
     let batteryStatus: BatteryStatus
     let codexUsageStatus: CodexUsageStatus
+    let dailyTokenStatus: DailyTokenStatus
     let onSubmit: (String) -> Void
 
     @FocusState private var isPromptFocused: Bool
@@ -82,6 +83,8 @@ struct CompactEntryView: View {
             BatteryTileView(status: batteryStatus)
         case .codexUsage:
             CodexUsageRingTileView(status: codexUsageStatus)
+        case .dailyTokens:
+            DailyTokenTileView(status: dailyTokenStatus)
         }
     }
 
