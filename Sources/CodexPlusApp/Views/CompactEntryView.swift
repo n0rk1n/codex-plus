@@ -23,17 +23,6 @@ struct CompactEntryView: View {
             GlassEffectContainer {
                 GeometryReader { geometry in
                     ZStack {
-                        if let draggedTile {
-                            placeholderView(for: draggedTile)
-                                .position(
-                                    x: (geometry.size.width / 2) + placementOffset(
-                                        for: draggedTile,
-                                        in: previewTileOrder.tiles
-                                    ),
-                                    y: tileRowHeight / 2
-                                )
-                        }
-
                         ForEach(dashboardTileOrder.tiles, id: \.self) { tile in
                             tileView(for: tile)
                                 .position(
@@ -51,7 +40,6 @@ struct CompactEntryView: View {
                 }
                 .frame(height: tileRowHeight)
                 .animation(.snappy(duration: 0.18), value: draggedTile)
-                .animation(.snappy(duration: 0.18), value: previewTileOrder.tiles)
                 .animation(.snappy(duration: 0.18), value: dashboardTileOrderRaw)
             }
 
@@ -100,10 +88,6 @@ struct CompactEntryView: View {
         return CGFloat(placement?.centerX ?? 0)
     }
 
-    private var previewTileOrder: DashboardTileOrder {
-        dashboardTileOrder
-    }
-
     private var dashboardTileOrder: DashboardTileOrder {
         DashboardTileOrder(rawValue: dashboardTileOrderRaw)
     }
@@ -120,13 +104,6 @@ struct CompactEntryView: View {
         case .dailyTokens:
             DailyTokenTileView(status: dailyTokenStatus)
         }
-    }
-
-    @ViewBuilder
-    private func placeholderView(for tile: DashboardTile) -> some View {
-        tileView(for: tile)
-            .opacity(0)
-            .allowsHitTesting(false)
     }
 
     private func rowDragGesture(rowWidth: CGFloat) -> some Gesture {
