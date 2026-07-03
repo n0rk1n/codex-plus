@@ -44,11 +44,19 @@ public enum DashboardTileLayoutPolicy {
         }
     }
 
-    public static func acceptsDragChange(activeTile: DashboardTile?, gestureTile: DashboardTile) -> Bool {
-        guard let activeTile else {
-            return true
+    public static func tile(atX x: Double, rowWidth: Double, tiles: [DashboardTile]) -> DashboardTile? {
+        let rowMidX = rowWidth / 2
+
+        for placement in placements(for: tiles) {
+            let centerX = rowMidX + placement.centerX
+            let minX = centerX - (placement.width / 2)
+            let maxX = centerX + (placement.width / 2)
+
+            if x >= minX && x <= maxX {
+                return placement.tile
+            }
         }
 
-        return activeTile == gestureTile
+        return nil
     }
 }

@@ -826,16 +826,20 @@ expect(
     "dashboard tile layout recenters the remaining codex tile while battery is dragged"
 )
 expect(
-    DashboardTileLayoutPolicy.acceptsDragChange(activeTile: nil, gestureTile: .battery),
-    "dashboard tile drag accepts the first gesture tile"
+    DashboardTileLayoutPolicy.tile(atX: 135, rowWidth: 420, tiles: defaultTileOrder.tiles) == .battery,
+    "dashboard tile hit testing selects battery at its visual center"
 )
 expect(
-    DashboardTileLayoutPolicy.acceptsDragChange(activeTile: .battery, gestureTile: .battery),
-    "dashboard tile drag keeps accepting the active gesture tile"
+    DashboardTileLayoutPolicy.tile(atX: 262, rowWidth: 420, tiles: defaultTileOrder.tiles) == .codexUsage,
+    "dashboard tile hit testing selects codex usage at its visual center"
 )
 expect(
-    !DashboardTileLayoutPolicy.acceptsDragChange(activeTile: .battery, gestureTile: .codexUsage),
-    "dashboard tile drag rejects a different tile while battery is active"
+    DashboardTileLayoutPolicy.tile(atX: 187, rowWidth: 420, tiles: defaultTileOrder.tiles) == nil,
+    "dashboard tile hit testing ignores the gap between tiles"
+)
+expect(
+    DashboardTileLayoutPolicy.tile(atX: 158, rowWidth: 420, tiles: reversedTileOrder.tiles) == .codexUsage,
+    "dashboard tile hit testing follows reversed visual order"
 )
 
 let compactEntryBounds = ScreenRect(x: 0, y: 0, width: 420, height: 210)

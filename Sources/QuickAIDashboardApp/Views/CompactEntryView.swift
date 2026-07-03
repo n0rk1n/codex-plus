@@ -29,10 +29,10 @@ struct CompactEntryView: View {
                             .opacity(draggedTile == tile ? 0.92 : 1)
                             .zIndex(draggedTile == tile ? 1 : 0)
                             .contentShape(Rectangle())
-                            .allowsHitTesting(draggedTile == nil || draggedTile == tile)
-                            .highPriorityGesture(dragGesture(for: tile))
                     }
                 }
+                .contentShape(Rectangle())
+                .highPriorityGesture(rowDragGesture(rowWidth: geometry.size.width))
             }
             .frame(height: tileRowHeight)
             .animation(.snappy(duration: 0.18), value: draggedTile)
@@ -85,22 +85,28 @@ struct CompactEntryView: View {
         }
     }
 
-    private func dragGesture(for tile: DashboardTile) -> some Gesture {
+    private func rowDragGesture(rowWidth: CGFloat) -> some Gesture {
         DragGesture(minimumDistance: 1)
             .onChanged { value in
-                guard DashboardTileLayoutPolicy.acceptsDragChange(activeTile: draggedTile, gestureTile: tile) else {
+                let sourceTile = draggedTile ?? DashboardTileLayoutPolicy.tile(
+                    atX: Double(value.startLocation.x),
+                    rowWidth: Double(rowWidth),
+                    tiles: dashboardTileOrder.tiles
+                )
+
+                guard let sourceTile else {
                     return
                 }
 
-                draggedTile = tile
+                draggedTile = sourceTile
                 dragTranslation = CGSize(width: value.translation.width, height: 0)
             }
             .onEnded { value in
-                guard draggedTile == tile else {
+                guard let sourceTile = draggedTile else {
                     return
                 }
 
-                reorderIfNeeded(tile: tile, translationWidth: value.translation.width)
+                reorderIfNeeded(tile: sourceTile, translationWidth: value.translation.width)
                 draggedTile = nil
                 dragTranslation = .zero
             }
