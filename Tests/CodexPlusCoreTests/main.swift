@@ -99,6 +99,28 @@ final class SequenceCodexUsageProvider: CodexUsageProviding, @unchecked Sendable
     }
 }
 
+final class SequenceDailyTokenProvider: DailyTokenUsageProviding, @unchecked Sendable {
+    private let lock = NSLock()
+    private var statuses: [DailyTokenStatus]
+
+    init(_ statuses: [DailyTokenStatus]) {
+        self.statuses = statuses
+    }
+
+    func currentStatus() -> DailyTokenStatus {
+        lock.lock()
+        defer {
+            lock.unlock()
+        }
+
+        guard !statuses.isEmpty else {
+            return .unknown
+        }
+
+        return statuses.removeFirst()
+    }
+}
+
 final class BlockingCodexUsageProvider: CodexUsageProviding, @unchecked Sendable {
     private let lock = NSLock()
     private let started = DispatchSemaphore(value: 0)
@@ -1219,70 +1241,77 @@ expect(invalidBattery.percentage == nil, "invalid battery percentage")
 expect(invalidBattery.state == .unknown, "invalid battery state")
 
 let defaultTileOrder = DashboardTileOrder(rawValue: nil)
-expect(defaultTileOrder.tiles == [.battery, .codexUsage], "dashboard tile order defaults to battery then codex usage")
-expect(defaultTileOrder.rawValue == "battery,codexUsage", "dashboard tile order serializes default order")
+expect(defaultTileOrder.tiles == [.battery, .codexUsage, .dailyTokens], "dashboard tile order defaults to battery, codex usage, then daily tokens")
+expect(defaultTileOrder.rawValue == "battery,codexUsage,dailyTokens", "dashboard tile order serializes default order")
 
-let reversedTileOrder = DashboardTileOrder(rawValue: "codexUsage,battery")
-expect(reversedTileOrder.tiles == [.codexUsage, .battery], "dashboard tile order reads reversed persisted order")
+let reversedTileOrder = DashboardTileOrder(rawValue: "dailyTokens,codexUsage,battery")
+expect(reversedTileOrder.tiles == [.dailyTokens, .codexUsage, .battery], "dashboard tile order reads reversed persisted order")
 
 let invalidTileOrder = DashboardTileOrder(rawValue: "battery,battery,unknown")
-expect(invalidTileOrder.tiles == [.battery, .codexUsage], "dashboard tile order falls back when persisted order is invalid")
+expect(invalidTileOrder.tiles == [.battery, .codexUsage, .dailyTokens], "dashboard tile order falls back when persisted order is invalid")
 
 let swappedTileOrder = defaultTileOrder.swapping(.battery, with: .codexUsage)
-expect(swappedTileOrder.tiles == [.codexUsage, .battery], "dashboard tile order swaps dragged and target tiles")
+expect(swappedTileOrder.tiles == [.codexUsage, .battery, .dailyTokens], "dashboard tile order swaps dragged and target tiles")
 expect(
-    defaultTileOrder.layoutTiles(excludingDragged: nil) == [.battery, .codexUsage],
+    defaultTileOrder.layoutTiles(excludingDragged: nil) == [.battery, .codexUsage, .dailyTokens],
     "dashboard tile layout shows all tiles when no tile is dragged"
 )
 expect(
-    defaultTileOrder.layoutTiles(excludingDragged: .battery) == [.codexUsage],
-    "dashboard tile layout removes dragged battery so codex usage can recenter"
+    defaultTileOrder.layoutTiles(excludingDragged: .battery) == [.codexUsage, .dailyTokens],
+    "dashboard tile layout removes dragged battery so remaining tiles can recenter"
 )
 expect(
-    reversedTileOrder.layoutTiles(excludingDragged: .codexUsage) == [.battery],
+    reversedTileOrder.layoutTiles(excludingDragged: .codexUsage) == [.dailyTokens, .battery],
     "dashboard tile layout removes dragged codex usage from reversed order"
 )
 expect(
     DashboardTileLayoutPolicy.placements(for: defaultTileOrder.tiles) == [
-        DashboardTilePlacement(tile: .battery, centerX: -75, width: 92),
-        DashboardTilePlacement(tile: .codexUsage, centerX: 52, width: 138)
+        DashboardTilePlacement(tile: .battery, centerX: -150, width: 92),
+        DashboardTilePlacement(tile: .codexUsage, centerX: -23, width: 138),
+        DashboardTilePlacement(tile: .dailyTokens, centerX: 127, width: 138)
     ],
     "dashboard tile layout places default tiles at stable visual centers"
 )
 expect(
     DashboardTileLayoutPolicy.placements(for: reversedTileOrder.tiles) == [
-        DashboardTilePlacement(tile: .codexUsage, centerX: -52, width: 138),
-        DashboardTilePlacement(tile: .battery, centerX: 75, width: 92)
+        DashboardTilePlacement(tile: .dailyTokens, centerX: -127, width: 138),
+        DashboardTilePlacement(tile: .codexUsage, centerX: 23, width: 138),
+        DashboardTilePlacement(tile: .battery, centerX: 150, width: 92)
     ],
     "dashboard tile layout places reversed tiles at stable visual centers"
 )
 expect(
     DashboardTileLayoutPolicy.placements(for: defaultTileOrder.layoutTiles(excludingDragged: .battery)) == [
-        DashboardTilePlacement(tile: .codexUsage, centerX: 0, width: 138)
+        DashboardTilePlacement(tile: .codexUsage, centerX: -75, width: 138),
+        DashboardTilePlacement(tile: .dailyTokens, centerX: 75, width: 138)
     ],
-    "dashboard tile layout recenters the remaining codex tile while battery is dragged"
+    "dashboard tile layout recenters the remaining tiles while battery is dragged"
 )
 expect(
-    DashboardTileLayoutPolicy.tile(atX: 135, rowWidth: 420, tiles: defaultTileOrder.tiles) == .battery,
+    DashboardTileLayoutPolicy.tile(atX: 80, rowWidth: 460, tiles: defaultTileOrder.tiles) == .battery,
     "dashboard tile hit testing selects battery at its visual center"
 )
 expect(
-    DashboardTileLayoutPolicy.tile(atX: 262, rowWidth: 420, tiles: defaultTileOrder.tiles) == .codexUsage,
+    DashboardTileLayoutPolicy.tile(atX: 207, rowWidth: 460, tiles: defaultTileOrder.tiles) == .codexUsage,
     "dashboard tile hit testing selects codex usage at its visual center"
 )
 expect(
-    DashboardTileLayoutPolicy.tile(atX: 187, rowWidth: 420, tiles: defaultTileOrder.tiles) == nil,
+    DashboardTileLayoutPolicy.tile(atX: 357, rowWidth: 460, tiles: defaultTileOrder.tiles) == .dailyTokens,
+    "dashboard tile hit testing selects daily tokens at its visual center"
+)
+expect(
+    DashboardTileLayoutPolicy.tile(atX: 132, rowWidth: 460, tiles: defaultTileOrder.tiles) == nil,
     "dashboard tile hit testing ignores the gap between tiles"
 )
 expect(
-    DashboardTileLayoutPolicy.tile(atX: 158, rowWidth: 420, tiles: reversedTileOrder.tiles) == .codexUsage,
+    DashboardTileLayoutPolicy.tile(atX: 103, rowWidth: 460, tiles: reversedTileOrder.tiles) == .dailyTokens,
     "dashboard tile hit testing follows reversed visual order"
 )
 
-let compactEntryBounds = ScreenRect(x: 0, y: 0, width: 420, height: 210)
+let compactEntryBounds = ScreenRect(x: 0, y: 0, width: 460, height: 210)
 expect(
     !CompactDashboardTileDragPolicy.shouldMoveWindowFromMouseDown(
-        at: ScreenPoint(x: 110, y: 64),
+        at: ScreenPoint(x: 80, y: 64),
         panelBounds: compactEntryBounds,
         verticalOrigin: .top
     ),
@@ -1290,7 +1319,7 @@ expect(
 )
 expect(
     !CompactDashboardTileDragPolicy.shouldMoveWindowFromMouseDown(
-        at: ScreenPoint(x: 290, y: 64),
+        at: ScreenPoint(x: 207, y: 64),
         panelBounds: compactEntryBounds,
         verticalOrigin: .top
     ),
@@ -1298,7 +1327,15 @@ expect(
 )
 expect(
     !CompactDashboardTileDragPolicy.shouldMoveWindowFromMouseDown(
-        at: ScreenPoint(x: 50, y: 64),
+        at: ScreenPoint(x: 357, y: 64),
+        panelBounds: compactEntryBounds,
+        verticalOrigin: .top
+    ),
+    "compact daily tokens tile blocks window dragging"
+)
+expect(
+    !CompactDashboardTileDragPolicy.shouldMoveWindowFromMouseDown(
+        at: ScreenPoint(x: 20, y: 64),
         panelBounds: compactEntryBounds,
         verticalOrigin: .top
     ),
@@ -1306,7 +1343,7 @@ expect(
 )
 expect(
     CompactDashboardTileDragPolicy.shouldMoveWindowFromMouseDown(
-        at: ScreenPoint(x: 210, y: 152),
+        at: ScreenPoint(x: 230, y: 152),
         panelBounds: compactEntryBounds,
         verticalOrigin: .top
     ),
@@ -1314,7 +1351,7 @@ expect(
 )
 expect(
     !CompactDashboardTileDragPolicy.shouldMoveWindowFromMouseDown(
-        at: ScreenPoint(x: 110, y: 146),
+        at: ScreenPoint(x: 80, y: 146),
         panelBounds: compactEntryBounds,
         verticalOrigin: .bottom
     ),
@@ -1322,7 +1359,7 @@ expect(
 )
 expect(
     CompactDashboardTileDragPolicy.shouldMoveWindowFromMouseDown(
-        at: ScreenPoint(x: 210, y: 50),
+        at: ScreenPoint(x: 230, y: 50),
         panelBounds: compactEntryBounds,
         verticalOrigin: .bottom
     ),
@@ -1390,6 +1427,80 @@ expect(redCodexUsage.ringColor(for: .weekly) == .highUsageRed, "codex usage at o
 let clampedCodexUsage = CodexUsageStatus(fiveHourPercent: -5, weeklyPercent: 140, observedAt: nil)
 expect(clampedCodexUsage.fiveHourPercent == 0, "codex usage clamps low percent to zero")
 expect(clampedCodexUsage.weeklyPercent == 100, "codex usage clamps high percent to one hundred")
+
+let unknownDailyTokens = DailyTokenStatus.unknown
+expect(unknownDailyTokens.inputText == "--", "unknown daily tokens show placeholder input")
+expect(unknownDailyTokens.outputText == "--", "unknown daily tokens show placeholder output")
+expect(unknownDailyTokens.hitRateText == "--", "unknown daily tokens show placeholder hit rate")
+
+let compactDailyTokens = DailyTokenStatus(
+    inputTokens: 1_234_431,
+    outputTokens: 12_345,
+    cachedInputTokens: 617_216,
+    observedAt: Date(timeIntervalSince1970: 10)
+)
+expect(compactDailyTokens.inputText == "1.2M", "daily tokens compact large input totals")
+expect(compactDailyTokens.outputText == "12K", "daily tokens compact medium output totals")
+expect(compactDailyTokens.hitRateText == "50%", "daily tokens show rounded cache hit rate")
+
+let dailyTokenSessionsDirectory = makeTemporaryDirectory(named: "daily-token-sessions")
+let dailyTokenArchivesDirectory = makeTemporaryDirectory(named: "daily-token-archives")
+defer {
+    try? FileManager.default.removeItem(at: dailyTokenSessionsDirectory)
+    try? FileManager.default.removeItem(at: dailyTokenArchivesDirectory)
+}
+var dailyTokenCalendar = Calendar(identifier: .gregorian)
+dailyTokenCalendar.timeZone = TimeZone(secondsFromGMT: 0)!
+let dailyTokenNow = ISO8601DateFormatter().date(from: "2026-07-03T12:00:00Z")!
+
+writeText(
+    """
+    {malformed
+    {"timestamp":"2026-07-02T23:59:00Z","type":"event_msg","payload":{"type":"token_count","info":{"last_token_usage":{"input_tokens":9000,"cached_input_tokens":9000,"output_tokens":900}}}}
+    {"timestamp":"2026-07-03T01:00:00Z","type":"event_msg","payload":{"type":"token_count","info":{"last_token_usage":{"input_tokens":1000,"cached_input_tokens":200,"output_tokens":50}}}}
+    """,
+    to: dailyTokenSessionsDirectory.appendingPathComponent("today.jsonl")
+)
+writeText(
+    """
+    {"timestamp":"2026-07-03T02:00:00Z","type":"event_msg","payload":{"type":"token_count","info":{"last_token_usage":{"input_tokens":2000,"cached_input_tokens":1300,"output_tokens":150}}}}
+    """,
+    to: dailyTokenArchivesDirectory.appendingPathComponent("archived.jsonl")
+)
+writeText(
+    """
+    {"timestamp":"2026-07-03T03:00:00Z","type":"event_msg","payload":{"type":"token_count","info":{"last_token_usage":{"input_tokens":9999,"cached_input_tokens":9999,"output_tokens":999}}}}
+    """,
+    to: dailyTokenSessionsDirectory.appendingPathComponent("ignored.txt")
+)
+
+let dailyTokenProvider = LocalDailyTokenUsageProvider(
+    sessionDirectories: [dailyTokenSessionsDirectory],
+    archiveDirectories: [dailyTokenArchivesDirectory],
+    calendar: dailyTokenCalendar,
+    now: { dailyTokenNow }
+)
+let dailyTokenStatus = dailyTokenProvider.currentStatus()
+expect(dailyTokenStatus.inputTokens == 3000, "daily token provider sums today's input deltas")
+expect(dailyTokenStatus.cachedInputTokens == 1500, "daily token provider sums today's cached input deltas")
+expect(dailyTokenStatus.outputTokens == 200, "daily token provider sums today's output deltas")
+expect(dailyTokenStatus.hitRateText == "50%", "daily token provider computes cache hit rate from summed input")
+expect(
+    dailyTokenStatus.observedAt == ISO8601DateFormatter().date(from: "2026-07-03T02:00:00Z"),
+    "daily token provider preserves newest contributing timestamp"
+)
+
+let emptyDailyTokenDirectory = makeTemporaryDirectory(named: "daily-token-empty")
+defer {
+    try? FileManager.default.removeItem(at: emptyDailyTokenDirectory)
+}
+let emptyDailyTokenProvider = LocalDailyTokenUsageProvider(
+    sessionDirectories: [emptyDailyTokenDirectory],
+    archiveDirectories: [],
+    calendar: dailyTokenCalendar,
+    now: { dailyTokenNow }
+)
+expect(emptyDailyTokenProvider.currentStatus() == .unknown, "daily token provider returns unknown without token events")
 
 let codexUsageSessionsDirectory = makeTemporaryDirectory(named: "codex-usage-sessions")
 let codexUsageArchivesDirectory = makeTemporaryDirectory(named: "codex-usage-archives")
@@ -1642,6 +1753,58 @@ let codexUsageMonitorSecondUpdate = waitUntil(timeout: 2) {
 expect(
     codexUsageMonitorSecondUpdate,
     "codex usage monitor refresh eventually updates status from provider"
+)
+
+let lowVolumeDailyTokenStatus = DailyTokenStatus(
+    inputTokens: 998_000,
+    outputTokens: 1_999,
+    cachedInputTokens: 0,
+    observedAt: Date(timeIntervalSince1970: 40)
+)
+let highVolumeDailyTokenStatus = DailyTokenStatus(
+    inputTokens: 999_000,
+    outputTokens: 1_000,
+    cachedInputTokens: 0,
+    observedAt: Date(timeIntervalSince1970: 50)
+)
+expect(
+    DailyTokenUsageMonitor.defaultLowVolumeRefreshInterval == 30,
+    "daily token monitor low-volume refresh interval is thirty seconds"
+)
+expect(
+    DailyTokenUsageMonitor.defaultHighVolumeRefreshInterval == 60,
+    "daily token monitor high-volume refresh interval is sixty seconds"
+)
+expect(
+    DailyTokenUsageMonitor.refreshInterval(for: lowVolumeDailyTokenStatus) == 30,
+    "daily token monitor refreshes every thirty seconds below one million total tokens"
+)
+expect(
+    DailyTokenUsageMonitor.refreshInterval(for: highVolumeDailyTokenStatus) == 60,
+    "daily token monitor refreshes every sixty seconds at one million total tokens"
+)
+
+let dailyTokenMonitorProvider = SequenceDailyTokenProvider([
+    lowVolumeDailyTokenStatus,
+    highVolumeDailyTokenStatus
+])
+let dailyTokenMonitor = DailyTokenUsageMonitor(provider: dailyTokenMonitorProvider)
+expect(dailyTokenMonitor.status == .unknown, "daily token monitor starts unknown before refresh")
+dailyTokenMonitor.refresh()
+let dailyTokenMonitorFirstUpdate = waitUntil(timeout: 2) {
+    dailyTokenMonitor.status == lowVolumeDailyTokenStatus
+}
+expect(
+    dailyTokenMonitorFirstUpdate,
+    "daily token monitor refresh eventually reads provider status"
+)
+dailyTokenMonitor.refresh()
+let dailyTokenMonitorSecondUpdate = waitUntil(timeout: 2) {
+    dailyTokenMonitor.status == highVolumeDailyTokenStatus
+}
+expect(
+    dailyTokenMonitorSecondUpdate,
+    "daily token monitor refresh eventually updates status from provider"
 )
 
 let asyncCodexUsageStatus = CodexUsageStatus(

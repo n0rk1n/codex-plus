@@ -11,8 +11,9 @@ public enum CompactDashboardTileDragPolicy {
     public static let tileStripHeight = 92.0
     public static let batteryTileWidth = 92.0
     public static let codexUsageTileWidth = 138.0
+    public static let dailyTokensTileWidth = 138.0
     public static let tileSpacing = 12.0
-    public static let tileStripWidth = batteryTileWidth + codexUsageTileWidth + tileSpacing
+    public static let tileStripWidth = batteryTileWidth + codexUsageTileWidth + dailyTokensTileWidth + (tileSpacing * 2)
 
     public static func shouldMoveWindowFromMouseDown(
         at point: ScreenPoint,

@@ -4,6 +4,7 @@ import SwiftUI
 struct CompactEntryView: View {
     let batteryStatus: BatteryStatus
     let codexUsageStatus: CodexUsageStatus
+    let dailyTokenStatus: DailyTokenStatus
     let onOpenDraft: (String) -> Void
     let onSubmit: (String) -> Void
 
@@ -95,6 +96,8 @@ struct CompactEntryView: View {
             BatteryTileView(status: batteryStatus)
         case .codexUsage:
             CodexUsageRingTileView(status: codexUsageStatus)
+        case .dailyTokens:
+            DailyTokenTileView(status: dailyTokenStatus)
         }
     }
 

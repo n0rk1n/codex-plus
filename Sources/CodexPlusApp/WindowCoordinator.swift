@@ -8,6 +8,7 @@ final class WindowCoordinator: NSObject, NSWindowDelegate {
     private let conversationCoordinator: ConversationCoordinator
     private let batteryMonitor: BatteryStatusMonitor
     private let codexUsageMonitor: CodexUsageMonitor
+    private let dailyTokenUsageMonitor: DailyTokenUsageMonitor
     private let runController: CodexRunController
     private let permissionPrompter = PermissionPrompter()
 
@@ -30,10 +31,12 @@ final class WindowCoordinator: NSObject, NSWindowDelegate {
         self.conversationCoordinator = conversationCoordinator
         self.batteryMonitor = BatteryStatusMonitor(provider: batteryProvider)
         self.codexUsageMonitor = CodexUsageMonitor(provider: LocalCodexUsageProvider())
+        self.dailyTokenUsageMonitor = DailyTokenUsageMonitor(provider: LocalDailyTokenUsageProvider())
         self.runController = CodexRunController(runner: codexRunner)
 
         super.init()
         codexUsageMonitor.start()
+        dailyTokenUsageMonitor.start()
     }
 
     deinit {
@@ -70,6 +73,7 @@ final class WindowCoordinator: NSObject, NSWindowDelegate {
             rootView: CompactEntryHostView(
                 batteryMonitor: batteryMonitor,
                 codexUsageMonitor: codexUsageMonitor,
+                dailyTokenUsageMonitor: dailyTokenUsageMonitor,
                 onOpenDraft: { [weak self] prompt in
                     Task { @MainActor in
                         self?.openDraftFromCompactEntry(prompt: prompt)
@@ -516,7 +520,7 @@ final class WindowCoordinator: NSObject, NSWindowDelegate {
     }
 
     private func defaultCompactPanelFrame(on screen: NSScreen) -> NSRect {
-        let size = NSSize(width: 420, height: 210)
+        let size = NSSize(width: 460, height: 210)
         let visibleFrame = screen.visibleFrame
         let origin = NSPoint(
             x: visibleFrame.midX - (size.width / 2),
