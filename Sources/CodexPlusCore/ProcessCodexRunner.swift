@@ -17,7 +17,7 @@ public struct CodexRunResult: Equatable, Sendable {
 public final class ProcessCodexRunHandle: Sendable {
     private let process: LockedProcess
 
-    public init(process: Process) {
+    init(process: Process) {
         self.process = LockedProcess(process)
     }
 
