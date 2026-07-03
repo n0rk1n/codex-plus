@@ -3,14 +3,16 @@ import QuickAIDashboardCore
 import SwiftUI
 
 @MainActor
-final class WindowCoordinator {
+final class WindowCoordinator: NSObject, NSWindowDelegate {
     private let conversationCoordinator: ConversationCoordinator
     private let batteryMonitor: BatteryStatusMonitor
     private let runController: CodexRunController
     private let permissionPrompter = PermissionPrompter()
 
     private var compactPanel: GlassPanel?
+    private var compactPanelFrame: NSRect?
     private var sidePanel: GlassPanel?
+    private var sidePanelCustomFrame: NSRect?
     private var edgeAffordancePanel: GlassPanel?
     private var sidePanelModel: ConversationPanelModel?
     private var isSidePanelContentInstalled = false
@@ -26,6 +28,8 @@ final class WindowCoordinator {
         self.conversationCoordinator = conversationCoordinator
         self.batteryMonitor = BatteryStatusMonitor(provider: batteryProvider)
         self.runController = CodexRunController(runner: codexRunner)
+
+        super.init()
     }
 
     deinit {
@@ -48,22 +52,16 @@ final class WindowCoordinator {
         sidePanel?.orderOut(nil)
         edgeAffordancePanel?.orderOut(nil)
 
-        let size = NSSize(width: 420, height: 210)
         guard let screen = activeScreen() else {
             return
         }
 
-        let visibleFrame = screen.visibleFrame
-        let origin = NSPoint(
-            x: visibleFrame.midX - (size.width / 2),
-            y: visibleFrame.maxY - (visibleFrame.height / 3) - (size.height / 2)
-        )
-        let frame = NSRect(origin: origin, size: size)
+        let frame = compactPanelFrame ?? defaultCompactPanelFrame(on: screen)
         let panel = compactPanel ?? makePanel(frame: frame)
 
         batteryMonitor.start()
         panel.setFrame(frame, display: true)
-        panel.contentView = NSHostingView(
+        panel.contentView = DraggableHostingView(
             rootView: CompactEntryHostView(
                 batteryMonitor: batteryMonitor,
                 onSubmit: { [weak self] prompt in
@@ -105,6 +103,7 @@ final class WindowCoordinator {
     private func makePanel(frame: NSRect) -> GlassPanel {
         let panel = GlassPanel(contentRect: frame)
         panel.acceptsMouseMovedEvents = true
+        panel.delegate = self
         return panel
     }
 
@@ -224,6 +223,7 @@ final class WindowCoordinator {
     }
 
     private func togglePreferredSide() {
+        sidePanelCustomFrame = nil
         conversationCoordinator.togglePreferredSide()
 
         if let screen = activeScreen(), let sidePanel {
@@ -275,7 +275,7 @@ final class WindowCoordinator {
     }
 
     private func installSidePanelContent(in panel: GlassPanel, model: ConversationPanelModel) {
-        panel.contentView = NSHostingView(
+        panel.contentView = DraggableHostingView(
             rootView: ConversationPanelHostView(
                 model: model,
                 onFollowUp: { [weak self] prompt in
@@ -313,7 +313,22 @@ final class WindowCoordinator {
         isSidePanelContentInstalled = true
     }
 
+    private func defaultCompactPanelFrame(on screen: NSScreen) -> NSRect {
+        let size = NSSize(width: 420, height: 210)
+        let visibleFrame = screen.visibleFrame
+        let origin = NSPoint(
+            x: visibleFrame.midX - (size.width / 2),
+            y: visibleFrame.maxY - (visibleFrame.height / 3) - (size.height / 2)
+        )
+
+        return NSRect(origin: origin, size: size)
+    }
+
     private func sidePanelFrame(on screen: NSScreen) -> NSRect {
+        if let sidePanelCustomFrame {
+            return sidePanelCustomFrame
+        }
+
         let visibleFrame = screen.visibleFrame
         let width = min(CGFloat(460), visibleFrame.width)
         let x: CGFloat
@@ -357,6 +372,7 @@ final class WindowCoordinator {
         guard
             conversationCoordinator.activeConversation != nil,
             conversationCoordinator.activeConversation?.isPinned != true,
+            sidePanelCustomFrame == nil,
             let screen = screen ?? activeScreen()
         else {
             return
@@ -411,6 +427,7 @@ final class WindowCoordinator {
         guard
             let sidePanel,
             sidePanel.isVisible,
+            sidePanelCustomFrame == nil,
             conversationCoordinator.activeConversation?.isPinned != true
         else {
             return
@@ -493,6 +510,56 @@ final class WindowCoordinator {
         if shouldDismiss {
             dismissCompactPanel()
         }
+    }
+
+    func windowDidMove(_ notification: Notification) {
+        guard let panel = notification.object as? GlassPanel else {
+            return
+        }
+
+        if panel === compactPanel {
+            compactPanelFrame = panel.frame
+            return
+        }
+
+        if panel === sidePanel {
+            updateSidePanelPlacement(afterMoving: panel)
+        }
+    }
+
+    private func updateSidePanelPlacement(afterMoving panel: GlassPanel) {
+        guard let screen = panel.screen ?? activeScreen() else {
+            sidePanelCustomFrame = panel.frame
+            return
+        }
+
+        switch PanelPlacementPolicy.placement(
+            for: screenRect(from: panel.frame),
+            in: screenRect(from: screen.visibleFrame)
+        ) {
+        case let .attached(side):
+            sidePanelCustomFrame = nil
+            setPreferredSide(side)
+        case .free:
+            sidePanelCustomFrame = panel.frame
+        }
+    }
+
+    private func setPreferredSide(_ side: SideAttachment) {
+        guard conversationCoordinator.preferredSide != side else {
+            return
+        }
+
+        conversationCoordinator.togglePreferredSide()
+    }
+
+    private func screenRect(from rect: NSRect) -> ScreenRect {
+        ScreenRect(
+            x: Double(rect.minX),
+            y: Double(rect.minY),
+            width: Double(rect.width),
+            height: Double(rect.height)
+        )
     }
 
     private func failureMessage(from result: CodexRunResult) -> String {

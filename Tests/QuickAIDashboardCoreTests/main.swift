@@ -720,6 +720,29 @@ expect(
     "compact dismiss policy dismisses for outside clicks"
 )
 
+let placementScreen = ScreenRect(x: 0, y: 0, width: 1440, height: 900)
+expect(
+    PanelPlacementPolicy.placement(
+        for: ScreenRect(x: 10, y: 0, width: 460, height: 900),
+        in: placementScreen
+    ) == .attached(.left),
+    "panel placement attaches near left edge"
+)
+expect(
+    PanelPlacementPolicy.placement(
+        for: ScreenRect(x: 970, y: 0, width: 460, height: 900),
+        in: placementScreen
+    ) == .attached(.right),
+    "panel placement attaches near right edge"
+)
+expect(
+    PanelPlacementPolicy.placement(
+        for: ScreenRect(x: 420, y: 120, width: 460, height: 600),
+        in: placementScreen
+    ) == .free,
+    "panel placement stays free away from edges"
+)
+
 if failures.isEmpty {
     print("QuickAIDashboardCoreTests passed: \(assertionCount) assertions")
 } else {

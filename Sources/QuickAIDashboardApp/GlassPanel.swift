@@ -23,5 +23,6 @@ final class GlassPanel: NSPanel {
         backgroundColor = .clear
         isOpaque = false
         hasShadow = true
+        isMovableByWindowBackground = true
     }
 }

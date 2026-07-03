@@ -27,6 +27,14 @@ public struct ScreenRect: Equatable, Sendable {
             point.y >= y &&
             point.y <= y + height
     }
+
+    public var minX: Double {
+        x
+    }
+
+    public var maxX: Double {
+        x + width
+    }
 }
 
 public enum CompactEntryDismissPolicy {
@@ -38,5 +46,30 @@ public enum CompactEntryDismissPolicy {
 
     public static func shouldDismissForMouseDown(at point: ScreenPoint, panelFrame: ScreenRect) -> Bool {
         !panelFrame.contains(point)
+    }
+}
+
+public enum PanelPlacement: Equatable, Sendable {
+    case attached(SideAttachment)
+    case free
+}
+
+public enum PanelPlacementPolicy {
+    public static let defaultSnapDistance = 36.0
+
+    public static func placement(
+        for panelFrame: ScreenRect,
+        in screenFrame: ScreenRect,
+        snapDistance: Double = defaultSnapDistance
+    ) -> PanelPlacement {
+        if abs(panelFrame.minX - screenFrame.minX) <= snapDistance {
+            return .attached(.left)
+        }
+
+        if abs(screenFrame.maxX - panelFrame.maxX) <= snapDistance {
+            return .attached(.right)
+        }
+
+        return .free
     }
 }
