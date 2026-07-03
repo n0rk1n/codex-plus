@@ -69,29 +69,189 @@ public enum ConversationDisplayEvent: Equatable, Identifiable, Sendable {
 
 public struct ConversationSession: Equatable, Identifiable, Sendable {
     public let id: UUID
+    public var title: String
     public var prompt: String
+    public var workspacePath: String
     public var state: ConversationRunState
     public var permissionMode: PermissionMode
     public var isPinned: Bool
     public var isExplicitlyKept: Bool
+    public var isArchived: Bool
+    public var createdAt: Date
+    public var lastActivityAt: Date
     public var events: [ConversationDisplayEvent]
 
     public init(
         id: UUID = UUID(),
+        title: String = "对话_0000",
         prompt: String,
+        workspacePath: String = ".",
         state: ConversationRunState = .idle,
         permissionMode: PermissionMode = .semiAutomatic,
         isPinned: Bool = false,
         isExplicitlyKept: Bool = false,
+        isArchived: Bool = false,
+        createdAt: Date = Date(),
+        lastActivityAt: Date = Date(),
         events: [ConversationDisplayEvent] = []
     ) {
         self.id = id
+        self.title = title
         self.prompt = prompt
+        self.workspacePath = workspacePath
         self.state = state
         self.permissionMode = permissionMode
         self.isPinned = isPinned
         self.isExplicitlyKept = isExplicitlyKept
+        self.isArchived = isArchived
+        self.createdAt = createdAt
+        self.lastActivityAt = lastActivityAt
         self.events = events
+    }
+}
+
+public struct WorkspaceSessionGroup: Equatable, Identifiable, Sendable {
+    public let id: UUID
+    public var path: String
+    public var displayName: String
+    public var conversationIDs: [UUID]
+    public var lastActivityAt: Date
+
+    public init(
+        id: UUID = UUID(),
+        path: String,
+        displayName: String,
+        conversationIDs: [UUID] = [],
+        lastActivityAt: Date = Date()
+    ) {
+        self.id = id
+        self.path = path
+        self.displayName = displayName
+        self.conversationIDs = conversationIDs
+        self.lastActivityAt = lastActivityAt
+    }
+}
+
+public struct ConversationDraft: Equatable, Sendable {
+    public var selectedWorkspacePath: String?
+    public var errorMessage: String?
+
+    public init(selectedWorkspacePath: String? = nil, errorMessage: String? = nil) {
+        self.selectedWorkspacePath = selectedWorkspacePath
+        self.errorMessage = errorMessage
+    }
+}
+
+public struct ConversationCoordinatorSnapshot: Equatable, Sendable {
+    public var workspaces: [WorkspaceSessionGroup]
+    public var conversations: [ConversationSession]
+    public var activeWorkspaceID: UUID?
+    public var activeConversationID: UUID?
+    public var draft: ConversationDraft?
+
+    public init(
+        workspaces: [WorkspaceSessionGroup],
+        conversations: [ConversationSession],
+        activeWorkspaceID: UUID?,
+        activeConversationID: UUID?,
+        draft: ConversationDraft?
+    ) {
+        self.workspaces = workspaces
+        self.conversations = conversations
+        self.activeWorkspaceID = activeWorkspaceID
+        self.activeConversationID = activeConversationID
+        self.draft = draft
+    }
+
+    public var activeConversation: ConversationSession? {
+        guard let activeConversationID else {
+            return nil
+        }
+
+        return conversations.first { $0.id == activeConversationID && !$0.isArchived }
+    }
+}
+
+public struct ConversationArchiveResult: Equatable, Sendable {
+    public var archivedConversationID: UUID
+    public var activeWorkspaceID: UUID?
+    public var activeConversationID: UUID?
+
+    public init(archivedConversationID: UUID, activeWorkspaceID: UUID?, activeConversationID: UUID?) {
+        self.archivedConversationID = archivedConversationID
+        self.activeWorkspaceID = activeWorkspaceID
+        self.activeConversationID = activeConversationID
+    }
+}
+
+public enum ConversationWorkspacePolicy {
+    public static let defaultParentDirectoryName = "Codex Plus Workspace"
+
+    public static func defaultParentPath(homeDirectoryPath: String) -> String {
+        NSString(string: NSString(string: homeDirectoryPath).appendingPathComponent("Documents"))
+            .appendingPathComponent(defaultParentDirectoryName)
+    }
+
+    public static func defaultDirectoryName(
+        date: Date,
+        randomSuffix: Int,
+        calendar: Calendar = Calendar(identifier: .gregorian)
+    ) -> String {
+        var calendar = calendar
+        calendar.timeZone = calendar.timeZone
+        let components = calendar.dateComponents([.year, .month, .day], from: date)
+        let year = components.year ?? 1970
+        let month = components.month ?? 1
+        let day = components.day ?? 1
+        return String(format: "%04d-%02d-%02d-%04d", year, month, day, randomSuffix)
+    }
+
+    public static func defaultWorkspacePath(
+        homeDirectoryPath: String,
+        date: Date,
+        randomSuffix: Int,
+        calendar: Calendar = Calendar(identifier: .gregorian)
+    ) -> String {
+        NSString(string: defaultParentPath(homeDirectoryPath: homeDirectoryPath))
+            .appendingPathComponent(defaultDirectoryName(date: date, randomSuffix: randomSuffix, calendar: calendar))
+    }
+
+    public static func normalizedPath(_ path: String) -> String {
+        let expanded = NSString(string: path).expandingTildeInPath
+        return NSString(string: expanded).standardizingPath
+    }
+
+    public static func displayName(for path: String) -> String {
+        let name = URL(fileURLWithPath: normalizedPath(path)).lastPathComponent
+        return name.isEmpty ? normalizedPath(path) : name
+    }
+}
+
+public struct ConversationTitleGenerator: Sendable {
+    private var randomSuffixes: [Int]
+
+    public init(randomSuffixes: [Int] = []) {
+        self.randomSuffixes = randomSuffixes
+    }
+
+    public mutating func nextTitle(existingTitles: [String]) -> String {
+        let existing = Set(existingTitles)
+
+        while true {
+            let suffix = nextSuffix()
+            let title = "对话_\(String(format: "%04d", suffix))"
+            if !existing.contains(title) {
+                return title
+            }
+        }
+    }
+
+    private mutating func nextSuffix() -> Int {
+        if !randomSuffixes.isEmpty {
+            return randomSuffixes.removeFirst()
+        }
+
+        return Int.random(in: 1000...9999)
     }
 }
 

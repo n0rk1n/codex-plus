@@ -676,6 +676,52 @@ expect(ConversationRunState.completed.isTerminal, "completed should be terminal"
 expect(ConversationRunState.failed.isTerminal, "failed should be terminal")
 expect(ConversationRunState.stopped.isTerminal, "stopped should be terminal")
 
+let fixedDateComponents = DateComponents(
+    calendar: Calendar(identifier: .gregorian),
+    timeZone: TimeZone(secondsFromGMT: 0),
+    year: 2026,
+    month: 7,
+    day: 3
+)
+let fixedDate = fixedDateComponents.date!
+expect(
+    ConversationWorkspacePolicy.defaultParentPath(homeDirectoryPath: "/Users/oriki") ==
+        "/Users/oriki/Documents/Codex Plus Workspace",
+    "default workspace parent uses corrected Codex Plus Workspace path"
+)
+expect(
+    ConversationWorkspacePolicy.defaultDirectoryName(
+        date: fixedDate,
+        randomSuffix: 4821,
+        calendar: Calendar(identifier: .gregorian)
+    ) == "2026-07-03-4821",
+    "default workspace child uses date and random suffix"
+)
+expect(
+    ConversationWorkspacePolicy.defaultWorkspacePath(
+        homeDirectoryPath: "/Users/oriki",
+        date: fixedDate,
+        randomSuffix: 4821,
+        calendar: Calendar(identifier: .gregorian)
+    ) == "/Users/oriki/Documents/Codex Plus Workspace/2026-07-03-4821",
+    "default workspace path joins parent and child"
+)
+expect(
+    ConversationWorkspacePolicy.displayName(for: "/Users/oriki/Documents/codex-plus") == "codex-plus",
+    "workspace display name uses last path component"
+)
+expect(
+    ConversationWorkspacePolicy.normalizedPath("/Users/oriki/Documents/codex-plus/") ==
+        "/Users/oriki/Documents/codex-plus",
+    "workspace path normalization removes trailing slash"
+)
+
+var titleGenerator = ConversationTitleGenerator(randomSuffixes: [4821, 4821, 9130])
+let firstTitle = titleGenerator.nextTitle(existingTitles: [])
+let secondTitle = titleGenerator.nextTitle(existingTitles: [firstTitle])
+expect(firstTitle == "对话_4821", "conversation title uses random suffix")
+expect(secondTitle == "对话_9130", "conversation title retries on collision")
+
 let emptyConversationCoordinator = ConversationCoordinator()
 expect(
     emptyConversationCoordinator.shortcutDecision() == .openFreshEntry,
