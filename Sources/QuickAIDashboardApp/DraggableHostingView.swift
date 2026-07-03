@@ -25,7 +25,7 @@ final class DraggableHostingView<Content: View>: NSHostingView<Content> {
             return
         }
 
-        window?.performDrag(with: event)
+        performCompactPromptDrag(from: event)
     }
 
     private func shouldPerformManualWindowDrag(for event: NSEvent) -> Bool {
@@ -53,6 +53,94 @@ final class DraggableHostingView<Content: View>: NSHostingView<Content> {
             y: 0,
             width: Double(bounds.width),
             height: Double(bounds.height)
+        )
+    }
+
+    private func performCompactPromptDrag(from initialEvent: NSEvent) {
+        guard let window else {
+            return
+        }
+
+        let initialFrame = window.frame
+        let initialMouseLocation = window.convertPoint(toScreen: initialEvent.locationInWindow)
+        var wasSnapped = false
+
+        while true {
+            guard let nextEvent = window.nextEvent(
+                matching: [.leftMouseDragged, .leftMouseUp],
+                until: .distantFuture,
+                inMode: .eventTracking,
+                dequeue: true
+            ) else {
+                return
+            }
+
+            switch nextEvent.type {
+            case .leftMouseDragged:
+                let mouseLocation = window.convertPoint(toScreen: nextEvent.locationInWindow)
+                let proposedFrame = initialFrame.offsetBy(
+                    dx: mouseLocation.x - initialMouseLocation.x,
+                    dy: mouseLocation.y - initialMouseLocation.y
+                )
+                let dragResult = compactPromptDragResult(for: proposedFrame, window: window)
+                if dragResult.isSnapped && !wasSnapped {
+                    NSHapticFeedbackManager.defaultPerformer.perform(.alignment, performanceTime: .now)
+                }
+                wasSnapped = dragResult.isSnapped
+                window.setFrame(dragResult.frame, display: true)
+            case .leftMouseUp:
+                return
+            default:
+                break
+            }
+        }
+    }
+
+    private func compactPromptDragResult(for proposedFrame: NSRect, window: NSWindow) -> (frame: NSRect, isSnapped: Bool) {
+        let screenFrame = (screen(containing: proposedFrame) ?? window.screen ?? NSScreen.main)?.visibleFrame
+        guard let screenFrame else {
+            return (proposedFrame, false)
+        }
+
+        let snappedFrame = CompactPanelSnapPolicy.snappedFrame(
+            for: ScreenRect(proposedFrame),
+            in: ScreenRect(screenFrame)
+        )
+        let frame = NSRect(snappedFrame)
+        return (frame, abs(frame.midX - screenFrame.midX) < 0.5)
+    }
+
+    private func screen(containing frame: NSRect) -> NSScreen? {
+        NSScreen.screens.max { first, second in
+            first.visibleFrame.intersection(frame).area < second.visibleFrame.intersection(frame).area
+        }
+    }
+}
+
+private extension NSRect {
+    var area: CGFloat {
+        width * height
+    }
+}
+
+private extension ScreenRect {
+    init(_ rect: NSRect) {
+        self.init(
+            x: Double(rect.origin.x),
+            y: Double(rect.origin.y),
+            width: Double(rect.width),
+            height: Double(rect.height)
+        )
+    }
+}
+
+private extension NSRect {
+    init(_ rect: ScreenRect) {
+        self.init(
+            x: rect.x,
+            y: rect.y,
+            width: rect.width,
+            height: rect.height
         )
     }
 }

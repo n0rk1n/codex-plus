@@ -844,6 +844,35 @@ expect(
     "compact prompt drag policy supports bottom-left AppKit coordinates"
 )
 
+let compactSnapScreen = ScreenRect(x: 0, y: 0, width: 1440, height: 900)
+let compactNearMidlineFrame = ScreenRect(x: 520, y: 300, width: 420, height: 210)
+expect(
+    CompactPanelSnapPolicy.snappedFrame(
+        for: compactNearMidlineFrame,
+        in: compactSnapScreen
+    ) == ScreenRect(x: 510, y: 300, width: 420, height: 210),
+    "compact panel snaps its center to the screen midline when near it"
+)
+
+let compactFarFromMidlineFrame = ScreenRect(x: 560, y: 300, width: 420, height: 210)
+expect(
+    CompactPanelSnapPolicy.snappedFrame(
+        for: compactFarFromMidlineFrame,
+        in: compactSnapScreen
+    ) == compactFarFromMidlineFrame,
+    "compact panel moves freely after leaving the midline snap distance"
+)
+
+let offsetSnapScreen = ScreenRect(x: 100, y: 0, width: 1000, height: 800)
+let offsetNearMidlineFrame = ScreenRect(x: 380, y: 260, width: 420, height: 210)
+expect(
+    CompactPanelSnapPolicy.snappedFrame(
+        for: offsetNearMidlineFrame,
+        in: offsetSnapScreen
+    ) == ScreenRect(x: 390, y: 260, width: 420, height: 210),
+    "compact panel snap uses the active screen midline"
+)
+
 let unknownCodexUsage = CodexUsageStatus.unknown
 expect(unknownCodexUsage.fiveHourPercent == nil, "unknown codex usage has no five-hour percent")
 expect(unknownCodexUsage.weeklyPercent == nil, "unknown codex usage has no weekly percent")
