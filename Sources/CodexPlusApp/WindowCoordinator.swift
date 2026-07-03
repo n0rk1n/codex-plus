@@ -9,6 +9,8 @@ final class WindowCoordinator: NSObject, NSWindowDelegate {
     private let codexUsageMonitor: CodexUsageMonitor
     private let runController: CodexRunController
     private let permissionPrompter = PermissionPrompter()
+    private let panelFactory = PanelFactory()
+    private let screenProvider = ActiveScreenProvider()
 
     private var compactPanel: GlassPanel?
     private var compactPanelFrame: NSRect?
@@ -108,10 +110,7 @@ final class WindowCoordinator: NSObject, NSWindowDelegate {
     }
 
     private func makePanel(frame: NSRect) -> GlassPanel {
-        let panel = GlassPanel(contentRect: frame)
-        panel.acceptsMouseMovedEvents = true
-        panel.delegate = self
-        return panel
+        panelFactory.makePanel(frame: frame, delegate: self)
     }
 
     private func startConversation(prompt: String) {
@@ -577,13 +576,6 @@ final class WindowCoordinator: NSObject, NSWindowDelegate {
     }
 
     private func activeScreen() -> NSScreen? {
-        if let screen = NSApp.keyWindow?.screen {
-            return screen
-        }
-
-        let mouseLocation = NSEvent.mouseLocation
-        return NSScreen.screens.first { screen in
-            NSMouseInRect(mouseLocation, screen.frame, false)
-        } ?? NSScreen.main ?? NSScreen.screens.first
+        screenProvider.activeScreen()
     }
 }
