@@ -3,33 +3,55 @@ import SwiftUI
 
 @MainActor
 final class ConversationPanelModel: ObservableObject {
-    @Published var session: ConversationSession
+    @Published var snapshot: ConversationCoordinatorSnapshot
 
-    init(session: ConversationSession) {
-        self.session = session
+    init(snapshot: ConversationCoordinatorSnapshot) {
+        self.snapshot = snapshot
     }
 }
 
 struct ConversationPanelHostView: View {
     @ObservedObject var model: ConversationPanelModel
 
+    let onSubmitDraft: (String) -> Void
     let onFollowUp: (String) -> Void
     let onStop: () -> Void
-    let onClose: () -> Void
     let onTogglePin: () -> Void
     let onToggleSide: () -> Void
     let onToggleFullAccess: () -> Void
+    let onSelectWorkspace: (UUID) -> Void
+    let onSelectConversation: (UUID) -> Void
+    let onNewDraft: () -> Void
+    let onArchiveConversation: (UUID) -> Void
+    let onPickWorkspace: () -> Void
+    let onReorderWorkspace: (UUID, Int) -> Void
+    let onReorderConversation: (UUID, Int) -> Void
 
     var body: some View {
         ConversationView(
-            session: model.session,
+            snapshot: model.snapshot,
+            onSubmitDraft: onSubmitDraft,
             onFollowUp: onFollowUp,
             onStop: onStop,
-            onClose: onClose,
             onTogglePin: onTogglePin,
             onToggleSide: onToggleSide,
-            onToggleFullAccess: onToggleFullAccess
+            onToggleFullAccess: onToggleFullAccess,
+            onSelectWorkspace: onSelectWorkspace,
+            onSelectConversation: onSelectConversation,
+            onNewDraft: onNewDraft,
+            onArchiveConversation: onArchiveConversation,
+            onPickWorkspace: onPickWorkspace,
+            onReorderWorkspace: onReorderWorkspace,
+            onReorderConversation: onReorderConversation
         )
-        .id(model.session.id)
+        .id(panelIdentity)
+    }
+
+    private var panelIdentity: String {
+        if let activeConversationID = model.snapshot.activeConversationID {
+            return "conversation-\(activeConversationID.uuidString)"
+        }
+
+        return "conversation-draft"
     }
 }

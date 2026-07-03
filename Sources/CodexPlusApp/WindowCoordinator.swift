@@ -1,5 +1,6 @@
 import AppKit
 import CodexPlusCore
+import QuartzCore
 import SwiftUI
 
 @MainActor
@@ -87,7 +88,9 @@ final class WindowCoordinator: NSObject, NSWindowDelegate {
         dismissCompactPanel()
         edgeAffordancePanel?.orderOut(nil)
 
-        guard conversationCoordinator.activeConversation != nil else {
+        let snapshot = conversationCoordinator.snapshot
+
+        guard snapshot.activeConversation != nil || snapshot.draft != nil else {
             showCompactPanel()
             return
         }
@@ -115,10 +118,23 @@ final class WindowCoordinator: NSObject, NSWindowDelegate {
     }
 
     private func startConversation(prompt: String) {
-        let session = conversationCoordinator.startConversation(prompt: prompt)
+        let workspacePath: String
+
+        do {
+            workspacePath = try resolveDraftWorkspacePath()
+        } catch {
+            conversationCoordinator.setDraftError("Unable to prepare workspace: \(error.localizedDescription)")
+            refreshSidePanelContent()
+            return
+        }
+
+        let session = conversationCoordinator.startConversation(
+            prompt: prompt,
+            workspacePath: workspacePath
+        )
         prepareCenteredSidePanelFrame()
         showSidePanel()
-        startCodexRun(prompt: prompt, sessionID: session.id)
+        startCodexRun(prompt: prompt, sessionID: session.id, workspacePath: session.workspacePath)
     }
 
     private func prepareCenteredSidePanelFrame() {
@@ -139,9 +155,9 @@ final class WindowCoordinator: NSObject, NSWindowDelegate {
             return
         }
 
-        guard !runController.isRunning else {
+        guard !runController.isRunning(sessionID: session.id) else {
             conversationCoordinator.appendCodexEvent(
-                .error("Codex is already running. Stop the current task before sending a follow-up."),
+                .error("Codex is already running in this conversation. Stop the current task before sending a follow-up."),
                 to: session.id
             )
             refreshSidePanelContent()
@@ -150,13 +166,13 @@ final class WindowCoordinator: NSObject, NSWindowDelegate {
 
         conversationCoordinator.appendUserPrompt(prompt, to: session.id)
         refreshSidePanelContent()
-        startCodexRun(prompt: prompt, sessionID: session.id)
+        startCodexRun(prompt: prompt, sessionID: session.id, workspacePath: session.workspacePath)
     }
 
-    private func startCodexRun(prompt: String, sessionID: UUID) {
-        guard !runController.isRunning else {
+    private func startCodexRun(prompt: String, sessionID: UUID, workspacePath: String) {
+        guard !runController.isRunning(sessionID: sessionID) else {
             conversationCoordinator.appendCodexEvent(
-                .error("Codex is already running. Stop the current task before starting another one."),
+                .error("Codex is already running in this conversation. Stop the current task before starting another one."),
                 to: sessionID
             )
             refreshSidePanelContent()
@@ -166,11 +182,12 @@ final class WindowCoordinator: NSObject, NSWindowDelegate {
         conversationCoordinator.markRunning(sessionID)
         refreshSidePanelContent()
 
-        let permissionMode = conversationCoordinator.activeConversation?.permissionMode ?? .semiAutomatic
+        let permissionMode = conversationCoordinator.conversation(with: sessionID)?.permissionMode ?? .semiAutomatic
         runController.start(
             prompt: prompt,
             permissionMode: permissionMode,
             sessionID: sessionID,
+            workingDirectoryURL: URL(fileURLWithPath: workspacePath, isDirectory: true),
             onEvent: { [weak self] event, eventSessionID in
                 self?.handleCodexEvent(event, sessionID: eventSessionID)
             },
@@ -209,6 +226,57 @@ final class WindowCoordinator: NSObject, NSWindowDelegate {
         if refreshesView {
             refreshSidePanelContent()
         }
+    }
+
+    private func createDefaultWorkspaceDirectory() throws -> String {
+        let homePath = FileManager.default.homeDirectoryForCurrentUser.path
+
+        for _ in 0..<20 {
+            let suffix = Int.random(in: 1000...9999)
+            let path = ConversationWorkspacePolicy.defaultWorkspacePath(
+                homeDirectoryPath: homePath,
+                date: Date(),
+                randomSuffix: suffix
+            )
+            let url = URL(fileURLWithPath: path, isDirectory: true)
+
+            if !FileManager.default.fileExists(atPath: url.path) {
+                try FileManager.default.createDirectory(at: url, withIntermediateDirectories: true)
+                return url.path
+            }
+        }
+
+        throw CocoaError(.fileWriteFileExists)
+    }
+
+    private func resolveDraftWorkspacePath() throws -> String {
+        if let selectedPath = conversationCoordinator.snapshot.draft?.selectedWorkspacePath {
+            var isDirectory: ObjCBool = false
+            guard FileManager.default.fileExists(atPath: selectedPath, isDirectory: &isDirectory),
+                  isDirectory.boolValue
+            else {
+                throw CocoaError(.fileNoSuchFile)
+            }
+
+            return selectedPath
+        }
+
+        return try createDefaultWorkspaceDirectory()
+    }
+
+    private func pickDraftWorkspace() {
+        let panel = NSOpenPanel()
+        panel.canChooseDirectories = true
+        panel.canChooseFiles = false
+        panel.allowsMultipleSelection = false
+        panel.canCreateDirectories = true
+
+        guard panel.runModal() == .OK, let url = panel.url else {
+            return
+        }
+
+        conversationCoordinator.setDraftWorkspacePath(url.path)
+        refreshSidePanelContent()
     }
 
     private func closeSidePanel() {
@@ -275,18 +343,15 @@ final class WindowCoordinator: NSObject, NSWindowDelegate {
     }
 
     private func refreshSidePanelContent(on panel: GlassPanel? = nil) {
-        guard let session = conversationCoordinator.activeConversation else {
-            return
-        }
-
+        let snapshot = conversationCoordinator.snapshot
         let targetPanel = panel ?? sidePanel
         let model: ConversationPanelModel
 
         if let sidePanelModel {
-            sidePanelModel.session = session
+            sidePanelModel.snapshot = snapshot
             model = sidePanelModel
         } else {
-            model = ConversationPanelModel(session: session)
+            model = ConversationPanelModel(snapshot: snapshot)
             sidePanelModel = model
         }
 
@@ -299,6 +364,11 @@ final class WindowCoordinator: NSObject, NSWindowDelegate {
         panel.contentView = DraggableHostingView(
             rootView: ConversationPanelHostView(
                 model: model,
+                onSubmitDraft: { [weak self] prompt in
+                    Task { @MainActor in
+                        self?.startConversation(prompt: prompt)
+                    }
+                },
                 onFollowUp: { [weak self] prompt in
                     Task { @MainActor in
                         self?.handleFollowUp(prompt)
@@ -307,11 +377,6 @@ final class WindowCoordinator: NSObject, NSWindowDelegate {
                 onStop: { [weak self] in
                     Task { @MainActor in
                         self?.stopActiveRun()
-                    }
-                },
-                onClose: { [weak self] in
-                    Task { @MainActor in
-                        self?.closeSidePanel()
                     }
                 },
                 onTogglePin: { [weak self] in
@@ -328,10 +393,106 @@ final class WindowCoordinator: NSObject, NSWindowDelegate {
                     Task { @MainActor in
                         self?.toggleFullAccess()
                     }
+                },
+                onSelectWorkspace: { [weak self] id in
+                    Task { @MainActor in
+                        self?.conversationCoordinator.selectWorkspace(id)
+                        self?.refreshSidePanelContent()
+                    }
+                },
+                onSelectConversation: { [weak self] id in
+                    Task { @MainActor in
+                        self?.conversationCoordinator.selectConversation(id)
+                        self?.refreshSidePanelContent()
+                    }
+                },
+                onNewDraft: { [weak self] in
+                    Task { @MainActor in
+                        self?.conversationCoordinator.beginDraft()
+                        self?.refreshSidePanelContent()
+                    }
+                },
+                onArchiveConversation: { [weak self] id in
+                    Task { @MainActor in
+                        self?.archiveConversation(id)
+                    }
+                },
+                onPickWorkspace: { [weak self] in
+                    Task { @MainActor in
+                        self?.pickDraftWorkspace()
+                    }
+                },
+                onReorderWorkspace: { [weak self] id, index in
+                    Task { @MainActor in
+                        self?.conversationCoordinator.reorderWorkspace(id, to: index)
+                        self?.refreshSidePanelContent()
+                    }
+                },
+                onReorderConversation: { [weak self] id, index in
+                    Task { @MainActor in
+                        self?.conversationCoordinator.reorderConversation(id, to: index)
+                        self?.refreshSidePanelContent()
+                    }
                 }
             )
         )
         isSidePanelContentInstalled = true
+    }
+
+    private func archiveConversation(_ id: UUID) {
+        guard let session = conversationCoordinator.conversation(with: id) else {
+            return
+        }
+
+        if runController.isRunning(sessionID: id) {
+            guard permissionPrompter.confirmStopRunningTaskOnArchive() else {
+                return
+            }
+
+            _ = runController.stop(sessionID: id)
+            if session.state == .running {
+                conversationCoordinator.markStopped(id)
+            }
+        }
+
+        _ = conversationCoordinator.archiveConversation(id)
+
+        if conversationCoordinator.activeConversation == nil {
+            returnToCompactEntry()
+        } else {
+            refreshSidePanelContent()
+        }
+    }
+
+    private func returnToCompactEntry() {
+        guard let screen = activeScreen() else {
+            showCompactPanel()
+            return
+        }
+
+        let targetFrame = defaultCompactPanelFrame(on: screen)
+
+        if let sidePanel, sidePanel.isVisible {
+            NSAnimationContext.runAnimationGroup { context in
+                context.duration = 0.18
+                context.timingFunction = CAMediaTimingFunction(name: .easeInEaseOut)
+                sidePanel.animator().setFrame(targetFrame, display: true)
+            } completionHandler: { [weak self] in
+                Task { @MainActor in
+                    self?.sidePanel?.orderOut(nil)
+                    self?.sidePanelModel = nil
+                    self?.isSidePanelContentInstalled = false
+                    self?.hasMouseEnteredSidePanel = false
+                    self?.showCompactPanel()
+                }
+            }
+            return
+        }
+
+        sidePanelModel = nil
+        isSidePanelContentInstalled = false
+        hasMouseEnteredSidePanel = false
+        showCompactPanel()
     }
 
     private func defaultCompactPanelFrame(on screen: NSScreen) -> NSRect {

@@ -32,4 +32,14 @@ struct PermissionPrompter {
         alert.addButton(withTitle: "Cancel")
         return alert.runModal() == .alertFirstButtonReturn
     }
+
+    func confirmStopRunningTaskOnArchive() -> Bool {
+        let alert = NSAlert()
+        alert.alertStyle = .warning
+        alert.messageText = "Archive running conversation?"
+        alert.informativeText = "Archiving this conversation will stop its running Codex task."
+        alert.addButton(withTitle: "Stop and Archive")
+        alert.addButton(withTitle: "Cancel")
+        return alert.runModal() == .alertFirstButtonReturn
+    }
 }
