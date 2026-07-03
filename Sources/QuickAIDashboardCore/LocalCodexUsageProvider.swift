@@ -4,19 +4,16 @@ public protocol CodexUsageProviding: Sendable {
     func currentStatus() -> CodexUsageStatus
 }
 
-public struct LocalCodexUsageProvider: CodexUsageProviding, @unchecked Sendable {
+public struct LocalCodexUsageProvider: CodexUsageProviding {
     private let sessionDirectories: [URL]
     private let archiveDirectories: [URL]
-    private let fileManager: FileManager
 
     public init(
         sessionDirectories: [URL] = [FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent(".codex/sessions")],
-        archiveDirectories: [URL] = [FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent(".codex/archived_sessions")],
-        fileManager: FileManager = .default
+        archiveDirectories: [URL] = [FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent(".codex/archived_sessions")]
     ) {
         self.sessionDirectories = sessionDirectories
         self.archiveDirectories = archiveDirectories
-        self.fileManager = fileManager
     }
 
     public func currentStatus() -> CodexUsageStatus {
@@ -38,6 +35,7 @@ public struct LocalCodexUsageProvider: CodexUsageProviding, @unchecked Sendable 
 
     private func candidateFiles() -> [URL] {
         let directories = sessionDirectories + archiveDirectories
+        let fileManager = FileManager.default
         var files: [(url: URL, modifiedAt: Date)] = []
 
         for directory in directories {
@@ -114,7 +112,7 @@ public struct LocalCodexUsageProvider: CodexUsageProviding, @unchecked Sendable 
             return nil
         }
 
-        let timestamp = (object["timestamp"] as? String).flatMap { ISO8601DateFormatter().date(from: $0) }
+        let timestamp = Self.timestamp(from: object["timestamp"] as? String)
         let fiveHourPercent = Self.percent(from: rateLimits["primary"], expectedWindowMinutes: 300)
         let weeklyPercent = Self.percent(from: rateLimits["secondary"], expectedWindowMinutes: 10_080)
 
@@ -145,5 +143,20 @@ public struct LocalCodexUsageProvider: CodexUsageProviding, @unchecked Sendable 
         }
 
         return nil
+    }
+
+    private static func timestamp(from value: String?) -> Date? {
+        guard let value else {
+            return nil
+        }
+
+        let wholeSecondFormatter = ISO8601DateFormatter()
+        if let date = wholeSecondFormatter.date(from: value) {
+            return date
+        }
+
+        let fractionalSecondFormatter = ISO8601DateFormatter()
+        fractionalSecondFormatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        return fractionalSecondFormatter.date(from: value)
     }
 }

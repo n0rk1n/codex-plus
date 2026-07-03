@@ -809,6 +809,81 @@ expect(
     "codex usage provider considers all files when choosing newest event timestamp"
 )
 
+let fractionalUsageDirectory = makeTemporaryDirectory(named: "codex-usage-fractional")
+defer {
+    try? FileManager.default.removeItem(at: fractionalUsageDirectory)
+}
+writeText(
+    """
+    {"timestamp":"2026-07-03T02:00:00Z","type":"event_msg","payload":{"type":"token_count","rate_limits":{"primary":{"used_percent":40,"window_minutes":300},"secondary":{"used_percent":50,"window_minutes":10080}}}}
+    """,
+    to: fractionalUsageDirectory.appendingPathComponent("whole-seconds.jsonl")
+)
+writeText(
+    """
+    {"timestamp":"2026-07-03T02:00:00.123Z","type":"event_msg","payload":{"type":"token_count","rate_limits":{"primary":{"used_percent":74,"window_minutes":300},"secondary":{"used_percent":84,"window_minutes":10080}}}}
+    """,
+    to: fractionalUsageDirectory.appendingPathComponent("fractional-seconds.jsonl")
+)
+let fractionalUsageProvider = LocalCodexUsageProvider(
+    sessionDirectories: [fractionalUsageDirectory],
+    archiveDirectories: []
+)
+let fractionalUsageStatus = fractionalUsageProvider.currentStatus()
+let fractionalTimestampFormatter = ISO8601DateFormatter()
+fractionalTimestampFormatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+expect(
+    fractionalUsageStatus.fiveHourPercent == 74,
+    "codex usage provider lets fractional-second timestamp win"
+)
+expect(
+    fractionalUsageStatus.observedAt == fractionalTimestampFormatter.date(from: "2026-07-03T02:00:00.123Z"),
+    "codex usage provider parses fractional-second timestamp"
+)
+
+let doublePercentUsageDirectory = makeTemporaryDirectory(named: "codex-usage-double-percent")
+defer {
+    try? FileManager.default.removeItem(at: doublePercentUsageDirectory)
+}
+writeText(
+    """
+    {"timestamp":"2026-07-03T05:00:00Z","type":"event_msg","payload":{"type":"token_count","rate_limits":{"primary":{"used_percent":42.6,"window_minutes":300},"secondary":{"used_percent":12.2,"window_minutes":10080}}}}
+    """,
+    to: doublePercentUsageDirectory.appendingPathComponent("double-percent.jsonl")
+)
+let doublePercentUsageProvider = LocalCodexUsageProvider(
+    sessionDirectories: [doublePercentUsageDirectory],
+    archiveDirectories: []
+)
+let doublePercentUsageStatus = doublePercentUsageProvider.currentStatus()
+expect(doublePercentUsageStatus.fiveHourPercent == 43, "codex usage provider rounds double five-hour percent")
+expect(doublePercentUsageStatus.weeklyPercent == 12, "codex usage provider rounds double weekly percent")
+
+let jsonlOnlyUsageDirectory = makeTemporaryDirectory(named: "codex-usage-jsonl-only")
+defer {
+    try? FileManager.default.removeItem(at: jsonlOnlyUsageDirectory)
+}
+writeText(
+    """
+    {"timestamp":"2026-07-03T06:00:00Z","type":"event_msg","payload":{"type":"token_count","rate_limits":{"primary":{"used_percent":99,"window_minutes":300},"secondary":{"used_percent":99,"window_minutes":10080}}}}
+    """,
+    to: jsonlOnlyUsageDirectory.appendingPathComponent("tempting.txt")
+)
+writeText(
+    """
+    {"timestamp":"2026-07-03T05:00:00Z","type":"event_msg","payload":{"type":"token_count","rate_limits":{"primary":{"used_percent":33,"window_minutes":300},"secondary":{"used_percent":44,"window_minutes":10080}}}}
+    """,
+    to: jsonlOnlyUsageDirectory.appendingPathComponent("actual.jsonl")
+)
+let jsonlOnlyUsageProvider = LocalCodexUsageProvider(
+    sessionDirectories: [jsonlOnlyUsageDirectory],
+    archiveDirectories: []
+)
+expect(
+    jsonlOnlyUsageProvider.currentStatus().fiveHourPercent == 33,
+    "codex usage provider ignores non-jsonl files"
+)
+
 let emptyUsageDirectory = makeTemporaryDirectory(named: "codex-usage-empty")
 defer {
     try? FileManager.default.removeItem(at: emptyUsageDirectory)
