@@ -1,4 +1,5 @@
 import Foundation
+import CoreGraphics
 import CodexPlusCore
 
 var failures: [String] = []
@@ -994,10 +995,10 @@ expect(
     "dashboard tile hit testing follows reversed visual order"
 )
 
-let compactEntryBounds = ScreenRect(x: 0, y: 0, width: 420, height: 210)
+let compactEntryBounds = CGRect(x: 0, y: 0, width: 420, height: 210)
 expect(
     !CompactDashboardTileDragPolicy.shouldMoveWindowFromMouseDown(
-        at: ScreenPoint(x: 110, y: 64),
+        at: CGPoint(x: 110, y: 64),
         panelBounds: compactEntryBounds,
         verticalOrigin: .top
     ),
@@ -1005,7 +1006,7 @@ expect(
 )
 expect(
     !CompactDashboardTileDragPolicy.shouldMoveWindowFromMouseDown(
-        at: ScreenPoint(x: 290, y: 64),
+        at: CGPoint(x: 290, y: 64),
         panelBounds: compactEntryBounds,
         verticalOrigin: .top
     ),
@@ -1013,7 +1014,7 @@ expect(
 )
 expect(
     !CompactDashboardTileDragPolicy.shouldMoveWindowFromMouseDown(
-        at: ScreenPoint(x: 50, y: 64),
+        at: CGPoint(x: 50, y: 64),
         panelBounds: compactEntryBounds,
         verticalOrigin: .top
     ),
@@ -1021,7 +1022,7 @@ expect(
 )
 expect(
     CompactDashboardTileDragPolicy.shouldMoveWindowFromMouseDown(
-        at: ScreenPoint(x: 210, y: 152),
+        at: CGPoint(x: 210, y: 152),
         panelBounds: compactEntryBounds,
         verticalOrigin: .top
     ),
@@ -1029,7 +1030,7 @@ expect(
 )
 expect(
     !CompactDashboardTileDragPolicy.shouldMoveWindowFromMouseDown(
-        at: ScreenPoint(x: 110, y: 146),
+        at: CGPoint(x: 110, y: 146),
         panelBounds: compactEntryBounds,
         verticalOrigin: .bottom
     ),
@@ -1037,24 +1038,24 @@ expect(
 )
 expect(
     CompactDashboardTileDragPolicy.shouldMoveWindowFromMouseDown(
-        at: ScreenPoint(x: 210, y: 50),
+        at: CGPoint(x: 210, y: 50),
         panelBounds: compactEntryBounds,
         verticalOrigin: .bottom
     ),
     "compact prompt drag policy supports bottom-left AppKit coordinates"
 )
 
-let compactSnapScreen = ScreenRect(x: 0, y: 0, width: 1440, height: 900)
-let compactNearMidlineFrame = ScreenRect(x: 520, y: 300, width: 420, height: 210)
+let compactSnapScreen = CGRect(x: 0, y: 0, width: 1440, height: 900)
+let compactNearMidlineFrame = CGRect(x: 520, y: 300, width: 420, height: 210)
 expect(
     CompactPanelSnapPolicy.snappedFrame(
         for: compactNearMidlineFrame,
         in: compactSnapScreen
-    ) == ScreenRect(x: 510, y: 300, width: 420, height: 210),
+    ) == CGRect(x: 510, y: 300, width: 420, height: 210),
     "compact panel snaps its center to the screen midline when near it"
 )
 
-let compactFarFromMidlineFrame = ScreenRect(x: 560, y: 300, width: 420, height: 210)
+let compactFarFromMidlineFrame = CGRect(x: 560, y: 300, width: 420, height: 210)
 expect(
     CompactPanelSnapPolicy.snappedFrame(
         for: compactFarFromMidlineFrame,
@@ -1063,13 +1064,13 @@ expect(
     "compact panel moves freely after leaving the midline snap distance"
 )
 
-let offsetSnapScreen = ScreenRect(x: 100, y: 0, width: 1000, height: 800)
-let offsetNearMidlineFrame = ScreenRect(x: 380, y: 260, width: 420, height: 210)
+let offsetSnapScreen = CGRect(x: 100, y: 0, width: 1000, height: 800)
+let offsetNearMidlineFrame = CGRect(x: 380, y: 260, width: 420, height: 210)
 expect(
     CompactPanelSnapPolicy.snappedFrame(
         for: offsetNearMidlineFrame,
         in: offsetSnapScreen
-    ) == ScreenRect(x: 390, y: 260, width: 420, height: 210),
+    ) == CGRect(x: 390, y: 260, width: 420, height: 210),
     "compact panel snap uses the active screen midline"
 )
 
@@ -1430,7 +1431,7 @@ expect(
     "codex usage monitor stop prevents in-flight refresh from updating status"
 )
 
-let compactPanelFrame = ScreenRect(x: 100, y: 100, width: 420, height: 210)
+let compactPanelFrame = CGRect(x: 100, y: 100, width: 420, height: 210)
 expect(
     CompactEntryDismissPolicy.shouldDismissForKeyDown(keyCode: CompactEntryDismissPolicy.escapeKeyCode),
     "compact dismiss policy dismisses on escape"
@@ -1441,37 +1442,37 @@ expect(
 )
 expect(
     !CompactEntryDismissPolicy.shouldDismissForMouseDown(
-        at: ScreenPoint(x: 200, y: 150),
+        at: CGPoint(x: 200, y: 150),
         panelFrame: compactPanelFrame
     ),
     "compact dismiss policy keeps visible for inside clicks"
 )
 expect(
     CompactEntryDismissPolicy.shouldDismissForMouseDown(
-        at: ScreenPoint(x: 20, y: 150),
+        at: CGPoint(x: 20, y: 150),
         panelFrame: compactPanelFrame
     ),
     "compact dismiss policy dismisses for outside clicks"
 )
 
-let placementScreen = ScreenRect(x: 0, y: 0, width: 1440, height: 900)
+let placementScreen = CGRect(x: 0, y: 0, width: 1440, height: 900)
 expect(
     PanelPlacementPolicy.placement(
-        for: ScreenRect(x: 10, y: 0, width: 460, height: 900),
+        for: CGRect(x: 10, y: 0, width: 460, height: 900),
         in: placementScreen
     ) == .attached(.left),
     "panel placement attaches near left edge"
 )
 expect(
     PanelPlacementPolicy.placement(
-        for: ScreenRect(x: 970, y: 0, width: 460, height: 900),
+        for: CGRect(x: 970, y: 0, width: 460, height: 900),
         in: placementScreen
     ) == .attached(.right),
     "panel placement attaches near right edge"
 )
 expect(
     PanelPlacementPolicy.placement(
-        for: ScreenRect(x: 420, y: 120, width: 460, height: 600),
+        for: CGRect(x: 420, y: 120, width: 460, height: 600),
         in: placementScreen
     ) == .free,
     "panel placement stays free away from edges"
@@ -1479,20 +1480,20 @@ expect(
 
 expect(
     ConversationPanelLayoutPolicy.initialCenteredFrame(
-        in: ScreenRect(x: 0, y: 0, width: 1500, height: 1000)
-    ) == ScreenRect(x: 330, y: 90, width: 840, height: 820),
+        in: CGRect(x: 0, y: 0, width: 1500, height: 1000)
+    ) == CGRect(x: 330, y: 90, width: 840, height: 820),
     "conversation panel initial frame is centered and sized for the main reading area"
 )
 expect(
     ConversationPanelLayoutPolicy.initialCenteredFrame(
-        in: ScreenRect(x: 0, y: 0, width: 3000, height: 2000)
-    ) == ScreenRect(x: 1070, y: 540, width: 860, height: 920),
+        in: CGRect(x: 0, y: 0, width: 3000, height: 2000)
+    ) == CGRect(x: 1070, y: 540, width: 860, height: 920),
     "conversation panel initial frame caps large desktop sizes"
 )
 expect(
     ConversationPanelLayoutPolicy.initialCenteredFrame(
-        in: ScreenRect(x: 0, y: 0, width: 700, height: 600)
-    ) == ScreenRect(x: 90, y: 24, width: 520, height: 552),
+        in: CGRect(x: 0, y: 0, width: 700, height: 600)
+    ) == CGRect(x: 90, y: 24, width: 520, height: 552),
     "conversation panel initial frame keeps margins on compact screens"
 )
 

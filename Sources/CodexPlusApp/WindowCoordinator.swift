@@ -127,10 +127,8 @@ final class WindowCoordinator: NSObject, NSWindowDelegate {
             return
         }
 
-        sidePanelCustomFrame = nsRect(
-            from: ConversationPanelLayoutPolicy.initialCenteredFrame(
-                in: screenRect(from: screen.visibleFrame)
-            )
+        sidePanelCustomFrame = ConversationPanelLayoutPolicy.initialCenteredFrame(
+            in: screen.visibleFrame
         )
     }
 
@@ -519,13 +517,8 @@ final class WindowCoordinator: NSObject, NSWindowDelegate {
         }
 
         let shouldDismiss = CompactEntryDismissPolicy.shouldDismissForMouseDown(
-            at: ScreenPoint(x: Double(point.x), y: Double(point.y)),
-            panelFrame: ScreenRect(
-                x: Double(compactPanel.frame.minX),
-                y: Double(compactPanel.frame.minY),
-                width: Double(compactPanel.frame.width),
-                height: Double(compactPanel.frame.height)
-            )
+            at: point,
+            panelFrame: compactPanel.frame
         )
 
         if shouldDismiss {
@@ -555,8 +548,8 @@ final class WindowCoordinator: NSObject, NSWindowDelegate {
         }
 
         switch PanelPlacementPolicy.placement(
-            for: screenRect(from: panel.frame),
-            in: screenRect(from: screen.visibleFrame)
+            for: panel.frame,
+            in: screen.visibleFrame
         ) {
         case let .attached(side):
             sidePanelCustomFrame = nil
@@ -572,24 +565,6 @@ final class WindowCoordinator: NSObject, NSWindowDelegate {
         }
 
         conversationCoordinator.togglePreferredSide()
-    }
-
-    private func screenRect(from rect: NSRect) -> ScreenRect {
-        ScreenRect(
-            x: Double(rect.minX),
-            y: Double(rect.minY),
-            width: Double(rect.width),
-            height: Double(rect.height)
-        )
-    }
-
-    private func nsRect(from rect: ScreenRect) -> NSRect {
-        NSRect(
-            x: rect.x,
-            y: rect.y,
-            width: rect.width,
-            height: rect.height
-        )
     }
 
     private func failureMessage(from result: CodexRunResult) -> String {

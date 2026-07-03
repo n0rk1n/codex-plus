@@ -34,26 +34,11 @@ final class DraggableHostingView<Content: View>: NSHostingView<Content> {
             return false
         case .compactPrompt:
             return CompactDashboardTileDragPolicy.shouldMoveWindowFromMouseDown(
-                at: localPoint(from: event),
-                panelBounds: currentLocalBounds(),
+                at: convert(event.locationInWindow, from: nil),
+                panelBounds: bounds,
                 verticalOrigin: isFlipped ? .top : .bottom
             )
         }
-    }
-
-    private func localPoint(from event: NSEvent) -> ScreenPoint {
-        let localPoint = convert(event.locationInWindow, from: nil)
-
-        return ScreenPoint(x: Double(localPoint.x), y: Double(localPoint.y))
-    }
-
-    private func currentLocalBounds() -> ScreenRect {
-        ScreenRect(
-            x: 0,
-            y: 0,
-            width: Double(bounds.width),
-            height: Double(bounds.height)
-        )
     }
 
     private func performCompactPromptDrag(from initialEvent: NSEvent) {
@@ -103,10 +88,10 @@ final class DraggableHostingView<Content: View>: NSHostingView<Content> {
         }
 
         let snappedFrame = CompactPanelSnapPolicy.snappedFrame(
-            for: ScreenRect(proposedFrame),
-            in: ScreenRect(screenFrame)
+            for: proposedFrame,
+            in: screenFrame
         )
-        let frame = NSRect(snappedFrame)
+        let frame = snappedFrame
         return (frame, abs(frame.midX - screenFrame.midX) < 0.5)
     }
 
@@ -120,27 +105,5 @@ final class DraggableHostingView<Content: View>: NSHostingView<Content> {
 private extension NSRect {
     var area: CGFloat {
         width * height
-    }
-}
-
-private extension ScreenRect {
-    init(_ rect: NSRect) {
-        self.init(
-            x: Double(rect.origin.x),
-            y: Double(rect.origin.y),
-            width: Double(rect.width),
-            height: Double(rect.height)
-        )
-    }
-}
-
-private extension NSRect {
-    init(_ rect: ScreenRect) {
-        self.init(
-            x: rect.x,
-            y: rect.y,
-            width: rect.width,
-            height: rect.height
-        )
     }
 }
