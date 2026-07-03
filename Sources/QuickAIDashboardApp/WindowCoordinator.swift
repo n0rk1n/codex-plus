@@ -64,7 +64,7 @@ final class WindowCoordinator: NSObject, NSWindowDelegate {
 
         batteryMonitor.start()
         panel.setFrame(frame, display: true)
-        panel.contentView = DraggableHostingView(
+        let contentView = DraggableHostingView(
             rootView: CompactEntryHostView(
                 batteryMonitor: batteryMonitor,
                 codexUsageMonitor: codexUsageMonitor,
@@ -75,6 +75,8 @@ final class WindowCoordinator: NSObject, NSWindowDelegate {
                 }
             )
         )
+        contentView.blocksWindowDragOnCompactDashboardTiles = true
+        panel.contentView = contentView
         panel.makeKeyAndOrderFront(nil)
         compactPanel = panel
         installCompactDismissMonitorsIfNeeded()

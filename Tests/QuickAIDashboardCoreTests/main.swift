@@ -794,6 +794,48 @@ expect(invalidTileOrder.tiles == [.battery, .codexUsage], "dashboard tile order 
 let swappedTileOrder = defaultTileOrder.swapping(.battery, with: .codexUsage)
 expect(swappedTileOrder.tiles == [.codexUsage, .battery], "dashboard tile order swaps dragged and target tiles")
 
+let compactEntryBounds = ScreenRect(x: 0, y: 0, width: 420, height: 210)
+expect(
+    !CompactDashboardTileDragPolicy.shouldMoveWindowFromMouseDown(
+        at: ScreenPoint(x: 110, y: 64),
+        panelBounds: compactEntryBounds,
+        verticalOrigin: .top
+    ),
+    "compact battery tile blocks window dragging"
+)
+expect(
+    !CompactDashboardTileDragPolicy.shouldMoveWindowFromMouseDown(
+        at: ScreenPoint(x: 290, y: 64),
+        panelBounds: compactEntryBounds,
+        verticalOrigin: .top
+    ),
+    "compact codex usage tile blocks window dragging"
+)
+expect(
+    CompactDashboardTileDragPolicy.shouldMoveWindowFromMouseDown(
+        at: ScreenPoint(x: 50, y: 64),
+        panelBounds: compactEntryBounds,
+        verticalOrigin: .top
+    ),
+    "compact tile row outside the dashboard cards still allows window dragging"
+)
+expect(
+    CompactDashboardTileDragPolicy.shouldMoveWindowFromMouseDown(
+        at: ScreenPoint(x: 210, y: 152),
+        panelBounds: compactEntryBounds,
+        verticalOrigin: .top
+    ),
+    "compact prompt area still allows window dragging"
+)
+expect(
+    !CompactDashboardTileDragPolicy.shouldMoveWindowFromMouseDown(
+        at: ScreenPoint(x: 110, y: 146),
+        panelBounds: compactEntryBounds,
+        verticalOrigin: .bottom
+    ),
+    "compact tile drag policy supports bottom-left AppKit coordinates"
+)
+
 let unknownCodexUsage = CodexUsageStatus.unknown
 expect(unknownCodexUsage.fiveHourPercent == nil, "unknown codex usage has no five-hour percent")
 expect(unknownCodexUsage.weeklyPercent == nil, "unknown codex usage has no weekly percent")
