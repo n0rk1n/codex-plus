@@ -24,7 +24,10 @@ public struct CodexUsageRingColor: Equatable, Sendable {
     public static let inactive = CodexUsageRingColor(red: 0.55, green: 0.55, blue: 0.58, opacity: 0.38)
 }
 
-public struct CodexUsageStatus: Equatable, Sendable {
+public struct CodexUsageStatus: Codable, Equatable, Sendable {
+    private static let greenToYellowStartPercent = 70
+    private static let yellowPercent = 80
+
     public let fiveHourPercent: Int?
     public let weeklyPercent: Int?
     public let observedAt: Date?
@@ -63,19 +66,20 @@ public struct CodexUsageStatus: Equatable, Sendable {
             return .inactive
         }
 
-        if percent <= 60 {
+        if percent <= Self.greenToYellowStartPercent {
             return .lowUsageGreen
         }
 
-        if percent == 80 {
+        if percent == Self.yellowPercent {
             return .midUsageYellow
         }
 
-        if percent < 80 {
+        if percent < Self.yellowPercent {
             return Self.interpolate(
                 from: .lowUsageGreen,
                 to: .midUsageYellow,
-                progress: Double(percent - 60) / 20.0
+                progress: Double(percent - Self.greenToYellowStartPercent) /
+                    Double(Self.yellowPercent - Self.greenToYellowStartPercent)
             )
         }
 

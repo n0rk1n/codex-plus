@@ -8,18 +8,22 @@ public final class DailyTokenUsageMonitor: ObservableObject {
     public static let highVolumeTokenThreshold = 1_000_000
 
     @Published public private(set) var status: DailyTokenStatus
+    @Published public private(set) var isRefreshing = false
 
     private let provider: any DailyTokenUsageProviding
+    private let statusCache: (any DailyTokenStatusCaching)?
     private let refreshQueue = DispatchQueue(label: "CodexPlusCore.DailyTokenUsageMonitor.refresh", qos: .utility)
     private var timer: Timer?
     private var refreshID = UUID()
 
     public init(
         provider: any DailyTokenUsageProviding,
-        initialStatus: DailyTokenStatus = .unknown
+        initialStatus: DailyTokenStatus = .unknown,
+        statusCache: (any DailyTokenStatusCaching)? = UserDefaultsDailyTokenStatusCache()
     ) {
         self.provider = provider
-        self.status = initialStatus
+        self.statusCache = statusCache
+        self.status = initialStatus == .unknown ? statusCache?.loadStatus() ?? initialStatus : initialStatus
     }
 
     deinit {
@@ -41,6 +45,7 @@ public final class DailyTokenUsageMonitor: ObservableObject {
         timer?.invalidate()
         timer = nil
         refreshID = UUID()
+        isRefreshing = false
     }
 
     public func refresh() {
@@ -49,6 +54,7 @@ public final class DailyTokenUsageMonitor: ObservableObject {
 
         let requestedRefreshID = UUID()
         refreshID = requestedRefreshID
+        isRefreshing = true
         let provider = provider
 
         refreshQueue.async { [provider, requestedRefreshID, weak self] in
@@ -60,6 +66,10 @@ public final class DailyTokenUsageMonitor: ObservableObject {
                 }
 
                 self.status = nextStatus
+                if nextStatus != .unknown {
+                    self.statusCache?.saveStatus(nextStatus)
+                }
+                self.isRefreshing = false
                 self.scheduleNextRefresh(for: nextStatus)
             }
         }

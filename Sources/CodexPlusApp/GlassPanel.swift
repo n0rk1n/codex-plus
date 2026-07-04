@@ -22,7 +22,7 @@ final class GlassPanel: NSPanel {
         collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
         backgroundColor = .clear
         isOpaque = false
-        hasShadow = true
+        hasShadow = false
         isMovableByWindowBackground = true
     }
 }

@@ -74,8 +74,8 @@ public final class ConversationCoordinator: ObservableObject {
             return .recallConversation(activeConversation.id)
         }
 
-        if draft != nil {
-            return .recallDraft
+        if let visibleConversation = conversations.first(where: { !$0.isArchived }) {
+            return .recallConversation(visibleConversation.id)
         }
 
         return .openFreshEntry

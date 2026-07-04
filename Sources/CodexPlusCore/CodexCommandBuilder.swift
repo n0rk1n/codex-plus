@@ -5,6 +5,7 @@ public enum CodexCommandBuilder {
         [
             "exec",
             "--json",
+            "--skip-git-repo-check",
             "--sandbox",
             sandboxValue(for: permissionMode),
             "--",

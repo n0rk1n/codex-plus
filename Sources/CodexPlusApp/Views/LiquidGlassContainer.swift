@@ -1,5 +1,33 @@
 import SwiftUI
 
+struct LiquidGlassScene<Content: View>: View {
+    let padding: CGFloat
+    let minWidth: CGFloat?
+    let minHeight: CGFloat?
+    private let content: Content
+
+    init(
+        padding: CGFloat,
+        minWidth: CGFloat? = nil,
+        minHeight: CGFloat? = nil,
+        @ViewBuilder content: () -> Content
+    ) {
+        self.padding = padding
+        self.minWidth = minWidth
+        self.minHeight = minHeight
+        self.content = content()
+    }
+
+    var body: some View {
+        GlassEffectContainer {
+            content
+                .padding(padding)
+                .frame(minWidth: minWidth, minHeight: minHeight)
+        }
+        .environment(\.colorScheme, .dark)
+    }
+}
+
 struct LiquidGlassContainer<Content: View>: View {
     let cornerRadius: CGFloat
     private let content: Content
@@ -15,8 +43,12 @@ struct LiquidGlassContainer<Content: View>: View {
     var body: some View {
         content
             .glassEffect(
-                .regular.tint(.white.opacity(0.62)),
-                in: RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+                .regular,
+                in: glassShape
             )
+    }
+
+    private var glassShape: RoundedRectangle {
+        RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
     }
 }

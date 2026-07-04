@@ -4,7 +4,9 @@ import SwiftUI
 struct CompactEntryView: View {
     let batteryStatus: BatteryStatus
     let codexUsageStatus: CodexUsageStatus
+    let codexUsageIsRefreshing: Bool
     let dailyTokenStatus: DailyTokenStatus
+    let dailyTokenIsRefreshing: Bool
     let onOpenDraft: (String) -> Void
     let onOpenCodexDesktop: () -> Void
     let onSubmit: (String) -> Void
@@ -18,65 +20,74 @@ struct CompactEntryView: View {
     private let reorderThreshold: CGFloat = 44
     private let tileRowHeight: CGFloat = 92
     private let tileStripWidth = CGFloat(CompactDashboardTileDragPolicy.tileStripWidth)
+    private let promptIconColor = Color.primary.opacity(0.78)
+    private let promptForegroundColor = Color.primary.opacity(0.86)
+    private let promptPlaceholderColor = Color.secondary.opacity(0.88)
 
     var body: some View {
-        VStack(spacing: 14) {
-            ZStack {
-                if let draggedTile {
-                    placeholderView(for: draggedTile)
-                        .position(
-                            x: (tileStripWidth / 2) + placementOffset(
-                                for: draggedTile,
-                                in: previewTileOrder.tiles
-                            ),
-                            y: tileRowHeight / 2
-                        )
-                }
-
-                ForEach(dashboardTileOrder.tiles, id: \.self) { tile in
-                    tileView(for: tile)
-                        .position(
-                            x: (tileStripWidth / 2) + tileOffset(for: tile),
-                            y: tileRowHeight / 2
-                        )
-                        .scaleEffect(draggedTile == tile ? 1.03 : 1)
-                        .opacity(draggedTile == tile ? 0.92 : 1)
-                        .zIndex(draggedTile == tile ? 1 : 0)
-                        .contentShape(Rectangle())
-                }
-            }
-            .frame(width: tileStripWidth, height: tileRowHeight)
-            .frame(maxWidth: .infinity)
-            .contentShape(Rectangle())
-            .highPriorityGesture(rowDragGesture(rowWidth: tileStripWidth))
-            .animation(.snappy(duration: 0.18), value: draggedTile)
-            .animation(.snappy(duration: 0.18), value: previewTileOrder.tiles)
-            .animation(.snappy(duration: 0.18), value: dashboardTileOrderRaw)
-
-            LiquidGlassContainer(cornerRadius: 24) {
-                HStack(alignment: .bottom, spacing: 10) {
-                    Button(action: { onOpenDraft(prompt) }) {
-                        Image(systemName: "folder")
-                            .font(.system(size: 15, weight: .semibold))
-                            .frame(width: 32, height: 32)
+        LiquidGlassScene(padding: 18) {
+            VStack(spacing: 14) {
+                ZStack {
+                    if let draggedTile {
+                        placeholderView(for: draggedTile)
+                            .position(
+                                x: (tileStripWidth / 2) + placementOffset(
+                                    for: draggedTile,
+                                    in: previewTileOrder.tiles
+                                ),
+                                y: tileRowHeight / 2
+                            )
                     }
-                    .buttonStyle(.plain)
-                    .contentShape(Rectangle())
-                    .help("Choose Workspace")
-                    .accessibilityLabel("Choose Workspace")
 
-                    TextField("Ask Codex...", text: $prompt, axis: .vertical)
+                    ForEach(dashboardTileOrder.tiles, id: \.self) { tile in
+                        tileView(for: tile)
+                            .position(
+                                x: (tileStripWidth / 2) + tileOffset(for: tile),
+                                y: tileRowHeight / 2
+                            )
+                            .scaleEffect(draggedTile == tile ? 1.03 : 1)
+                            .opacity(draggedTile == tile ? 0.92 : 1)
+                            .zIndex(draggedTile == tile ? 1 : 0)
+                            .contentShape(Rectangle())
+                    }
+                }
+                .frame(width: tileStripWidth, height: tileRowHeight)
+                .frame(maxWidth: .infinity)
+                .contentShape(Rectangle())
+                .highPriorityGesture(rowDragGesture(rowWidth: tileStripWidth))
+                .animation(.snappy(duration: 0.18), value: draggedTile)
+                .animation(.snappy(duration: 0.18), value: previewTileOrder.tiles)
+                .animation(.snappy(duration: 0.18), value: dashboardTileOrderRaw)
+
+                LiquidGlassContainer(cornerRadius: 24) {
+                    HStack(alignment: .bottom, spacing: 10) {
+                        Button(action: { onOpenDraft(prompt) }) {
+                            Image(systemName: "folder")
+                                .font(.system(size: 15, weight: .semibold))
+                                .foregroundStyle(promptIconColor)
+                                .frame(width: 32, height: 32)
+                        }
+                        .buttonStyle(.plain)
+                        .contentShape(Rectangle())
+                        .help("Choose Workspace")
+                        .accessibilityLabel("Choose Workspace")
+
+                        TextField(text: $prompt, axis: .vertical) {
+                            Text("Ask Codex...")
+                                .foregroundStyle(promptPlaceholderColor)
+                        }
                         .textFieldStyle(.plain)
                         .font(.system(size: 15))
+                        .foregroundStyle(promptForegroundColor)
                         .lineLimit(1...3)
                         .focused($isPromptFocused)
                         .onSubmit(submitPrompt)
+                    }
+                    .padding(.horizontal, 18)
+                    .padding(.vertical, 14)
                 }
-                .padding(.horizontal, 18)
-                .padding(.vertical, 14)
             }
         }
-        .padding(18)
         .onAppear {
             isPromptFocused = true
         }
@@ -122,9 +133,9 @@ struct CompactEntryView: View {
         case .codexDesktop:
             CodexDesktopTileView(onOpen: onOpenCodexDesktop)
         case .codexUsage:
-            CodexUsageRingTileView(status: codexUsageStatus)
+            CodexUsageRingTileView(status: codexUsageStatus, isRefreshing: codexUsageIsRefreshing)
         case .dailyTokens:
-            DailyTokenTileView(status: dailyTokenStatus)
+            DailyTokenTileView(status: dailyTokenStatus, isRefreshing: dailyTokenIsRefreshing)
         }
     }
 

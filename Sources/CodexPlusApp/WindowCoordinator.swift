@@ -63,7 +63,10 @@ final class WindowCoordinator: NSObject, NSWindowDelegate {
         NSApp.activate(ignoringOtherApps: true)
 
         switch conversationCoordinator.shortcutDecision() {
-        case .recallConversation, .recallDraft:
+        case let .recallConversation(conversationID):
+            conversationCoordinator.selectConversation(conversationID)
+            showSidePanel()
+        case .recallDraft:
             showSidePanel()
         case .openFreshEntry:
             showCompactPanel()

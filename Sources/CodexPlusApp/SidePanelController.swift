@@ -35,6 +35,7 @@ final class SidePanelController {
     private var model: ConversationPanelModel?
     private var isContentInstalled = false
     private let mouseExitMonitors = EventMonitorStore()
+    private let dismissMonitors = EventMonitorStore()
     private var hasMouseEnteredPanel = false
 
     var isPanelVisible: Bool {
@@ -61,6 +62,7 @@ final class SidePanelController {
 
     deinit {
         mouseExitMonitors.removeAll()
+        dismissMonitors.removeAll()
     }
 
     func prepareCenteredFrame() {
@@ -88,6 +90,7 @@ final class SidePanelController {
         panel.makeKeyAndOrderFront(nil)
         self.panel = panel
         installMouseExitMonitorIfNeeded()
+        installDismissMonitorsIfNeeded()
     }
 
     func refresh(snapshot: ConversationCoordinatorSnapshot, actions: SidePanelActions) {
@@ -97,6 +100,7 @@ final class SidePanelController {
     func orderOutAll() {
         panel?.orderOut(nil)
         edgeAffordancePanel?.orderOut(nil)
+        dismissMonitors.removeAll()
     }
 
     func closeAndReset() {
@@ -272,6 +276,60 @@ final class SidePanelController {
             }
         }) {
             mouseExitMonitors.append(globalMonitor)
+        }
+    }
+
+    private func installDismissMonitorsIfNeeded() {
+        guard dismissMonitors.isEmpty else {
+            return
+        }
+
+        if let keyMonitor = NSEvent.addLocalMonitorForEvents(matching: [.keyDown], handler: { [weak self] event in
+            guard let self else {
+                return event
+            }
+
+            guard
+                self.panel?.isVisible == true,
+                CompactEntryDismissPolicy.shouldDismissForKeyDown(keyCode: event.keyCode)
+            else {
+                return event
+            }
+
+            self.orderOutAll()
+            return nil
+        }) {
+            dismissMonitors.append(keyMonitor)
+        }
+
+        let mouseDownMask: NSEvent.EventTypeMask = [.leftMouseDown, .rightMouseDown, .otherMouseDown]
+        if let localMouseMonitor = NSEvent.addLocalMonitorForEvents(matching: mouseDownMask, handler: { [weak self] event in
+            self?.dismissIfNeededForMouseDown(at: NSEvent.mouseLocation)
+            return event
+        }) {
+            dismissMonitors.append(localMouseMonitor)
+        }
+
+        if let globalMouseMonitor = NSEvent.addGlobalMonitorForEvents(matching: mouseDownMask, handler: { [weak self] _ in
+            Task { @MainActor in
+                self?.dismissIfNeededForMouseDown(at: NSEvent.mouseLocation)
+            }
+        }) {
+            dismissMonitors.append(globalMouseMonitor)
+        }
+    }
+
+    private func dismissIfNeededForMouseDown(at point: NSPoint) {
+        guard let panel, panel.isVisible else {
+            return
+        }
+
+        guard !isPinned() else {
+            return
+        }
+
+        if CompactEntryDismissPolicy.shouldDismissForMouseDown(at: point, panelFrame: panel.frame) {
+            orderOutAll()
         }
     }
 

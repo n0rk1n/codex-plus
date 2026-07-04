@@ -1,6 +1,6 @@
 import Foundation
 
-public struct DailyTokenStatus: Equatable, Sendable {
+public struct DailyTokenStatus: Codable, Equatable, Sendable {
     public let inputTokens: Int
     public let outputTokens: Int
     public let cachedInputTokens: Int

@@ -122,6 +122,82 @@ final class SequenceDailyTokenProvider: DailyTokenUsageProviding, @unchecked Sen
     }
 }
 
+final class MemoryCodexUsageStatusCache: CodexUsageStatusCaching, @unchecked Sendable {
+    private let lock = NSLock()
+    private var storedStatus: CodexUsageStatus?
+    private var savedStatusValue: CodexUsageStatus?
+
+    init(_ storedStatus: CodexUsageStatus? = nil) {
+        self.storedStatus = storedStatus
+    }
+
+    func loadStatus() -> CodexUsageStatus? {
+        lock.lock()
+        defer {
+            lock.unlock()
+        }
+
+        return storedStatus
+    }
+
+    func saveStatus(_ status: CodexUsageStatus) {
+        lock.lock()
+        defer {
+            lock.unlock()
+        }
+
+        savedStatusValue = status
+        storedStatus = status
+    }
+
+    var savedStatus: CodexUsageStatus? {
+        lock.lock()
+        defer {
+            lock.unlock()
+        }
+
+        return savedStatusValue
+    }
+}
+
+final class MemoryDailyTokenStatusCache: DailyTokenStatusCaching, @unchecked Sendable {
+    private let lock = NSLock()
+    private var storedStatus: DailyTokenStatus?
+    private var savedStatusValue: DailyTokenStatus?
+
+    init(_ storedStatus: DailyTokenStatus? = nil) {
+        self.storedStatus = storedStatus
+    }
+
+    func loadStatus() -> DailyTokenStatus? {
+        lock.lock()
+        defer {
+            lock.unlock()
+        }
+
+        return storedStatus
+    }
+
+    func saveStatus(_ status: DailyTokenStatus) {
+        lock.lock()
+        defer {
+            lock.unlock()
+        }
+
+        savedStatusValue = status
+        storedStatus = status
+    }
+
+    var savedStatus: DailyTokenStatus? {
+        lock.lock()
+        defer {
+            lock.unlock()
+        }
+
+        return savedStatusValue
+    }
+}
+
 final class BlockingCodexUsageProvider: CodexUsageProviding, @unchecked Sendable {
     private let lock = NSLock()
     private let started = DispatchSemaphore(value: 0)
@@ -165,6 +241,37 @@ final class BlockingCodexUsageProvider: CodexUsageProviding, @unchecked Sendable
         }
 
         return callWasOnMainThreadValue
+    }
+}
+
+final class BlockingDailyTokenProvider: DailyTokenUsageProviding, @unchecked Sendable {
+    private let started = DispatchSemaphore(value: 0)
+    private let releaseSemaphore = DispatchSemaphore(value: 0)
+    private let finished = DispatchSemaphore(value: 0)
+    private let status: DailyTokenStatus
+
+    init(status: DailyTokenStatus) {
+        self.status = status
+    }
+
+    func currentStatus() -> DailyTokenStatus {
+        started.signal()
+        _ = releaseSemaphore.wait(timeout: .now() + .seconds(2))
+        finished.signal()
+
+        return status
+    }
+
+    func release() {
+        releaseSemaphore.signal()
+    }
+
+    func waitUntilStarted() -> Bool {
+        started.wait(timeout: .now() + .seconds(2)) == .success
+    }
+
+    func waitUntilFinished() -> Bool {
+        finished.wait(timeout: .now() + .seconds(2)) == .success
     }
 }
 
@@ -397,11 +504,20 @@ func expectCodexDesktopLauncherIntegration() {
     let packageRoot = URL(fileURLWithPath: FileManager.default.currentDirectoryPath, isDirectory: true)
     let launcherPath = "Sources/CodexPlusApp/CodexDesktopLauncher.swift"
     let tilePath = "Sources/CodexPlusApp/Views/CodexDesktopTileView.swift"
+    let batteryTilePath = "Sources/CodexPlusApp/Views/BatteryTileView.swift"
+    let codexUsageTilePath = "Sources/CodexPlusApp/Views/CodexUsageRingTileView.swift"
+    let dailyTokenTilePath = "Sources/CodexPlusApp/Views/DailyTokenTileView.swift"
+    let metricTileLayoutPath = "Sources/CodexPlusApp/Views/CompactDashboardMetricTileLayout.swift"
     let compactEntryPath = "Sources/CodexPlusApp/Views/CompactEntryView.swift"
+    let compactEntryHostPath = "Sources/CodexPlusApp/Views/CompactEntryHostView.swift"
+    let conversationViewPath = "Sources/CodexPlusApp/Views/ConversationView.swift"
     let compactControllerPath = "Sources/CodexPlusApp/CompactPanelController.swift"
+    let sidePanelControllerPath = "Sources/CodexPlusApp/SidePanelController.swift"
+    let windowCoordinatorPath = "Sources/CodexPlusApp/WindowCoordinator.swift"
     let liquidGlassPath = "Sources/CodexPlusApp/Views/LiquidGlassContainer.swift"
+    let glassPanelPath = "Sources/CodexPlusApp/GlassPanel.swift"
 
-    for sourceFile in [launcherPath, tilePath] {
+    for sourceFile in [launcherPath, tilePath, batteryTilePath, codexUsageTilePath, dailyTokenTilePath] {
         let exists = FileManager.default.fileExists(
             atPath: packageRoot.appendingPathComponent(sourceFile).path
         )
@@ -432,6 +548,14 @@ func expectCodexDesktopLauncherIntegration() {
         contentsOf: packageRoot.appendingPathComponent(compactEntryPath),
         encoding: .utf8
     )) ?? ""
+    let compactEntryHostText = (try? String(
+        contentsOf: packageRoot.appendingPathComponent(compactEntryHostPath),
+        encoding: .utf8
+    )) ?? ""
+    let conversationViewText = (try? String(
+        contentsOf: packageRoot.appendingPathComponent(conversationViewPath),
+        encoding: .utf8
+    )) ?? ""
     expect(compactEntryText.contains("CodexDesktopTileView"), "compact entry renders Codex Desktop tile above prompt")
     expect(compactEntryText.contains("case .codexDesktop"), "Codex Desktop tile is part of dashboard tile row")
     expect(
@@ -439,8 +563,121 @@ func expectCodexDesktopLauncherIntegration() {
         "compact entry dashboard row uses the shared full tile strip width"
     )
     expect(
-        !compactEntryText.contains("GlassEffectContainer"),
-        "compact entry dashboard row does not add a merged glass outline behind tiles"
+        compactEntryText.contains("LiquidGlassScene(padding: 18)")
+            && !compactEntryText.contains("GlassEffectContainer"),
+        "compact entry uses the shared liquid glass scene component"
+    )
+    expect(
+        compactEntryText.contains("promptPlaceholderColor")
+            && compactEntryText.contains("TextField(text: $prompt, axis: .vertical)")
+            && compactEntryText.contains(#"Text("Ask Codex...")"#),
+        "compact entry prompt uses an explicit placeholder color so Ask Codex does not drift with the sampled background"
+    )
+    expect(
+        compactEntryText.contains("promptForegroundColor")
+            && compactEntryText.contains("promptIconColor"),
+        "compact entry prompt text and icon use stable foreground colors"
+    )
+    expect(
+        compactEntryHostText.contains("codexUsageIsRefreshing: codexUsageMonitor.isRefreshing")
+            && compactEntryHostText.contains("dailyTokenIsRefreshing: dailyTokenUsageMonitor.isRefreshing"),
+        "compact entry host passes monitor refresh state into the compact entry view"
+    )
+    expect(
+        compactEntryText.contains("let codexUsageIsRefreshing: Bool")
+            && compactEntryText.contains("let dailyTokenIsRefreshing: Bool")
+            && compactEntryText.contains("CodexUsageRingTileView(status: codexUsageStatus, isRefreshing: codexUsageIsRefreshing)")
+            && compactEntryText.contains("DailyTokenTileView(status: dailyTokenStatus, isRefreshing: dailyTokenIsRefreshing)"),
+        "compact entry forwards refresh state to the usage and token tiles"
+    )
+    expect(
+        compactEntryText.contains("LiquidGlassContainer(cornerRadius: 24)")
+            && !compactEntryText.contains("surface: .compactPrompt"),
+        "compact entry prompt uses the plain system glass container"
+    )
+    expect(
+        !compactEntryText.contains(#".environment(\.colorScheme, .dark)"#),
+        "compact entry does not own a page-specific color scheme override"
+    )
+    expect(
+        conversationViewText.contains("LiquidGlassScene(padding: 14, minWidth: 360, minHeight: 420)")
+            && conversationViewText.contains("private var panelContent: some View")
+            && !conversationViewText.contains("GlassEffectContainer")
+            && !conversationViewText.contains("LiquidGlassContainer(cornerRadius: 28)"),
+        "conversation panel uses the same shared liquid glass scene component without drawing a large blurred outer shell"
+    )
+    expect(
+        [tilePath, batteryTilePath, codexUsageTilePath, dailyTokenTilePath].allSatisfy { sourceFile in
+            let text = (try? String(
+                contentsOf: packageRoot.appendingPathComponent(sourceFile),
+                encoding: .utf8
+            )) ?? ""
+
+            return text.contains("LiquidGlassContainer(cornerRadius: 22)")
+                && !text.contains("surface: .compactPrompt")
+        },
+        "compact dashboard tiles use the plain system glass container"
+    )
+    let codexUsageTileText = (try? String(
+        contentsOf: packageRoot.appendingPathComponent(codexUsageTilePath),
+        encoding: .utf8
+    )) ?? ""
+    let dailyTokenTileText = (try? String(
+        contentsOf: packageRoot.appendingPathComponent(dailyTokenTilePath),
+        encoding: .utf8
+    )) ?? ""
+    let metricTileLayoutText = (try? String(
+        contentsOf: packageRoot.appendingPathComponent(metricTileLayoutPath),
+        encoding: .utf8
+    )) ?? ""
+    expect(
+        metricTileLayoutText.contains("metricRowHeight")
+            && metricTileLayoutText.contains("labelRowHeight")
+            && metricTileLayoutText.contains("valueRowHeight")
+            && metricTileLayoutText.contains("footerRowHeight"),
+        "compact dashboard metric tiles define shared row heights"
+    )
+    expect(
+        [codexUsageTileText, dailyTokenTileText].allSatisfy { text in
+            text.contains("CompactDashboardMetricTileLayout.metricRowHeight")
+                && text.contains("CompactDashboardMetricTileLayout.labelRowHeight")
+                && text.contains("CompactDashboardMetricTileLayout.valueRowHeight")
+                && text.contains("CompactDashboardMetricTileLayout.footerRowHeight")
+        },
+        "Codex usage and daily token tiles share fixed label, value, and footer rows"
+    )
+    expect(
+        dailyTokenTileText.contains(".font(.system(size: 11")
+            && dailyTokenTileText.contains(".font(.system(size: 22"),
+        "daily token metrics use the same label and value font sizes as usage metrics"
+    )
+    expect(
+        dailyTokenTileText.contains("Text(label)")
+            && dailyTokenTileText.contains(".font(.system(size: 11, weight: .semibold, design: .rounded))")
+            && dailyTokenTileText.contains(".foregroundStyle(.primary)")
+            && dailyTokenTileText.contains(".frame(height: CompactDashboardMetricTileLayout.labelRowHeight)"),
+        "daily token metric labels use the same primary foreground as usage metric labels"
+    )
+    expect(
+        codexUsageTileText.contains("status.percent(for: window) != nil")
+            && codexUsageTileText.contains("return .secondary"),
+        "Codex usage unknown values use the shared placeholder foreground"
+    )
+    expect(
+        [codexUsageTileText, dailyTokenTileText].allSatisfy { text in
+            text.contains("let isRefreshing: Bool")
+                && text.contains("ProgressView()")
+                && text.contains("if isRefreshing")
+                && text.contains("Spacer()")
+        },
+        "usage and token tiles show a small bottom-right progress spinner while refreshing"
+    )
+    expect(
+        dailyTokenTileText.contains("private var placeholderValueColor: Color")
+            && dailyTokenTileText.contains("status.observedAt == nil ? placeholderValueColor : .primary")
+            && dailyTokenTileText.contains("status.hitRatePercent == nil ? placeholderValueColor : successValueColor")
+            && dailyTokenTileText.contains("CodexUsageRingColor.lowUsageGreen"),
+        "daily token unknown values use the shared placeholder foreground"
     )
 
     let liquidGlassText = (try? String(
@@ -448,8 +685,46 @@ func expectCodexDesktopLauncherIntegration() {
         encoding: .utf8
     )) ?? ""
     expect(
-        liquidGlassText.contains(".regular.tint("),
-        "liquid glass container uses a shared tint so compact surfaces stay visually consistent"
+        liquidGlassText.contains(".glassEffect(")
+            && liquidGlassText.contains(".regular,")
+            && liquidGlassText.contains("in: glassShape"),
+        "liquid glass container uses the system regular glass effect"
+    )
+    expect(
+        liquidGlassText.contains("struct LiquidGlassScene")
+            && liquidGlassText.contains("GlassEffectContainer")
+            && liquidGlassText.contains(#".environment(\.colorScheme, .dark)"#),
+        "shared liquid glass scene owns the system glass grouping and color scheme for both pages"
+    )
+    expect(
+        liquidGlassText.contains("content\n            .glassEffect(")
+            && !liquidGlassText.contains(".background {"),
+        "liquid glass container applies system glass directly to content so foreground stays readable"
+    )
+    expect(
+        !liquidGlassText.contains("LiquidGlassSurface")
+            && !liquidGlassText.contains("surface:")
+            && !liquidGlassText.contains(".regular.tint(")
+            && !liquidGlassText.contains("compactPrompt")
+            && !liquidGlassText.contains("strokeBorder("),
+        "liquid glass container has no custom surface, tint, or stroke"
+    )
+    expect(
+        !liquidGlassText.contains("baseOpacity")
+            && !liquidGlassText.contains("compactPromptFill")
+            && !liquidGlassText.contains("compactPromptTint")
+            && !liquidGlassText.contains("compactPromptStroke"),
+        "liquid glass container does not carry old custom glass tuning"
+    )
+
+    let glassPanelText = (try? String(
+        contentsOf: packageRoot.appendingPathComponent(glassPanelPath),
+        encoding: .utf8
+    )) ?? ""
+    expect(
+        glassPanelText.contains("hasShadow = false")
+            && !glassPanelText.contains("hasShadow = true"),
+        "transparent glass panels disable AppKit system shadow so active windows do not draw a dark outer outline"
     )
 
     let compactControllerText = (try? String(
@@ -459,6 +734,34 @@ func expectCodexDesktopLauncherIntegration() {
     expect(
         compactControllerText.contains("openCodexDesktopAndDismiss"),
         "Codex Desktop tile click dismisses compact panel after opening Codex"
+    )
+
+    let sidePanelControllerText = (try? String(
+        contentsOf: packageRoot.appendingPathComponent(sidePanelControllerPath),
+        encoding: .utf8
+    )) ?? ""
+    expect(
+        sidePanelControllerText.contains("private let dismissMonitors = EventMonitorStore()")
+            && sidePanelControllerText.contains("installDismissMonitorsIfNeeded()")
+            && sidePanelControllerText.contains("CompactEntryDismissPolicy.shouldDismissForKeyDown")
+            && sidePanelControllerText.contains("CompactEntryDismissPolicy.shouldDismissForMouseDown"),
+        "side panel can be dismissed by escape or clicking outside"
+    )
+    expect(
+        sidePanelControllerText.contains("guard !isPinned() else")
+            && sidePanelControllerText.contains("private func dismissIfNeededForMouseDown"),
+        "side panel ignores outside mouse dismiss while pinned"
+    )
+
+    let windowCoordinatorText = (try? String(
+        contentsOf: packageRoot.appendingPathComponent(windowCoordinatorPath),
+        encoding: .utf8
+    )) ?? ""
+    expect(
+        windowCoordinatorText.contains("case let .recallConversation(conversationID):")
+            && windowCoordinatorText.contains("conversationCoordinator.selectConversation(conversationID)")
+            && windowCoordinatorText.contains("case .openFreshEntry:"),
+        "global shortcut selects an existing conversation before opening the side panel"
     )
 }
 
@@ -495,15 +798,15 @@ expect(
     "item.started agent message without text returns raw"
 )
 expect(
-    CodexCommandBuilder.arguments(prompt: "List files", permissionMode: .semiAutomatic) == ["exec", "--json", "--sandbox", "read-only", "--", "List files"],
+    CodexCommandBuilder.arguments(prompt: "List files", permissionMode: .semiAutomatic) == ["exec", "--json", "--skip-git-repo-check", "--sandbox", "read-only", "--", "List files"],
     "semi-automatic command arguments"
 )
 expect(
-    CodexCommandBuilder.arguments(prompt: "List files", permissionMode: .fullAccess) == ["exec", "--json", "--sandbox", "danger-full-access", "--", "List files"],
+    CodexCommandBuilder.arguments(prompt: "List files", permissionMode: .fullAccess) == ["exec", "--json", "--skip-git-repo-check", "--sandbox", "danger-full-access", "--", "List files"],
     "full access command arguments"
 )
 expect(
-    CodexCommandBuilder.arguments(prompt: "--help", permissionMode: .semiAutomatic) == ["exec", "--json", "--sandbox", "read-only", "--", "--help"],
+    CodexCommandBuilder.arguments(prompt: "--help", permissionMode: .semiAutomatic) == ["exec", "--json", "--skip-git-repo-check", "--sandbox", "read-only", "--", "--help"],
     "prompt beginning with dash remains after delimiter"
 )
 expectNoCodexDesktopHandoffIntegration()
@@ -1115,8 +1418,8 @@ expect(emptyConversationCoordinator.snapshot.workspaces.isEmpty, "empty coordina
 let draftShortcutCoordinator = ConversationCoordinator(titleGenerator: ConversationTitleGenerator(randomSuffixes: [1112]))
 draftShortcutCoordinator.beginDraft(selectedWorkspacePath: "/tmp/draft")
 expect(
-    draftShortcutCoordinator.shortcutDecision() == .recallDraft,
-    "shortcut recalls existing draft when draft exists"
+    draftShortcutCoordinator.shortcutDecision() == .openFreshEntry,
+    "shortcut opens compact entry when only a draft exists"
 )
 
 let draftPromptCoordinator = ConversationCoordinator(titleGenerator: ConversationTitleGenerator(randomSuffixes: [1113]))
@@ -1146,8 +1449,8 @@ let archivedDraftShortcutConversation = archivedDraftShortcutCoordinator.startCo
 archivedDraftShortcutCoordinator.archiveConversation(archivedDraftShortcutConversation.id)
 archivedDraftShortcutCoordinator.beginDraft(selectedWorkspacePath: "/tmp/archive-draft-shortcut", prompt: "resume draft prompt")
 expect(
-    archivedDraftShortcutCoordinator.shortcutDecision() == .recallDraft,
-    "shortcut recalls draft when all conversations are archived and a draft exists"
+    archivedDraftShortcutCoordinator.shortcutDecision() == .openFreshEntry,
+    "shortcut opens the compact entry when no visible conversation remains"
 )
 
 let visibleCompletedShortcutCoordinator = ConversationCoordinator(titleGenerator: ConversationTitleGenerator(randomSuffixes: [6201]))
@@ -1156,6 +1459,17 @@ visibleCompletedShortcutCoordinator.markCompleted(visibleCompletedConversation.i
 expect(
     visibleCompletedShortcutCoordinator.shortcutDecision() == .recallConversation(visibleCompletedConversation.id),
     "completed visible conversation recalls workbench while it remains unarchived"
+)
+
+let visibleConversationWithDraftShortcutCoordinator = ConversationCoordinator(titleGenerator: ConversationTitleGenerator(randomSuffixes: [6202, 6203]))
+let visibleConversationWithDraft = visibleConversationWithDraftShortcutCoordinator.startConversation(
+    prompt: "visible",
+    workspacePath: "/tmp/visible-with-draft"
+)
+visibleConversationWithDraftShortcutCoordinator.beginDraft(selectedWorkspacePath: "/tmp/visible-with-draft", prompt: "draft should not win shortcut")
+expect(
+    visibleConversationWithDraftShortcutCoordinator.shortcutDecision() == .recallConversation(visibleConversationWithDraft.id),
+    "shortcut recalls a visible conversation before opening any draft surface"
 )
 
 let workspaceMergeCoordinator = ConversationCoordinator(titleGenerator: ConversationTitleGenerator(randomSuffixes: [1111, 2222]))
@@ -1296,8 +1610,8 @@ expect(
     "draft mode preserves prompt when archiving the last visible conversation"
 )
 expect(
-    draftArchiveLastCoordinator.shortcutDecision() == .recallDraft,
-    "shortcut recalls draft after archiving the last visible conversation from draft mode"
+    draftArchiveLastCoordinator.shortcutDecision() == .openFreshEntry,
+    "shortcut opens compact entry after archiving the last visible conversation from draft mode"
 )
 
 let isolatedEventsCoordinator = ConversationCoordinator(titleGenerator: ConversationTitleGenerator(randomSuffixes: [8001, 8002]))
@@ -1659,11 +1973,21 @@ expect(
     "codex usage display text shows known five-hour percent"
 )
 
+let stableGreenCodexUsage = CodexUsageStatus(fiveHourPercent: 65, weeklyPercent: 70, observedAt: nil)
+expect(
+    stableGreenCodexUsage.ringColor(for: .fiveHour) == .lowUsageGreen,
+    "codex usage at sixty-five percent still uses the shared green"
+)
+expect(
+    stableGreenCodexUsage.ringColor(for: .weekly) == .lowUsageGreen,
+    "codex usage green-to-yellow transition starts from the shared green"
+)
+
 let yellowCodexUsage = CodexUsageStatus(fiveHourPercent: 80, weeklyPercent: 75, observedAt: nil)
 expect(yellowCodexUsage.ringColor(for: .fiveHour) == .midUsageYellow, "codex usage at eighty percent is yellow")
 expect(
     yellowCodexUsage.ringColor(for: .weekly) != .lowUsageGreen,
-    "codex usage between sixty and eighty percent interpolates away from green"
+    "codex usage between seventy and eighty percent interpolates away from green"
 )
 
 let redCodexUsage = CodexUsageStatus(fiveHourPercent: 96, weeklyPercent: 100, observedAt: nil)
@@ -1982,7 +2306,7 @@ expect(
     CodexUsageMonitor.defaultRefreshInterval == 120,
     "codex usage monitor defaults to a two-minute refresh interval"
 )
-let codexUsageMonitor = CodexUsageMonitor(provider: codexUsageMonitorProvider)
+let codexUsageMonitor = CodexUsageMonitor(provider: codexUsageMonitorProvider, statusCache: nil)
 expect(codexUsageMonitor.status == .unknown, "codex usage monitor starts unknown before refresh")
 codexUsageMonitor.refresh()
 let codexUsageMonitorFirstUpdate = waitUntil(timeout: 2) {
@@ -2000,6 +2324,55 @@ expect(
     codexUsageMonitorSecondUpdate,
     "codex usage monitor refresh eventually updates status from provider"
 )
+
+let cachedCodexUsageStatus = CodexUsageStatus(
+    fiveHourPercent: 7,
+    weeklyPercent: 8,
+    observedAt: Date(timeIntervalSince1970: 60)
+)
+let refreshedCodexUsageStatus = CodexUsageStatus(
+    fiveHourPercent: 9,
+    weeklyPercent: 10,
+    observedAt: Date(timeIntervalSince1970: 70)
+)
+let cachedCodexUsageProvider = SequenceCodexUsageProvider([refreshedCodexUsageStatus])
+let codexUsageStatusCache = MemoryCodexUsageStatusCache(cachedCodexUsageStatus)
+let cachedCodexUsageMonitor = CodexUsageMonitor(
+    provider: cachedCodexUsageProvider,
+    statusCache: codexUsageStatusCache
+)
+expect(
+    cachedCodexUsageMonitor.status == cachedCodexUsageStatus,
+    "codex usage monitor loads cached status before the first provider refresh"
+)
+cachedCodexUsageMonitor.refresh()
+let cachedCodexUsageMonitorUpdated = waitUntil(timeout: 2) {
+    cachedCodexUsageMonitor.status == refreshedCodexUsageStatus
+}
+expect(
+    cachedCodexUsageMonitorUpdated,
+    "codex usage monitor replaces cached status after provider refresh"
+)
+expect(
+    codexUsageStatusCache.savedStatus == refreshedCodexUsageStatus,
+    "codex usage monitor saves refreshed status to local cache"
+)
+
+let codexUsageCacheSuiteName = "CodexPlusCoreTests.codexUsage.\(UUID().uuidString)"
+if let codexUsageDefaults = UserDefaults(suiteName: codexUsageCacheSuiteName) {
+    defer {
+        codexUsageDefaults.removePersistentDomain(forName: codexUsageCacheSuiteName)
+    }
+
+    let persistedCodexUsageCache = UserDefaultsCodexUsageStatusCache(defaults: codexUsageDefaults)
+    persistedCodexUsageCache.saveStatus(refreshedCodexUsageStatus)
+    expect(
+        UserDefaultsCodexUsageStatusCache(defaults: codexUsageDefaults).loadStatus() == refreshedCodexUsageStatus,
+        "codex usage status cache persists and reloads status locally"
+    )
+} else {
+    expect(false, "codex usage status cache test can create an isolated UserDefaults suite")
+}
 
 let lowVolumeDailyTokenStatus = DailyTokenStatus(
     inputTokens: 998_000,
@@ -2034,7 +2407,7 @@ let dailyTokenMonitorProvider = SequenceDailyTokenProvider([
     lowVolumeDailyTokenStatus,
     highVolumeDailyTokenStatus
 ])
-let dailyTokenMonitor = DailyTokenUsageMonitor(provider: dailyTokenMonitorProvider)
+let dailyTokenMonitor = DailyTokenUsageMonitor(provider: dailyTokenMonitorProvider, statusCache: nil)
 expect(dailyTokenMonitor.status == .unknown, "daily token monitor starts unknown before refresh")
 dailyTokenMonitor.refresh()
 let dailyTokenMonitorFirstUpdate = waitUntil(timeout: 2) {
@@ -2053,16 +2426,131 @@ expect(
     "daily token monitor refresh eventually updates status from provider"
 )
 
+let cachedDailyTokenStatus = DailyTokenStatus(
+    inputTokens: 12_000,
+    outputTokens: 340,
+    cachedInputTokens: 6_000,
+    observedAt: Date(timeIntervalSince1970: 80)
+)
+let refreshedDailyTokenStatus = DailyTokenStatus(
+    inputTokens: 13_000,
+    outputTokens: 450,
+    cachedInputTokens: 7_000,
+    observedAt: Date(timeIntervalSince1970: 90)
+)
+let cachedDailyTokenProvider = SequenceDailyTokenProvider([refreshedDailyTokenStatus])
+let dailyTokenStatusCache = MemoryDailyTokenStatusCache(cachedDailyTokenStatus)
+let cachedDailyTokenMonitor = DailyTokenUsageMonitor(
+    provider: cachedDailyTokenProvider,
+    statusCache: dailyTokenStatusCache
+)
+expect(
+    cachedDailyTokenMonitor.status == cachedDailyTokenStatus,
+    "daily token monitor loads cached status before the first provider refresh"
+)
+cachedDailyTokenMonitor.refresh()
+let cachedDailyTokenMonitorUpdated = waitUntil(timeout: 2) {
+    cachedDailyTokenMonitor.status == refreshedDailyTokenStatus
+}
+expect(
+    cachedDailyTokenMonitorUpdated,
+    "daily token monitor replaces cached status after provider refresh"
+)
+expect(
+    dailyTokenStatusCache.savedStatus == refreshedDailyTokenStatus,
+    "daily token monitor saves refreshed status to local cache"
+)
+
+var dailyTokenCacheCalendar = Calendar(identifier: .gregorian)
+dailyTokenCacheCalendar.timeZone = TimeZone(secondsFromGMT: 0) ?? .current
+let dailyTokenCacheNow = Date(timeIntervalSince1970: 90)
+let dailyTokenCacheSuiteName = "CodexPlusCoreTests.dailyTokens.\(UUID().uuidString)"
+if let dailyTokenDefaults = UserDefaults(suiteName: dailyTokenCacheSuiteName) {
+    defer {
+        dailyTokenDefaults.removePersistentDomain(forName: dailyTokenCacheSuiteName)
+    }
+
+    let persistedDailyTokenCache = UserDefaultsDailyTokenStatusCache(
+        defaults: dailyTokenDefaults,
+        calendar: dailyTokenCacheCalendar,
+        now: { dailyTokenCacheNow }
+    )
+    persistedDailyTokenCache.saveStatus(refreshedDailyTokenStatus)
+    expect(
+        UserDefaultsDailyTokenStatusCache(
+            defaults: dailyTokenDefaults,
+            calendar: dailyTokenCacheCalendar,
+            now: { dailyTokenCacheNow }
+        ).loadStatus() == refreshedDailyTokenStatus,
+        "daily token status cache persists and reloads today's status locally"
+    )
+
+    let staleDailyTokenStatus = DailyTokenStatus(
+        inputTokens: 1,
+        outputTokens: 1,
+        cachedInputTokens: 0,
+        observedAt: dailyTokenCacheNow.addingTimeInterval(-86_400)
+    )
+    persistedDailyTokenCache.saveStatus(staleDailyTokenStatus)
+    expect(
+        UserDefaultsDailyTokenStatusCache(
+            defaults: dailyTokenDefaults,
+            calendar: dailyTokenCacheCalendar,
+            now: { dailyTokenCacheNow }
+        ).loadStatus() == nil,
+        "daily token status cache ignores statuses from previous days"
+    )
+} else {
+    expect(false, "daily token status cache test can create an isolated UserDefaults suite")
+}
+
+let asyncDailyTokenStatus = DailyTokenStatus(
+    inputTokens: 15_000,
+    outputTokens: 750,
+    cachedInputTokens: 8_000,
+    observedAt: Date(timeIntervalSince1970: 95)
+)
+let asyncDailyTokenProvider = BlockingDailyTokenProvider(status: asyncDailyTokenStatus)
+let asyncDailyTokenMonitor = DailyTokenUsageMonitor(provider: asyncDailyTokenProvider, statusCache: nil)
+DispatchQueue.global().asyncAfter(deadline: .now() + .milliseconds(350)) {
+    asyncDailyTokenProvider.release()
+}
+expect(!asyncDailyTokenMonitor.isRefreshing, "daily token monitor starts not refreshing")
+let asyncDailyTokenRefreshStartedAt = Date()
+asyncDailyTokenMonitor.refresh()
+let asyncDailyTokenRefreshDuration = Date().timeIntervalSince(asyncDailyTokenRefreshStartedAt)
+expect(
+    asyncDailyTokenRefreshDuration < 0.15,
+    "daily token monitor refresh returns before a slow provider finishes"
+)
+expect(
+    asyncDailyTokenMonitor.isRefreshing,
+    "daily token monitor marks itself refreshing while provider work is pending"
+)
+expect(
+    asyncDailyTokenProvider.waitUntilFinished(),
+    "daily token monitor slow provider finishes"
+)
+let asyncDailyTokenMonitorUpdated = waitUntil(timeout: 2) {
+    asyncDailyTokenMonitor.status == asyncDailyTokenStatus && !asyncDailyTokenMonitor.isRefreshing
+}
+expect(
+    asyncDailyTokenMonitorUpdated,
+    "daily token monitor clears refreshing after publishing provider status"
+)
+asyncDailyTokenMonitor.stop()
+
 let asyncCodexUsageStatus = CodexUsageStatus(
     fiveHourPercent: 66,
     weeklyPercent: 77,
     observedAt: Date(timeIntervalSince1970: 20)
 )
 let asyncCodexUsageProvider = BlockingCodexUsageProvider(status: asyncCodexUsageStatus)
-let asyncCodexUsageMonitor = CodexUsageMonitor(provider: asyncCodexUsageProvider)
+let asyncCodexUsageMonitor = CodexUsageMonitor(provider: asyncCodexUsageProvider, statusCache: nil)
 DispatchQueue.global().asyncAfter(deadline: .now() + .milliseconds(350)) {
     asyncCodexUsageProvider.release()
 }
+expect(!asyncCodexUsageMonitor.isRefreshing, "codex usage monitor starts not refreshing")
 let asyncRefreshStartedAt = Date()
 asyncCodexUsageMonitor.refresh()
 let asyncRefreshDuration = Date().timeIntervalSince(asyncRefreshStartedAt)
@@ -2075,6 +2563,10 @@ expect(
     "codex usage monitor refresh starts provider work"
 )
 expect(
+    asyncCodexUsageMonitor.isRefreshing,
+    "codex usage monitor marks itself refreshing while provider work is pending"
+)
+expect(
     asyncCodexUsageMonitor.status == .unknown,
     "codex usage monitor keeps status unchanged while background provider work is pending"
 )
@@ -2083,11 +2575,11 @@ expect(
     "codex usage monitor slow provider finishes"
 )
 let asyncCodexUsageMonitorUpdated = waitUntil(timeout: 2) {
-    asyncCodexUsageMonitor.status == asyncCodexUsageStatus
+    asyncCodexUsageMonitor.status == asyncCodexUsageStatus && !asyncCodexUsageMonitor.isRefreshing
 }
 expect(
     asyncCodexUsageMonitorUpdated,
-    "codex usage monitor publishes background provider status on the main actor"
+    "codex usage monitor publishes background provider status and clears refreshing on the main actor"
 )
 expect(
     asyncCodexUsageProvider.callWasOnMainThread == false,
@@ -2100,7 +2592,7 @@ let stoppedCodexUsageStatus = CodexUsageStatus(
     observedAt: Date(timeIntervalSince1970: 30)
 )
 let stoppedCodexUsageProvider = BlockingCodexUsageProvider(status: stoppedCodexUsageStatus)
-let stoppedCodexUsageMonitor = CodexUsageMonitor(provider: stoppedCodexUsageProvider)
+let stoppedCodexUsageMonitor = CodexUsageMonitor(provider: stoppedCodexUsageProvider, statusCache: nil)
 DispatchQueue.global().asyncAfter(deadline: .now() + .milliseconds(350)) {
     stoppedCodexUsageProvider.release()
 }
@@ -2112,6 +2604,10 @@ expect(
     "codex usage monitor stop test refresh returns before a slow provider finishes"
 )
 stoppedCodexUsageMonitor.stop()
+expect(
+    !stoppedCodexUsageMonitor.isRefreshing,
+    "codex usage monitor stop clears the refreshing state"
+)
 expect(
     stoppedCodexUsageProvider.waitUntilFinished(),
     "codex usage monitor stopped provider finishes"

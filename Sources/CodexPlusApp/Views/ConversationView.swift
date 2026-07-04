@@ -26,6 +26,17 @@ struct ConversationView: View {
     }
 
     var body: some View {
+        LiquidGlassScene(padding: 14, minWidth: 360, minHeight: 420) {
+            panelContent
+        }
+        .onAppear {
+            if session != nil {
+                isFollowUpFocused = true
+            }
+        }
+    }
+
+    private var panelContent: some View {
         VStack(spacing: 12) {
             header
 
@@ -39,13 +50,6 @@ struct ConversationView: View {
                     onPickWorkspace: onPickWorkspace,
                     onSubmit: onSubmitDraft
                 )
-            }
-        }
-        .padding(14)
-        .frame(minWidth: 360, minHeight: 420)
-        .onAppear {
-            if session != nil {
-                isFollowUpFocused = true
             }
         }
     }

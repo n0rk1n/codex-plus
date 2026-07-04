@@ -6,8 +6,10 @@ public final class CodexUsageMonitor: ObservableObject {
     public static let defaultRefreshInterval: TimeInterval = 120
 
     @Published public private(set) var status: CodexUsageStatus
+    @Published public private(set) var isRefreshing = false
 
     private let provider: any CodexUsageProviding
+    private let statusCache: (any CodexUsageStatusCaching)?
     private let interval: TimeInterval
     private let refreshQueue = DispatchQueue(label: "CodexPlusCore.CodexUsageMonitor.refresh", qos: .utility)
     private var timer: Timer?
@@ -16,10 +18,12 @@ public final class CodexUsageMonitor: ObservableObject {
     public init(
         provider: any CodexUsageProviding,
         initialStatus: CodexUsageStatus = .unknown,
+        statusCache: (any CodexUsageStatusCaching)? = UserDefaultsCodexUsageStatusCache(),
         interval: TimeInterval = CodexUsageMonitor.defaultRefreshInterval
     ) {
         self.provider = provider
-        self.status = initialStatus
+        self.statusCache = statusCache
+        self.status = initialStatus == .unknown ? statusCache?.loadStatus() ?? initialStatus : initialStatus
         self.interval = interval
     }
 
@@ -48,11 +52,13 @@ public final class CodexUsageMonitor: ObservableObject {
         timer?.invalidate()
         timer = nil
         refreshID = UUID()
+        isRefreshing = false
     }
 
     public func refresh() {
         let requestedRefreshID = UUID()
         refreshID = requestedRefreshID
+        isRefreshing = true
         let provider = provider
 
         refreshQueue.async { [provider, requestedRefreshID, weak self] in
@@ -64,6 +70,10 @@ public final class CodexUsageMonitor: ObservableObject {
                 }
 
                 self.status = nextStatus
+                if nextStatus != .unknown {
+                    self.statusCache?.saveStatus(nextStatus)
+                }
+                self.isRefreshing = false
             }
         }
     }

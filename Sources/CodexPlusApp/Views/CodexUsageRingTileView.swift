@@ -3,29 +3,49 @@ import SwiftUI
 
 struct CodexUsageRingTileView: View {
     let status: CodexUsageStatus
+    let isRefreshing: Bool
 
     var body: some View {
         LiquidGlassContainer(cornerRadius: 22) {
-            VStack(spacing: 8) {
-                HStack(spacing: 10) {
-                    UsageMetricColumn(
-                        label: "5h",
-                        value: status.displayPercentText(for: .fiveHour),
-                        color: color(for: .fiveHour)
-                    )
+            ZStack {
+                VStack(spacing: CompactDashboardMetricTileLayout.footerSpacing) {
+                    HStack(spacing: 10) {
+                        UsageMetricColumn(
+                            label: "5h",
+                            value: status.displayPercentText(for: .fiveHour),
+                            color: color(for: .fiveHour)
+                        )
 
-                    UsageMetricColumn(
-                        label: "1w",
-                        value: status.displayPercentText(for: .weekly),
-                        color: color(for: .weekly)
-                    )
+                        UsageMetricColumn(
+                            label: "1w",
+                            value: status.displayPercentText(for: .weekly),
+                            color: color(for: .weekly)
+                        )
+                    }
+                    .frame(height: CompactDashboardMetricTileLayout.metricRowHeight)
+
+                    Text(labelText)
+                        .font(.system(size: 9, weight: .medium))
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.75)
+                        .frame(height: CompactDashboardMetricTileLayout.footerRowHeight)
                 }
 
-                Text(labelText)
-                    .font(.system(size: 9, weight: .medium))
-                    .foregroundStyle(.secondary)
-                    .lineLimit(1)
-                    .minimumScaleFactor(0.75)
+                if isRefreshing {
+                    VStack {
+                        Spacer()
+                        HStack {
+                            Spacer()
+                            ProgressView()
+                                .controlSize(.small)
+                                .tint(.secondary)
+                                .frame(width: 16, height: 16)
+                        }
+                    }
+                    .padding(.trailing, 8)
+                    .padding(.bottom, 7)
+                }
             }
             .frame(width: 138, height: 92)
         }
@@ -54,6 +74,10 @@ struct CodexUsageRingTileView: View {
     }
 
     private func color(for window: CodexUsageWindow) -> Color {
+        guard status.percent(for: window) != nil else {
+            return .secondary
+        }
+
         let ringColor = status.ringColor(for: window)
 
         return Color(
@@ -75,13 +99,16 @@ private struct UsageMetricColumn: View {
             Text(label.uppercased())
                 .font(.system(size: 11, weight: .semibold, design: .rounded))
                 .foregroundStyle(.primary)
+                .frame(height: CompactDashboardMetricTileLayout.labelRowHeight)
 
             Text(value)
                 .font(.system(size: 22, weight: .semibold, design: .rounded))
                 .foregroundStyle(color)
+                .frame(height: CompactDashboardMetricTileLayout.valueRowHeight)
         }
         .lineLimit(1)
         .minimumScaleFactor(0.62)
         .frame(maxWidth: .infinity)
+        .frame(height: CompactDashboardMetricTileLayout.metricRowHeight)
     }
 }
