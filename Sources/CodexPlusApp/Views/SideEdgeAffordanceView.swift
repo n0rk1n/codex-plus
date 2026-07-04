@@ -6,11 +6,7 @@ struct SideEdgeAffordanceView: View {
     var body: some View {
         Button(action: onActivate) {
             Capsule(style: .continuous)
-                .fill(.ultraThinMaterial)
-                .overlay {
-                    Capsule(style: .continuous)
-                        .strokeBorder(Color.white.opacity(0.32), lineWidth: 1)
-                }
+                .glassEffect(.regular, in: Capsule(style: .continuous))
                 .shadow(color: Color.black.opacity(0.18), radius: 8, x: 0, y: 4)
                 .padding(2)
         }

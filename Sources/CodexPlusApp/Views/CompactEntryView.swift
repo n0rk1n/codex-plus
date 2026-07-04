@@ -20,38 +20,40 @@ struct CompactEntryView: View {
 
     var body: some View {
         VStack(spacing: 14) {
-            GeometryReader { geometry in
-                ZStack {
-                    if let draggedTile {
-                        placeholderView(for: draggedTile)
-                            .position(
-                                x: (geometry.size.width / 2) + placementOffset(
-                                    for: draggedTile,
-                                    in: previewTileOrder.tiles
-                                ),
-                                y: tileRowHeight / 2
-                            )
-                    }
+            GlassEffectContainer {
+                GeometryReader { geometry in
+                    ZStack {
+                        if let draggedTile {
+                            placeholderView(for: draggedTile)
+                                .position(
+                                    x: (geometry.size.width / 2) + placementOffset(
+                                        for: draggedTile,
+                                        in: previewTileOrder.tiles
+                                    ),
+                                    y: tileRowHeight / 2
+                                )
+                        }
 
-                    ForEach(dashboardTileOrder.tiles, id: \.self) { tile in
-                        tileView(for: tile)
-                            .position(
-                                x: (geometry.size.width / 2) + tileOffset(for: tile),
-                                y: tileRowHeight / 2
-                            )
-                            .scaleEffect(draggedTile == tile ? 1.03 : 1)
-                            .opacity(draggedTile == tile ? 0.92 : 1)
-                            .zIndex(draggedTile == tile ? 1 : 0)
-                            .contentShape(Rectangle())
+                        ForEach(dashboardTileOrder.tiles, id: \.self) { tile in
+                            tileView(for: tile)
+                                .position(
+                                    x: (geometry.size.width / 2) + tileOffset(for: tile),
+                                    y: tileRowHeight / 2
+                                )
+                                .scaleEffect(draggedTile == tile ? 1.03 : 1)
+                                .opacity(draggedTile == tile ? 0.92 : 1)
+                                .zIndex(draggedTile == tile ? 1 : 0)
+                                .contentShape(Rectangle())
+                        }
                     }
+                    .contentShape(Rectangle())
+                    .highPriorityGesture(rowDragGesture(rowWidth: geometry.size.width))
                 }
-                .contentShape(Rectangle())
-                .highPriorityGesture(rowDragGesture(rowWidth: geometry.size.width))
+                .frame(height: tileRowHeight)
+                .animation(.snappy(duration: 0.18), value: draggedTile)
+                .animation(.snappy(duration: 0.18), value: previewTileOrder.tiles)
+                .animation(.snappy(duration: 0.18), value: dashboardTileOrderRaw)
             }
-            .frame(height: tileRowHeight)
-            .animation(.snappy(duration: 0.18), value: draggedTile)
-            .animation(.snappy(duration: 0.18), value: previewTileOrder.tiles)
-            .animation(.snappy(duration: 0.18), value: dashboardTileOrderRaw)
 
             LiquidGlassContainer(cornerRadius: 24) {
                 HStack(alignment: .bottom, spacing: 10) {
