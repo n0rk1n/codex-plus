@@ -46,6 +46,72 @@ public struct DashboardTileOrder: Equatable, Sendable {
         return DashboardTileOrder(tiles: nextTiles)
     }
 
+    public func previewingDrag(
+        _ source: DashboardTile,
+        translationWidth: Double,
+        threshold: Double
+    ) -> DashboardTileOrder {
+        guard abs(translationWidth) >= abs(threshold),
+              let sourceIndex = tiles.firstIndex(of: source)
+        else {
+            return self
+        }
+
+        let targetIndex = previewTargetIndex(
+            from: sourceIndex,
+            translationWidth: translationWidth
+        )
+        guard targetIndex != sourceIndex else {
+            return self
+        }
+
+        var nextTiles = tiles
+        let movedTile = nextTiles.remove(at: sourceIndex)
+        nextTiles.insert(movedTile, at: targetIndex)
+        return DashboardTileOrder(tiles: nextTiles)
+    }
+
+    private func previewTargetIndex(from sourceIndex: Int, translationWidth: Double) -> Int {
+        let placements = DashboardTileLayoutPolicy.placements(for: tiles)
+        guard let sourcePlacement = placements.first(where: { $0.tile == tiles[sourceIndex] }) else {
+            return sourceIndex
+        }
+
+        let draggedCenterX = sourcePlacement.centerX + translationWidth
+
+        if translationWidth > 0 {
+            var targetIndex = min(sourceIndex + 1, tiles.count - 1)
+
+            guard targetIndex != sourceIndex else {
+                return sourceIndex
+            }
+
+            for index in (sourceIndex + 2)..<tiles.count {
+                let boundary = (placements[index - 1].centerX + placements[index].centerX) / 2
+                if draggedCenterX >= boundary {
+                    targetIndex = index
+                }
+            }
+
+            return targetIndex
+        }
+
+        var targetIndex = max(sourceIndex - 1, 0)
+
+        guard targetIndex != sourceIndex else {
+            return sourceIndex
+        }
+
+        for index in stride(from: sourceIndex - 2, through: 0, by: -1) {
+            let boundary = (placements[index].centerX + placements[index + 1].centerX) / 2
+            if draggedCenterX <= boundary {
+                targetIndex = index
+            }
+        }
+
+        return targetIndex
+    }
+
     public func layoutTiles(excludingDragged draggedTile: DashboardTile?) -> [DashboardTile] {
         guard let draggedTile else {
             return tiles
@@ -55,12 +121,23 @@ public struct DashboardTileOrder: Equatable, Sendable {
     }
 
     private static func validated(_ tiles: [DashboardTile]) -> [DashboardTile] {
-        guard tiles.count == defaultTiles.count,
-              Set(tiles) == Set(defaultTiles)
-        else {
+        var migratedTiles: [DashboardTile] = []
+
+        for tile in tiles {
+            let migratedTile = tile == .battery ? DashboardTile.codexDesktop : tile
+            guard defaultTiles.contains(migratedTile),
+                  !migratedTiles.contains(migratedTile)
+            else {
+                continue
+            }
+
+            migratedTiles.append(migratedTile)
+        }
+
+        guard !migratedTiles.isEmpty else {
             return defaultTiles
         }
 
-        return tiles
+        return migratedTiles + defaultTiles.filter { !migratedTiles.contains($0) }
     }
 }

@@ -14,7 +14,7 @@ public enum CompactDashboardTileDragPolicy {
     public static let batteryTileWidth = 92.0
     public static let codexDesktopTileWidth = 92.0
     public static let codexUsageTileWidth = 138.0
-    public static let dailyTokensTileWidth = 138.0
+    public static let dailyTokensTileWidth = 184.0
     public static let tileSpacing = 12.0
     public static let tileStripWidth = codexDesktopTileWidth + codexUsageTileWidth + dailyTokensTileWidth + (tileSpacing * 2)
 

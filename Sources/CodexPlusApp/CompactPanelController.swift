@@ -85,7 +85,7 @@ final class CompactPanelController {
     }
 
     private static func defaultFrame(on screen: NSScreen) -> NSRect {
-        let size = NSSize(width: 460, height: 210)
+        let size = NSSize(width: 500, height: 210)
         let visibleFrame = screen.visibleFrame
         let origin = NSPoint(
             x: visibleFrame.midX - (size.width / 2),

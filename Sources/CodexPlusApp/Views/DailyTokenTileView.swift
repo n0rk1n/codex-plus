@@ -19,7 +19,10 @@ struct DailyTokenTileView: View {
                     .lineLimit(1)
                     .minimumScaleFactor(0.75)
             }
-            .frame(width: 138, height: 92)
+            .frame(
+                width: CGFloat(CompactDashboardTileDragPolicy.dailyTokensTileWidth),
+                height: CGFloat(CompactDashboardTileDragPolicy.tileStripHeight)
+            )
         }
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(accessibilityText)

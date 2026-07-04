@@ -22,6 +22,17 @@ struct CompactEntryView: View {
         VStack(spacing: 14) {
             GeometryReader { geometry in
                 ZStack {
+                    if let draggedTile {
+                        placeholderView(for: draggedTile)
+                            .position(
+                                x: (geometry.size.width / 2) + placementOffset(
+                                    for: draggedTile,
+                                    in: previewTileOrder.tiles
+                                ),
+                                y: tileRowHeight / 2
+                            )
+                    }
+
                     ForEach(dashboardTileOrder.tiles, id: \.self) { tile in
                         tileView(for: tile)
                             .position(
@@ -39,6 +50,7 @@ struct CompactEntryView: View {
             }
             .frame(height: tileRowHeight)
             .animation(.snappy(duration: 0.18), value: draggedTile)
+            .animation(.snappy(duration: 0.18), value: previewTileOrder.tiles)
             .animation(.snappy(duration: 0.18), value: dashboardTileOrderRaw)
 
             LiquidGlassContainer(cornerRadius: 24) {
@@ -77,7 +89,7 @@ struct CompactEntryView: View {
 
         return placementOffset(
             for: tile,
-            in: dashboardTileOrder.layoutTiles(excludingDragged: draggedTile)
+            in: previewTileOrder.tiles
         )
     }
 
@@ -88,6 +100,18 @@ struct CompactEntryView: View {
 
     private var dashboardTileOrder: DashboardTileOrder {
         DashboardTileOrder(rawValue: dashboardTileOrderRaw)
+    }
+
+    private var previewTileOrder: DashboardTileOrder {
+        guard let draggedTile else {
+            return dashboardTileOrder
+        }
+
+        return dashboardTileOrder.previewingDrag(
+            draggedTile,
+            translationWidth: Double(dragTranslation.width),
+            threshold: Double(reorderThreshold)
+        )
     }
 
     @ViewBuilder
@@ -102,6 +126,21 @@ struct CompactEntryView: View {
         case .dailyTokens:
             DailyTokenTileView(status: dailyTokenStatus)
         }
+    }
+
+    private func placeholderView(for tile: DashboardTile) -> some View {
+        RoundedRectangle(cornerRadius: 22, style: .continuous)
+            .fill(.secondary.opacity(0.08))
+            .overlay(
+                RoundedRectangle(cornerRadius: 22, style: .continuous)
+                    .strokeBorder(.secondary.opacity(0.24), lineWidth: 1)
+            )
+            .frame(
+                width: CGFloat(DashboardTileLayoutPolicy.width(for: tile)),
+                height: tileRowHeight
+            )
+            .opacity(0.9)
+            .allowsHitTesting(false)
     }
 
     private func rowDragGesture(rowWidth: CGFloat) -> some Gesture {
@@ -125,29 +164,15 @@ struct CompactEntryView: View {
                     return
                 }
 
-                reorderIfNeeded(tile: sourceTile, translationWidth: value.translation.width)
+                let nextOrder = dashboardTileOrder.previewingDrag(
+                    sourceTile,
+                    translationWidth: Double(value.translation.width),
+                    threshold: Double(reorderThreshold)
+                )
+                dashboardTileOrderRaw = nextOrder.rawValue
                 draggedTile = nil
                 dragTranslation = .zero
             }
-    }
-
-    private func reorderIfNeeded(tile: DashboardTile, translationWidth: CGFloat) {
-        guard abs(translationWidth) >= reorderThreshold else {
-            return
-        }
-
-        let order = dashboardTileOrder
-        guard let tileIndex = order.tiles.firstIndex(of: tile) else {
-            return
-        }
-
-        let targetIndex = translationWidth > 0 ? tileIndex + 1 : tileIndex - 1
-        guard order.tiles.indices.contains(targetIndex) else {
-            return
-        }
-
-        let nextOrder = order.swapping(tile, with: order.tiles[targetIndex])
-        dashboardTileOrderRaw = nextOrder.rawValue
     }
 
     private func submitPrompt() {

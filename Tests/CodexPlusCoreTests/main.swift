@@ -1339,12 +1339,44 @@ expect(invalidBattery.state == .unknown, "invalid battery state")
 let defaultTileOrder = DashboardTileOrder(rawValue: nil)
 expect(defaultTileOrder.tiles == [.codexDesktop, .codexUsage, .dailyTokens], "dashboard tile order defaults to Codex Desktop, usage, then daily tokens")
 expect(defaultTileOrder.rawValue == "codexDesktop,codexUsage,dailyTokens", "dashboard tile order serializes visible default order")
+expect(
+    CompactDashboardTileDragPolicy.dailyTokensTileWidth == CompactDashboardTileDragPolicy.tileStripHeight * 2,
+    "daily token tile uses a 2:1 aspect ratio"
+)
+expect(
+    CompactDashboardTileDragPolicy.tileStripWidth == 438,
+    "compact dashboard tile strip accounts for the wider daily token tile"
+)
+
+let packageRootForDashboardTiles = URL(fileURLWithPath: FileManager.default.currentDirectoryPath, isDirectory: true)
+let dailyTokenTileText = (try? String(
+    contentsOf: packageRootForDashboardTiles.appendingPathComponent("Sources/CodexPlusApp/Views/DailyTokenTileView.swift"),
+    encoding: .utf8
+)) ?? ""
+expect(
+    dailyTokenTileText.contains("CompactDashboardTileDragPolicy.dailyTokensTileWidth"),
+    "daily token tile view uses the shared 2:1 width constant"
+)
+let compactPanelControllerTextForDashboard = (try? String(
+    contentsOf: packageRootForDashboardTiles.appendingPathComponent("Sources/CodexPlusApp/CompactPanelController.swift"),
+    encoding: .utf8
+)) ?? ""
+expect(
+    compactPanelControllerTextForDashboard.contains("NSSize(width: 500, height: 210)"),
+    "compact panel default frame leaves room for the wider daily token tile"
+)
 
 let legacyTileOrder = DashboardTileOrder(rawValue: "battery,codexUsage")
 expect(legacyTileOrder.tiles == [.codexDesktop, .codexUsage, .dailyTokens], "dashboard tile order migrates persisted battery to visible tiles")
 
 let twoTileLegacyOrder = DashboardTileOrder(rawValue: "codexDesktop,codexUsage")
 expect(twoTileLegacyOrder.tiles == [.codexDesktop, .codexUsage, .dailyTokens], "dashboard tile order adds daily tokens to two-tile persisted order")
+
+let reorderedTwoTileLegacyOrder = DashboardTileOrder(rawValue: "codexUsage,codexDesktop")
+expect(
+    reorderedTwoTileLegacyOrder.tiles == [.codexUsage, .codexDesktop, .dailyTokens],
+    "dashboard tile order preserves reordered two-tile persisted order and appends daily tokens"
+)
 
 let reversedTileOrder = DashboardTileOrder(rawValue: "dailyTokens,codexUsage,codexDesktop")
 expect(reversedTileOrder.tiles == [.dailyTokens, .codexUsage, .codexDesktop], "dashboard tile order reads reversed persisted order")
@@ -1354,6 +1386,78 @@ expect(invalidTileOrder.tiles == [.codexDesktop, .codexUsage, .dailyTokens], "da
 
 let swappedTileOrder = defaultTileOrder.swapping(.codexDesktop, with: .codexUsage)
 expect(swappedTileOrder.tiles == [.codexUsage, .codexDesktop, .dailyTokens], "dashboard tile order swaps Codex Desktop and usage tiles")
+expect(
+    defaultTileOrder.previewingDrag(.codexDesktop, translationWidth: 43, threshold: 44).tiles == [
+        .codexDesktop,
+        .codexUsage,
+        .dailyTokens
+    ],
+    "dashboard tile drag preview keeps order before crossing threshold"
+)
+expect(
+    defaultTileOrder.previewingDrag(.codexDesktop, translationWidth: 44, threshold: 44).tiles == [
+        .codexUsage,
+        .codexDesktop,
+        .dailyTokens
+    ],
+    "dashboard tile drag preview moves a tile right after crossing threshold"
+)
+expect(
+    defaultTileOrder.previewingDrag(.codexDesktop, translationWidth: 213, threshold: 44).tiles == [
+        .codexUsage,
+        .codexDesktop,
+        .dailyTokens
+    ],
+    "dashboard tile drag preview keeps the dragged tile in the second slot before the next slot boundary"
+)
+expect(
+    defaultTileOrder.previewingDrag(.codexDesktop, translationWidth: 214, threshold: 44).tiles == [
+        .codexUsage,
+        .dailyTokens,
+        .codexDesktop
+    ],
+    "dashboard tile drag preview moves the first tile to the third slot during one continuous drag"
+)
+expect(
+    defaultTileOrder.previewingDrag(.dailyTokens, translationWidth: -44, threshold: 44).tiles == [
+        .codexDesktop,
+        .dailyTokens,
+        .codexUsage
+    ],
+    "dashboard tile drag preview moves a tile left after crossing threshold"
+)
+expect(
+    defaultTileOrder.previewingDrag(.dailyTokens, translationWidth: -236, threshold: 44).tiles == [
+        .codexDesktop,
+        .dailyTokens,
+        .codexUsage
+    ],
+    "dashboard tile drag preview keeps the dragged tile in the second slot before the previous slot boundary"
+)
+expect(
+    defaultTileOrder.previewingDrag(.dailyTokens, translationWidth: -237, threshold: 44).tiles == [
+        .dailyTokens,
+        .codexDesktop,
+        .codexUsage
+    ],
+    "dashboard tile drag preview moves the last tile to the first slot during one continuous drag"
+)
+expect(
+    defaultTileOrder.previewingDrag(.codexDesktop, translationWidth: -80, threshold: 44).tiles == [
+        .codexDesktop,
+        .codexUsage,
+        .dailyTokens
+    ],
+    "dashboard tile drag preview keeps first tile in place when dragged left"
+)
+expect(
+    defaultTileOrder.previewingDrag(.dailyTokens, translationWidth: 80, threshold: 44).tiles == [
+        .codexDesktop,
+        .codexUsage,
+        .dailyTokens
+    ],
+    "dashboard tile drag preview keeps last tile in place when dragged right"
+)
 expect(
     defaultTileOrder.layoutTiles(excludingDragged: nil) == [.codexDesktop, .codexUsage, .dailyTokens],
     "dashboard tile layout shows visible tiles"
@@ -1368,33 +1472,33 @@ expect(
 )
 expect(
     DashboardTileLayoutPolicy.placements(for: defaultTileOrder.tiles) == [
-        DashboardTilePlacement(tile: .codexDesktop, centerX: -150, width: 92),
-        DashboardTilePlacement(tile: .codexUsage, centerX: -23, width: 138),
-        DashboardTilePlacement(tile: .dailyTokens, centerX: 127, width: 138)
+        DashboardTilePlacement(tile: .codexDesktop, centerX: -173, width: 92),
+        DashboardTilePlacement(tile: .codexUsage, centerX: -46, width: 138),
+        DashboardTilePlacement(tile: .dailyTokens, centerX: 127, width: 184)
     ],
     "dashboard tile layout places Codex Desktop left of usage"
 )
 expect(
     DashboardTileLayoutPolicy.placements(for: reversedTileOrder.tiles) == [
-        DashboardTilePlacement(tile: .dailyTokens, centerX: -127, width: 138),
-        DashboardTilePlacement(tile: .codexUsage, centerX: 23, width: 138),
-        DashboardTilePlacement(tile: .codexDesktop, centerX: 150, width: 92)
+        DashboardTilePlacement(tile: .dailyTokens, centerX: -127, width: 184),
+        DashboardTilePlacement(tile: .codexUsage, centerX: 46, width: 138),
+        DashboardTilePlacement(tile: .codexDesktop, centerX: 173, width: 92)
     ],
     "dashboard tile layout places reversed tiles at stable visual centers"
 )
 expect(
     DashboardTileLayoutPolicy.placements(for: defaultTileOrder.layoutTiles(excludingDragged: .codexDesktop)) == [
-        DashboardTilePlacement(tile: .codexUsage, centerX: -75, width: 138),
-        DashboardTilePlacement(tile: .dailyTokens, centerX: 75, width: 138)
+        DashboardTilePlacement(tile: .codexUsage, centerX: -98, width: 138),
+        DashboardTilePlacement(tile: .dailyTokens, centerX: 75, width: 184)
     ],
     "dashboard tile layout recenters the remaining tiles while Codex Desktop is dragged"
 )
 expect(
-    DashboardTileLayoutPolicy.tile(atX: 80, rowWidth: 460, tiles: defaultTileOrder.tiles) == .codexDesktop,
+    DashboardTileLayoutPolicy.tile(atX: 57, rowWidth: 460, tiles: defaultTileOrder.tiles) == .codexDesktop,
     "dashboard tile hit testing selects Codex Desktop at its visual center"
 )
 expect(
-    DashboardTileLayoutPolicy.tile(atX: 207, rowWidth: 460, tiles: defaultTileOrder.tiles) == .codexUsage,
+    DashboardTileLayoutPolicy.tile(atX: 184, rowWidth: 460, tiles: defaultTileOrder.tiles) == .codexUsage,
     "dashboard tile hit testing selects codex usage at its visual center"
 )
 expect(
@@ -1402,7 +1506,7 @@ expect(
     "dashboard tile hit testing selects daily tokens at its visual center"
 )
 expect(
-    DashboardTileLayoutPolicy.tile(atX: 132, rowWidth: 460, tiles: defaultTileOrder.tiles) == nil,
+    DashboardTileLayoutPolicy.tile(atX: 109, rowWidth: 460, tiles: defaultTileOrder.tiles) == nil,
     "dashboard tile hit testing ignores the gap between tiles"
 )
 expect(
