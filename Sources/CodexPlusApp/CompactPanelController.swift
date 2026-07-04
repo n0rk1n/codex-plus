@@ -44,7 +44,10 @@ final class CompactPanelController {
             return
         }
 
-        let frame = storedFrame ?? Self.defaultFrame(on: screen)
+        let frame = CompactDashboardTileDragPolicy.panelFrameFittingTileStrip(
+            storedFrame ?? Self.defaultFrame(on: screen),
+            in: screen.visibleFrame
+        )
         let panel = panel ?? panelFactory.makePanel(frame: frame, delegate: panelDelegate)
 
         batteryMonitor.start()

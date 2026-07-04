@@ -15,7 +15,7 @@ struct LiquidGlassContainer<Content: View>: View {
     var body: some View {
         content
             .glassEffect(
-                .regular,
+                .regular.tint(.white.opacity(0.62)),
                 in: RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
             )
     }

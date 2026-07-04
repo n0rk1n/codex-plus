@@ -399,6 +399,7 @@ func expectCodexDesktopLauncherIntegration() {
     let tilePath = "Sources/CodexPlusApp/Views/CodexDesktopTileView.swift"
     let compactEntryPath = "Sources/CodexPlusApp/Views/CompactEntryView.swift"
     let compactControllerPath = "Sources/CodexPlusApp/CompactPanelController.swift"
+    let liquidGlassPath = "Sources/CodexPlusApp/Views/LiquidGlassContainer.swift"
 
     for sourceFile in [launcherPath, tilePath] {
         let exists = FileManager.default.fileExists(
@@ -433,6 +434,23 @@ func expectCodexDesktopLauncherIntegration() {
     )) ?? ""
     expect(compactEntryText.contains("CodexDesktopTileView"), "compact entry renders Codex Desktop tile above prompt")
     expect(compactEntryText.contains("case .codexDesktop"), "Codex Desktop tile is part of dashboard tile row")
+    expect(
+        compactEntryText.contains("CompactDashboardTileDragPolicy.tileStripWidth"),
+        "compact entry dashboard row uses the shared full tile strip width"
+    )
+    expect(
+        !compactEntryText.contains("GlassEffectContainer"),
+        "compact entry dashboard row does not add a merged glass outline behind tiles"
+    )
+
+    let liquidGlassText = (try? String(
+        contentsOf: packageRoot.appendingPathComponent(liquidGlassPath),
+        encoding: .utf8
+    )) ?? ""
+    expect(
+        liquidGlassText.contains(".regular.tint("),
+        "liquid glass container uses a shared tint so compact surfaces stay visually consistent"
+    )
 
     let compactControllerText = (try? String(
         contentsOf: packageRoot.appendingPathComponent(compactControllerPath),
@@ -1347,6 +1365,10 @@ expect(
     CompactDashboardTileDragPolicy.tileStripWidth == 438,
     "compact dashboard tile strip accounts for the wider daily token tile"
 )
+expect(
+    CompactDashboardTileDragPolicy.minimumPanelWidth == 474,
+    "compact panel minimum width leaves horizontal padding around the full tile strip"
+)
 
 let packageRootForDashboardTiles = URL(fileURLWithPath: FileManager.default.currentDirectoryPath, isDirectory: true)
 let dailyTokenTileText = (try? String(
@@ -1573,6 +1595,24 @@ expect(
 )
 
 let compactSnapScreen = CGRect(x: 0, y: 0, width: 1440, height: 900)
+let narrowCompactPanelFrame = CGRect(x: 510, y: 300, width: 420, height: 210)
+expect(
+    CompactDashboardTileDragPolicy.panelFrameFittingTileStrip(
+        narrowCompactPanelFrame,
+        in: compactSnapScreen
+    ) == CGRect(x: 483, y: 300, width: 474, height: 210),
+    "compact panel expands old two-tile frames to show all dashboard tiles"
+)
+
+let currentCompactPanelFrame = CGRect(x: 470, y: 300, width: 500, height: 210)
+expect(
+    CompactDashboardTileDragPolicy.panelFrameFittingTileStrip(
+        currentCompactPanelFrame,
+        in: compactSnapScreen
+    ) == currentCompactPanelFrame,
+    "compact panel keeps current dashboard-sized frames unchanged"
+)
+
 let compactNearMidlineFrame = CGRect(x: 520, y: 300, width: 420, height: 210)
 expect(
     CompactPanelSnapPolicy.snappedFrame(

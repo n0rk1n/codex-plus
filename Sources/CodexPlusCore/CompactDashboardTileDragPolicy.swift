@@ -17,6 +17,33 @@ public enum CompactDashboardTileDragPolicy {
     public static let dailyTokensTileWidth = 184.0
     public static let tileSpacing = 12.0
     public static let tileStripWidth = codexDesktopTileWidth + codexUsageTileWidth + dailyTokensTileWidth + (tileSpacing * 2)
+    public static let minimumPanelWidth = tileStripWidth + (horizontalPadding * 2)
+
+    public static func panelFrameFittingTileStrip(
+        _ panelFrame: CGRect,
+        in screenFrame: CGRect
+    ) -> CGRect {
+        let width = min(
+            max(panelFrame.width, CGFloat(Self.minimumPanelWidth)),
+            max(0, screenFrame.width)
+        )
+        guard width != panelFrame.width else {
+            return panelFrame
+        }
+
+        let centeredX = panelFrame.midX - (width / 2)
+        let x = min(
+            max(centeredX, screenFrame.minX),
+            screenFrame.maxX - width
+        )
+
+        return CGRect(
+            x: x,
+            y: panelFrame.minY,
+            width: width,
+            height: panelFrame.height
+        )
+    }
 
     public static func shouldMoveWindowFromMouseDown(
         at point: CGPoint,
