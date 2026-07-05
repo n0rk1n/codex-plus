@@ -12,6 +12,12 @@
 
 预览目录 `.superpowers/` 不纳入 Git，因此本文件是可长期追溯的设计记录。
 
+导出设计图：
+
+`docs/superpowers/prototypes/codex-plus-v1-main-workbench-design.png`
+
+该 PNG 是当前 V1 悬浮工作台主界面的视觉基准。
+
 ## 已确认界面规则
 
 - 悬浮工作台是 V1 的优先入口。
