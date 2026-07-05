@@ -1,407 +1,407 @@
-# Codex Plus V1 Redesign Design
+# Codex Plus V1 重设计方案
 
-Date: 2026-07-05
+日期：2026-07-05
 
-## Summary
+## 摘要
 
-Codex Plus V1 is a native macOS enhancement shell for Codex. It should first make Codex's basic workflow reliable inside a local desktop app: choose a project, start a Codex CLI task, view the full conversation and execution stream, continue or stop the task, archive the complete conversation, search archived conversations, and reopen an archived conversation with its full event history.
+Codex Plus V1 是一个原生 macOS 的 Codex 增强外壳。第一版先把 Codex 的基础工作流变成可靠的本地桌面体验：选择项目、启动 Codex CLI 任务、查看完整对话和执行流、继续或停止任务、归档完整对话、搜索已归档对话，并从搜索结果重新打开带有完整事件历史的归档对话。
 
-V1 is not the full long-term memory product. Memory work in V1 is limited to local persistence foundations: schemas, files, indexes, and references that allow future memory cards, injection, extraction, and review workflows to build on stable data. Manual memory injection, automatic memory extraction, STAR review, and periodic review are post-V1 features.
+V1 不是完整的长期记忆产品。V1 中的记忆工作只做本地持久化基础：数据结构、文件、索引和引用关系。这些基础要能支撑后续的记忆卡、记忆注入、自动抽取和审核工作流。手动记忆注入、自动记忆抽取、STAR 复盘和周期回顾都属于 V1 之后的功能。
 
-The old codebase is treated as historical product exploration only. It may inform interaction ideas such as the floating activity window, but the V1 product, architecture, and implementation plan should be designed from first principles.
+旧代码库只作为历史产品探索参考。它可以影响交互想法，例如活动悬浮窗口，但 V1 的产品、架构和实现计划应当从头设计。
 
-## Process Gate
+## 流程硬门
 
-Development must not start until requirements, prototypes, and this design are approved by the user.
+在需求、原型和本设计得到用户确认之前，不得开始开发。
 
-If the user is dissatisfied with any requirement, prototype, or design section, the project remains in design and does not move to implementation planning or code changes.
+如果用户对任何需求、原型或设计章节不满意，项目必须停留在设计阶段，不进入实现计划或代码修改。
 
-## Product Boundary
+## 产品边界
 
-V1 must implement:
+V1 必须实现：
 
-- Project or working-directory selection.
-- Creating a new Codex task.
-- Running Codex CLI through an execution engine adapter.
-- Displaying user messages, assistant messages, command events, errors, and raw execution events.
-- Sending follow-up prompts in the same conversation.
-- Stopping a running task.
-- Basic execution mode and permission configuration.
-- Archiving a complete conversation.
-- Searching archived conversations.
-- Reopening an archived conversation from search results.
-- Preserving local data structures for future memory features.
+- 选择项目或工作目录。
+- 创建新的 Codex 任务。
+- 通过执行引擎适配器运行 Codex CLI。
+- 展示用户消息、模型回复、命令事件、错误和原始执行事件。
+- 在同一对话中发送后续提示。
+- 停止运行中的任务。
+- 基础执行模式和权限配置。
+- 归档完整对话。
+- 搜索已归档对话。
+- 从搜索结果重新打开归档对话。
+- 为未来记忆功能保留本地数据结构。
 
-V1 must not implement:
+V1 不实现：
 
-- Manual memory injection into the active conversation.
-- Automatic memory extraction from completed tasks.
-- Full memory card review boards.
-- STAR review generation as a required flow.
-- Periodic review.
-- Similar-task memory recommendation.
-- Custom agent execution beyond the Codex CLI adapter.
-- Plugin systems.
+- 手动把记忆注入当前对话。
+- 从已完成任务中自动抽取记忆。
+- 完整记忆卡审核看板。
+- 把 STAR 复盘生成作为必走流程。
+- 周期回顾。
+- 相似任务前的记忆推荐。
+- Codex CLI 适配器之外的自定义 Agent 执行。
+- 插件系统。
 
-## Primary Product Surfaces
+## 主要产品界面
 
-### Main Window
+### 主窗口
 
-The main window is the source of truth for project navigation, conversation execution, archive search, and reopened archived conversations.
+主窗口是项目导航、对话执行、归档搜索和重新打开归档对话的事实来源。
 
-It follows a three-area structure:
+主窗口采用三区结构：
 
-- Left navigation: projects, active conversations, archived conversation entry points, and search.
-- Center work area: current conversation, execution stream, follow-up composer, stop action, and archive action.
-- Right auxiliary area: environment state such as current project path, Git branch, dirty state, execution mode, Codex CLI availability, and future extension slots.
+- 左侧导航：项目、活跃对话、归档对话入口和搜索。
+- 中间工作区：当前对话、执行流、后续输入框、停止操作和归档操作。
+- 右侧辅助区：当前项目路径、Git 分支、变更状态、执行模式、Codex CLI 可用性和未来扩展位。
 
-The V1 complexity should live primarily in the left navigation and center work area. The right auxiliary area stays lightweight.
+V1 的复杂度主要放在左侧导航和中间工作区。右侧辅助区保持轻量。
 
-### Floating Activity Window
+### 活动悬浮窗口
 
-Codex Plus keeps the original floating-window idea, but defines it as a companion layer rather than a replacement for the main window.
+Codex Plus 保留旧版本中的悬浮窗口想法，但将它定义为伴随层，而不是主窗口的替代品。
 
-The floating window handles:
+悬浮窗口负责：
 
-- Global shortcut invocation.
-- Fast first prompt entry.
-- Recent or current project selection.
-- Running task status.
-- Quick follow-up for the active task.
-- Stop action for the active running task.
-- Opening the corresponding full conversation in the main window.
-- Completion notification and archive prompt.
+- 全局快捷键唤起。
+- 快速输入第一条提示。
+- 选择最近项目或当前项目。
+- 显示运行中任务状态。
+- 对活跃任务快速发送后续提示。
+- 停止活跃运行任务。
+- 打开主窗口中的对应完整对话。
+- 任务完成通知和归档提示。
 
-The floating window and main window must share the same task state. They must not maintain separate copies of conversation or run data.
+悬浮窗口和主窗口必须共享同一套任务状态，不能各自维护对话或运行数据副本。
 
-## Information Architecture
+## 信息架构
 
-### Left Navigation
+### 左侧导航
 
-The left navigation contains:
+左侧导航包含：
 
-- New conversation.
-- Search.
-- Project list.
-- Conversations grouped by project.
-- Conversation states: running, completed, failed, stopped, archived.
-- Archived conversation entry points.
+- 新对话。
+- 搜索。
+- 项目列表。
+- 按项目分组的对话。
+- 对话状态：运行中、已完成、失败、已停止、已归档。
+- 归档对话入口。
 
-Future navigation items can include:
+未来可以加入：
 
-- Memory library.
-- Plugins.
-- Scheduled tasks.
+- 记忆库。
+- 插件。
+- 已安排任务。
 
-These future items must not be required for V1 completion.
+这些未来入口不作为 V1 完成条件。
 
-### Center Work Area
+### 中间工作区
 
-The center work area contains:
+中间工作区包含：
 
-- Full conversation message stream.
-- User prompts.
-- Assistant responses.
-- Codex CLI JSON events mapped into readable rows.
-- Command events.
-- Error and warning rows.
-- Raw event preservation for diagnostics.
-- Follow-up composer.
-- Stop action while running.
-- Archive action after completion, failure, or stop.
-- Reopened archived conversation view.
+- 完整对话消息流。
+- 用户提示。
+- 模型回复。
+- 映射成可读行的 Codex CLI JSON 事件。
+- 命令事件。
+- 错误和警告行。
+- 用于诊断的原始事件保留。
+- 后续输入框。
+- 运行中停止操作。
+- 完成、失败或停止后的归档操作。
+- 重新打开的归档对话视图。
 
-Archived conversations default to read-only. Restoring an archived conversation into a new active conversation is a post-V1 extension.
+归档对话默认是只读视图。把归档对话恢复成新的活跃对话属于 V1 之后的扩展。
 
-### Right Auxiliary Area
+### 右侧辅助区
 
-The right area contains compact local context:
+右侧区域展示紧凑的本地上下文：
 
-- Project path.
-- Git branch.
-- File change counts.
-- Execution mode and permission state.
-- Codex CLI availability.
+- 项目路径。
+- Git 分支。
+- 文件变更数量。
+- 执行模式和权限状态。
+- Codex CLI 可用性。
 
-It can later host memory and context tools, but V1 does not require memory injection UI.
+右侧后续可以承载记忆和上下文工具，但 V1 不要求实现记忆注入 UI。
 
-## Task Lifecycle
+## 任务生命周期
 
-A V1 task follows this flow:
+V1 任务流程如下：
 
-1. User selects or confirms a project or working directory.
-2. User creates a conversation and sends the first prompt.
-3. The app creates a task record and conversation record.
-4. `CodexCLIEngine` starts Codex CLI in the selected working directory.
-5. Codex stdout JSON events stream into the app.
-6. The app stores raw events and structured conversation events.
-7. The user can send follow-up prompts while the conversation remains active.
-8. The user can stop the running task.
-9. The task reaches completed, failed, or stopped state.
-10. The user archives the conversation.
-11. The app writes a complete structured archive and a readable Markdown archive.
-12. Search indexes are updated.
-13. User can search archives and reopen the full conversation.
+1. 用户选择或确认项目 / 工作目录。
+2. 用户创建对话并发送第一条提示。
+3. 应用创建任务记录和对话记录。
+4. `CodexCLIEngine` 在选定工作目录中启动 Codex CLI。
+5. Codex stdout JSON 事件流入应用。
+6. 应用保存原始事件和结构化对话事件。
+7. 只要对话保持活跃，用户可以发送后续提示。
+8. 用户可以停止运行中的任务。
+9. 任务进入已完成、失败或已停止状态。
+10. 用户归档对话。
+11. 应用写入完整结构化归档和可读 Markdown 归档。
+12. 搜索索引更新。
+13. 用户可以搜索归档并重新打开完整对话。
 
-Task state transitions:
+任务状态包括：
 
-- Draft.
-- Running.
-- Completed.
-- Failed.
-- Stopped.
-- Archived.
+- 草稿。
+- 运行中。
+- 已完成。
+- 失败。
+- 已停止。
+- 已归档。
 
-Only running tasks can be stopped. Archived conversations are preserved and searchable.
+只有运行中的任务可以停止。已归档对话必须被保留并可搜索。
 
-## Execution Engine
+## 执行引擎
 
-V1 defines an execution engine abstraction and implements only `CodexCLIEngine`.
+V1 定义执行引擎抽象，但只实现 `CodexCLIEngine`。
 
-The engine interface must support:
+执行引擎接口必须支持：
 
-- Starting a task.
-- Continuing a conversation.
-- Stopping a running task.
-- Streaming raw events.
-- Streaming structured display events.
-- Reporting completion, failure, and stop results.
-- Exposing engine metadata for archives.
+- 启动任务。
+- 继续对话。
+- 停止运行中的任务。
+- 流式返回原始事件。
+- 流式返回结构化展示事件。
+- 报告完成、失败和停止结果。
+- 暴露用于归档的引擎元数据。
 
-`CodexCLIEngine` is responsible for:
+`CodexCLIEngine` 负责：
 
-- Checking whether Codex CLI is available.
-- Starting Codex CLI in a selected working directory.
-- Requesting JSON output from Codex CLI.
-- Parsing user-visible event types.
-- Capturing stderr.
-- Preserving raw JSON lines.
-- Stopping the child process.
-- Reporting startup failure clearly.
+- 检查 Codex CLI 是否可用。
+- 在选定工作目录中启动 Codex CLI。
+- 请求 Codex CLI 输出 JSON。
+- 解析用户可见事件类型。
+- 捕获 stderr。
+- 保留原始 JSON 行。
+- 停止子进程。
+- 清晰报告启动失败。
 
-The task and archive systems must depend on the execution engine interface, not on Codex CLI command-line details.
+任务和归档系统必须依赖执行引擎接口，而不是直接依赖 Codex CLI 命令行细节。
 
-Future engines can include:
+未来可以加入的引擎包括：
 
-- OpenAI API agent engine.
-- Other CLI agent engines.
-- Local model engines.
-- Remote execution engines.
+- OpenAI API Agent 引擎。
+- 其他 CLI Agent 引擎。
+- 本地模型引擎。
+- 远程执行引擎。
 
-## Local Persistence
+## 本地持久化
 
-V1 uses SQLite plus Markdown and attachment files.
+V1 使用 SQLite 加 Markdown 和附件文件。
 
-SQLite is the source of truth for structured data and reconstruction. Markdown is a readable export and archive surface, not the only persisted representation.
+SQLite 是结构化数据和 UI 重建的事实来源。Markdown 是可读导出和归档表面，不是唯一持久化表示。
 
-### SQLite Tables
+### SQLite 表
 
 `projects`
 
-- Stores project ID, display name, normalized path, created time, last opened time, and archive count metadata.
+- 保存项目 ID、展示名称、规范化路径、创建时间、最近打开时间和归档数量元数据。
 
 `conversations`
 
-- Stores conversation ID, project ID, title, state, engine ID, working directory, created time, updated time, archived time, and archive file path.
+- 保存对话 ID、项目 ID、标题、状态、引擎 ID、工作目录、创建时间、更新时间、归档时间和归档文件路径。
 
 `conversation_events`
 
-- Stores event ID, conversation ID, sequence number, event type, display text, structured payload JSON, raw engine payload, timestamp, and searchable text.
+- 保存事件 ID、对话 ID、序号、事件类型、展示文本、结构化 payload JSON、原始引擎 payload、时间戳和可搜索文本。
 
 `archive_index`
 
-- Stores archive ID, conversation ID, project ID, title, searchable text, command text, error text, project path, and timestamps for archive search.
+- 保存归档 ID、对话 ID、项目 ID、标题、可搜索文本、命令文本、错误文本、项目路径和归档搜索时间戳。
 
 `memory_cards`
 
-- Stores local memory foundations for post-V1 features. Fields include card ID, scope, type, title, summary, body text, content shape, status, created time, updated time, and source metadata.
+- 保存 V1 之后记忆功能所需的本地基础。字段包括卡片 ID、作用范围、类型、标题、摘要、正文、内容形态、状态、创建时间、更新时间和来源元数据。
 
 `memory_sources`
 
-- Links a memory card to a source conversation, event, archived fragment, file path, screenshot, or attachment.
+- 将记忆卡关联到来源对话、事件、归档片段、文件路径、截图或附件。
 
 `attachments`
 
-- Stores attachment ID, owner type, owner ID, file path, original file path, content type, size, checksum, created time, and whether it is a snapshot copy.
+- 保存附件 ID、所属对象类型、所属对象 ID、文件路径、原始文件路径、内容类型、大小、校验和、创建时间，以及它是否是快照副本。
 
-### Memory Card Foundations
+### 记忆卡基础
 
-Memory cards are persisted locally in V1 so they can be searched and expanded later.
+V1 本地持久化记忆卡，以便后续可以搜索和扩展。
 
-Supported memory scopes:
+支持的记忆作用范围：
 
-- Project-level.
-- User-level.
+- 项目级。
+- 用户级。
 
-Supported content shapes:
+支持的内容形态：
 
-- Text.
-- Image plus text.
-- File reference.
-- File snapshot.
-- Task excerpt.
+- 文字。
+- 图片 + 文字。
+- 文件引用。
+- 文件快照。
+- 任务片段。
 
-Supported fixed memory types:
+固定记忆类型：
 
-1. Product constraint.
-2. Prototype or design material.
-3. Architecture decision.
-4. Implementation rule or code convention.
-5. API or data contract.
-6. Test boundary.
-7. Bad case or pitfall.
-8. Operation flow or command.
-9. Retrospective or STAR note.
+1. 产品约束。
+2. 原型或设计资料。
+3. 架构决策。
+4. 实现规则或代码约定。
+5. 接口或数据契约。
+6. 测试边界。
+7. Bad Case 或避坑。
+8. 操作流程或命令。
+9. 复盘或 STAR 记录。
 
-Memory cards can also have free-form tags. V1 storage must allow create, rename, edit, delete, summary edit, scope change, and source management at the data-model level. Full memory management UI is not required for V1 completion.
+记忆卡也可以拥有自由标签。V1 存储层必须允许在数据模型层面新增、重命名、编辑、删除、编辑摘要、变更作用范围和管理来源。完整记忆管理 UI 不作为 V1 完成条件。
 
-### File Layout
+### 文件布局
 
-Global app data stores:
+全局应用数据保存：
 
-- SQLite database.
-- User-level memory attachments.
-- Global archive exports if a conversation does not belong to a project-specific storage area.
+- SQLite 数据库。
+- 用户级记忆附件。
+- 不属于项目本地存储区域的全局归档导出。
 
-Project data can store:
+项目数据可以保存：
 
 - `.codex-plus/archives/`
 - `.codex-plus/memory/`
 - `.codex-plus/attachments/`
 
-V1 defaults to global app data storage for SQLite, archive records, memory foundations, and attachments. Project-local `.codex-plus/` folders are created only when the user opts into project-local storage or explicitly exports project artifacts into the project. The data model must support both global and project-local storage from the beginning.
+V1 默认把 SQLite、归档记录、记忆基础和附件保存在全局应用数据中。只有当用户选择项目本地存储，或明确把项目产物导出到项目里时，才创建项目本地 `.codex-plus/` 目录。数据模型必须从一开始就支持全局存储和项目本地存储。
 
-## Archive And Search
+## 归档与搜索
 
-Archiving must preserve complete conversations, not only summaries.
+归档必须保存完整对话，而不是只保存摘要。
 
-An archive includes:
+一次归档包括：
 
-- Project ID and path.
-- Conversation metadata.
-- Engine metadata.
-- User messages.
-- Assistant messages.
-- Command events.
-- Error events.
-- Raw JSON lines where available.
-- stderr excerpts.
-- Completion state.
-- Created, updated, completed, stopped, failed, and archived timestamps where applicable.
+- 项目 ID 和路径。
+- 对话元数据。
+- 引擎元数据。
+- 用户消息。
+- 模型回复。
+- 命令事件。
+- 错误事件。
+- 可用时的原始 JSON 行。
+- stderr 摘要。
+- 完成状态。
+- 适用时的创建、更新、完成、停止、失败和归档时间戳。
 
-Search must support:
+搜索必须支持：
 
-- Conversation title.
-- Project name and path.
-- User messages.
-- Assistant messages.
-- Command text.
-- Error text.
-- Searchable event text.
+- 对话标题。
+- 项目名称和路径。
+- 用户消息。
+- 模型回复。
+- 命令文本。
+- 错误文本。
+- 可搜索事件文本。
 
-Opening a search result must reconstruct the full conversation from SQLite event records. Markdown export can be opened as a readable artifact, but UI reconstruction must not depend solely on Markdown parsing.
+打开搜索结果时，必须从 SQLite 事件记录重建完整对话。Markdown 导出可以作为可读文档打开，但 UI 重建不能只依赖解析 Markdown。
 
-Search indexes must be rebuildable from stored conversation and archive records.
+搜索索引必须可以从已保存的对话和归档记录中重建。
 
-## Error Handling
+## 错误处理
 
-Codex CLI missing:
+Codex CLI 缺失：
 
-- Main window and floating window show Codex unavailable.
-- User can configure or retry the executable path.
-- Task creation is blocked until the engine is available.
+- 主窗口和悬浮窗口都显示 Codex 不可用。
+- 用户可以配置或重试可执行文件路径。
+- 引擎不可用前阻止任务创建。
 
-Project path missing or inaccessible:
+项目路径缺失或不可访问：
 
-- Task does not start.
-- Prompt draft and selected project state are preserved.
+- 不启动任务。
+- 保留提示草稿和选定项目状态。
 
-Codex startup failure:
+Codex 启动失败：
 
-- Conversation receives a failure event.
-- stderr and startup error details are stored.
+- 对话收到失败事件。
+- 保存 stderr 和启动错误细节。
 
-JSON parse failure:
+JSON 解析失败：
 
-- Raw line is preserved.
-- UI shows a parse warning.
-- Archive remains complete.
+- 保留原始行。
+- UI 显示解析警告。
+- 归档保持完整。
 
-Window closed while task runs:
+任务运行时关闭窗口：
 
-- Closing a window does not automatically discard the task.
-- App quit requires confirmation if tasks are running.
+- 关闭窗口不会自动丢弃任务。
+- 如果有任务正在运行，退出 App 需要确认。
 
-Stop failure:
+停止失败：
 
-- Task records stop request failure.
-- Error details are stored.
+- 任务记录停止请求失败。
+- 保存错误细节。
 
-Archive failure:
+归档失败：
 
-- Active conversation is not deleted.
-- User can retry archive.
+- 不删除活跃对话。
+- 用户可以重试归档。
 
-Search indexing failure:
+搜索索引失败：
 
-- Archive still completes if complete records are stored.
-- Index can be rebuilt later.
+- 只要完整记录已保存，归档仍然完成。
+- 索引之后可以重建。
 
-## Testing Targets
+## 测试目标
 
-Core tests should cover:
+核心测试应覆盖：
 
-- Execution engine protocol behavior using fake engines.
-- Codex CLI event parser samples.
-- Raw JSON preservation.
-- Event sequence ordering.
-- Task state transitions.
-- Stop behavior for one running task.
-- Conversation event persistence.
-- Archive record creation.
-- Markdown archive rendering.
-- Search index creation.
-- Search over user message, assistant message, command, error, and project path.
-- Reopening archived conversation from stored event records.
-- Memory card schema creation and basic CRUD at the data layer.
+- 使用 fake engine 测试执行引擎协议行为。
+- Codex CLI 事件解析样例。
+- 原始 JSON 保留。
+- 事件序号顺序。
+- 任务状态转换。
+- 单个运行任务的停止行为。
+- 对话事件持久化。
+- 归档记录创建。
+- Markdown 归档渲染。
+- 搜索索引创建。
+- 搜索用户消息、模型回复、命令、错误和项目路径。
+- 从已保存事件记录重新打开归档对话。
+- 记忆卡 schema 创建和数据层基础 CRUD。
 
-App smoke checks should cover:
+App 冒烟检查应覆盖：
 
-- Creating a task from the main window.
-- Creating a task from the floating window.
-- Showing running status in both surfaces.
-- Opening a running task from the floating window in the main window.
-- Stopping a task.
-- Archiving a completed conversation.
-- Searching and reopening an archived conversation.
-- Codex CLI unavailable state.
+- 从主窗口创建任务。
+- 从悬浮窗口创建任务。
+- 在两个界面显示运行状态。
+- 从悬浮窗口打开主窗口中的运行任务。
+- 停止任务。
+- 归档已完成对话。
+- 搜索并重新打开归档对话。
+- Codex CLI 不可用状态。
 
-## V1 Completion Criteria
+## V1 完成标准
 
-V1 is complete when:
+满足以下条件时，V1 才算完成：
 
-- A user can create a Codex task from the main window.
-- A user can create a Codex task from the floating window.
-- The app shows the full execution process.
-- The app supports follow-up prompts.
-- The app supports stopping a running task.
-- The app archives a complete conversation.
-- The app searches archived conversations.
-- A user can reopen a full archived conversation from search results.
-- Floating window and main window share task state.
-- Memory card data foundations exist locally but do not need injection or automatic extraction workflows.
+- 用户可以从主窗口创建 Codex 任务。
+- 用户可以从悬浮窗口创建 Codex 任务。
+- 应用显示完整执行过程。
+- 应用支持后续提示。
+- 应用支持停止运行中的任务。
+- 应用可以归档完整对话。
+- 应用可以搜索已归档对话。
+- 用户可以从搜索结果重新打开完整归档对话。
+- 悬浮窗口和主窗口共享任务状态。
+- 记忆卡数据基础本地存在，但不需要实现注入或自动抽取工作流。
 
-## Post-V1 Roadmap
+## V1 之后的路线图
 
-Post-V1 features include:
+V1 之后的功能包括：
 
-- Manual memory injection into active conversations.
-- Automatic memory extraction from archived tasks.
-- Memory card review board.
-- STAR summary generation.
-- Similar-task memory recommendation.
-- Periodic review.
-- Full memory library UI.
-- Restoring archived conversations into new active conversations.
-- Additional execution engines.
-- Plugin workflows.
+- 手动把记忆注入活跃对话。
+- 从归档任务中自动抽取记忆。
+- 记忆卡审核看板。
+- STAR 摘要生成。
+- 相似任务前的记忆推荐。
+- 周期回顾。
+- 完整记忆库 UI。
+- 把归档对话恢复成新的活跃对话。
+- 其他执行引擎。
+- 插件工作流。
