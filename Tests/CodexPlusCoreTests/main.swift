@@ -942,6 +942,17 @@ func expectWorkbenchInterfaceIntegration() {
         "workbench panel keeps the active key window backing and shadow transparent"
     )
     expect(
+        workbenchPanelControllerText.contains("func recordMove(of movedPanel: GlassPanel) -> Bool")
+            && workbenchPanelControllerText.contains("CompactPanelSnapPolicy.snappedFrame")
+            && workbenchPanelControllerText.contains("NSHapticFeedbackManager.defaultPerformer.perform(.alignment")
+            && workbenchPanelControllerText.contains("isApplyingSnapFrame"),
+        "workbench panel snaps to the screen midline while being moved"
+    )
+    expect(
+        windowCoordinatorText.contains("workbenchPanelController.recordMove(of: panel)"),
+        "window coordinator routes workbench panel move events into snap handling"
+    )
+    expect(
         workbenchLauncherViewText.contains("struct WorkbenchLauncherView")
             && workbenchLauncherViewText.contains(".glassEffect(")
             && workbenchLauncherViewText.contains(".compositingGroup()")

@@ -411,6 +411,10 @@ final class WindowCoordinator: NSObject, NSWindowDelegate {
         if sidePanelController.recordMove(of: panel) {
             return
         }
+
+        if workbenchPanelController.recordMove(of: panel) {
+            return
+        }
     }
 
     private func failureMessage(from result: CodexRunResult) -> String {

@@ -13,6 +13,8 @@ final class WorkbenchPanelController {
 
     private var panel: GlassPanel?
     private let dismissMonitors = EventMonitorStore()
+    private var isApplyingSnapFrame = false
+    private var wasSnappedToMidline = false
 
     init(
         panelFactory: PanelFactory,
@@ -51,6 +53,7 @@ final class WorkbenchPanelController {
         let panel = panel ?? panelFactory.makePanel(frame: frame, delegate: panelDelegate)
         panel.hasShadow = false
         panel.setFrame(frame, display: true)
+        wasSnappedToMidline = true
         panel.contentView = WorkbenchPanelHostingView(rootView: WorkbenchView(store: store))
         panel.makeKeyAndOrderFront(nil)
         self.panel = panel
@@ -65,6 +68,45 @@ final class WorkbenchPanelController {
         if wasVisible {
             onHide()
         }
+    }
+
+    func recordMove(of movedPanel: GlassPanel) -> Bool {
+        guard movedPanel === panel else {
+            return false
+        }
+
+        guard !isApplyingSnapFrame else {
+            return true
+        }
+
+        guard let screenFrame = (
+            screen(containing: movedPanel.frame) ??
+                movedPanel.screen ??
+                screenProvider.activeScreen()
+        )?.visibleFrame else {
+            wasSnappedToMidline = false
+            return true
+        }
+
+        let snappedFrame = CompactPanelSnapPolicy.snappedFrame(
+            for: movedPanel.frame,
+            in: screenFrame
+        )
+        let isSnapped = abs(snappedFrame.midX - screenFrame.midX) < 0.5
+
+        if isSnapped && !wasSnappedToMidline {
+            NSHapticFeedbackManager.defaultPerformer.perform(.alignment, performanceTime: .now)
+        }
+
+        wasSnappedToMidline = isSnapped
+        guard snappedFrame != movedPanel.frame else {
+            return true
+        }
+
+        isApplyingSnapFrame = true
+        movedPanel.setFrame(snappedFrame, display: true)
+        isApplyingSnapFrame = false
+        return true
     }
 
     static func defaultFrame(in visibleFrame: NSRect) -> NSRect {
@@ -114,6 +156,12 @@ final class WorkbenchPanelController {
             hide()
         }
     }
+
+    private func screen(containing frame: NSRect) -> NSScreen? {
+        NSScreen.screens.max { first, second in
+            first.visibleFrame.intersection(frame).area < second.visibleFrame.intersection(frame).area
+        }
+    }
 }
 
 private final class WorkbenchPanelHostingView<Content: View>: NSHostingView<Content> {
@@ -133,5 +181,11 @@ private final class WorkbenchPanelHostingView<Content: View>: NSHostingView<Cont
         layer?.isOpaque = false
         layer?.shadowOpacity = 0
         layer?.shadowColor = NSColor.clear.cgColor
+    }
+}
+
+private extension NSRect {
+    var area: CGFloat {
+        width * height
     }
 }
