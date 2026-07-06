@@ -3,26 +3,14 @@ import CodexPlusCore
 
 @MainActor
 final class AppDelegate: NSObject, NSApplicationDelegate {
-    private let conversationCoordinator: ConversationCoordinator
-    private let batteryProvider: IOKitBatteryStatusProvider
-    private let codexRunner: ProcessCodexRunner
     private var windowCoordinator: WindowCoordinator?
     private var hotKeyController: HotKeyController?
-
-    override init() {
-        self.conversationCoordinator = ConversationCoordinator()
-        self.batteryProvider = IOKitBatteryStatusProvider()
-        self.codexRunner = ProcessCodexRunner()
-        super.init()
-    }
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         do {
             let store = try makeWorkbenchStore()
             self.windowCoordinator = WindowCoordinator(
-                conversationCoordinator: conversationCoordinator,
-                batteryProvider: batteryProvider,
-                codexRunner: codexRunner,
+                batteryProvider: IOKitBatteryStatusProvider(),
                 workbenchStore: store
             )
         } catch {
@@ -51,7 +39,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let database = try SQLiteDatabase(path: databasePath)
         try CodexPlusSchema.migrate(database)
         let repository = SQLiteCodexPlusRepository(database: database)
-        let engine = CodexCLIEngine()
+        let engine = CodexCLIEngine(runner: ProcessCodexRunner())
         return WorkbenchStore(repository: repository, engine: engine)
     }
 

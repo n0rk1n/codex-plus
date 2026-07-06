@@ -27,9 +27,14 @@ let package = Package(
             ]
         ),
         .executableTarget(
-            name: "CodexPlusCoreTests",
+            name: "CodexPlusCoreLegacyTests",
             dependencies: ["CodexPlusCore"],
             path: "Tests/CodexPlusCoreTests"
+        ),
+        .testTarget(
+            name: "CodexPlusCoreTests",
+            dependencies: ["CodexPlusCore"],
+            path: "Tests/CodexPlusCoreXCTests"
         )
     ]
 )

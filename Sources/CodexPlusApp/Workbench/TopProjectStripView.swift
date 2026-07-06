@@ -6,12 +6,7 @@ struct TopProjectStripView: View {
     let isPinned: Bool
     let isNewConversationDisabled: Bool
     let isShowingArchiveSearch: Bool
-    let onNewConversation: () -> Void
-    let onReturnToConversation: () -> Void
-    let onOpenArchive: () -> Void
-    let onTogglePin: () -> Void
-    let onSelectProject: (UUID) -> Void
-    let onSelectConversation: (UUID) -> Void
+    let actions: ProjectStripActions
 
     var body: some View {
         VStack(spacing: 10) {
@@ -19,7 +14,7 @@ struct TopProjectStripView: View {
                 stripActionButton(title: firstActionTitle, systemName: firstActionSystemName, action: firstAction)
                     .disabled(!isShowingArchiveSearch && isNewConversationDisabled)
                     .opacity(!isShowingArchiveSearch && isNewConversationDisabled ? 0.45 : 1)
-                stripActionButton(title: "已归档", systemName: "archivebox", action: onOpenArchive)
+                stripActionButton(title: WorkbenchStrings.archived, systemName: "archivebox", action: actions.openArchive)
                 Spacer(minLength: 0)
                 pinButton
             }
@@ -38,7 +33,7 @@ struct TopProjectStripView: View {
     }
 
     private var firstActionTitle: String {
-        isShowingArchiveSearch ? "回到对话" : "新的对话"
+        isShowingArchiveSearch ? "回到对话" : WorkbenchStrings.newConversation
     }
 
     private var firstActionSystemName: String {
@@ -46,11 +41,11 @@ struct TopProjectStripView: View {
     }
 
     private var firstAction: () -> Void {
-        isShowingArchiveSearch ? onReturnToConversation : onNewConversation
+        isShowingArchiveSearch ? actions.returnToConversation : actions.newConversation
     }
 
     private var pinButton: some View {
-        Button(action: onTogglePin) {
+        Button(action: actions.togglePin) {
             Image(systemName: isPinned ? "pin.fill" : "pin")
                 .font(.system(size: 13, weight: .semibold))
                 .frame(width: 32, height: 32)
@@ -78,12 +73,12 @@ struct TopProjectStripView: View {
     private func projectCard(_ card: WorkbenchProjectCard) -> some View {
         Button(action: {
             if let conversationID = card.conversationID {
-                onSelectConversation(conversationID)
+                actions.selectConversation(conversationID)
             } else {
-                onSelectProject(card.id)
+                actions.selectProject(card.id)
             }
         }) {
-            LiquidGlassContainer(cornerRadius: 18) {
+            LiquidGlassContainer(cornerRadius: WorkbenchMetrics.projectCardCornerRadius) {
                 HStack(alignment: .top, spacing: 12) {
                     VStack(alignment: .leading, spacing: 8) {
                         HStack(alignment: .firstTextBaseline, spacing: 8) {
@@ -133,7 +128,7 @@ struct TopProjectStripView: View {
                         Menu {
                             ForEach(card.conversationSummaries) { conversation in
                                 Button {
-                                    onSelectConversation(conversation.id)
+                                    actions.selectConversation(conversation.id)
                                 } label: {
                                     Text(conversation.title)
                                 }

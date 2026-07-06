@@ -78,6 +78,7 @@ public struct WorkbenchSnapshot: Equatable, Sendable {
     public var pendingArchiveConfirmationConversationID: UUID?
     public var isShowingArchiveSearch: Bool
     public var openedArchiveConversation: ConversationSession?
+    public var error: WorkbenchErrorState?
 
     public init(
         projectCards: [WorkbenchProjectCard] = [],
@@ -94,7 +95,8 @@ public struct WorkbenchSnapshot: Equatable, Sendable {
         isPinned: Bool = false,
         pendingArchiveConfirmationConversationID: UUID? = nil,
         isShowingArchiveSearch: Bool = false,
-        openedArchiveConversation: ConversationSession? = nil
+        openedArchiveConversation: ConversationSession? = nil,
+        error: WorkbenchErrorState? = nil
     ) {
         self.projectCards = projectCards
         self.activeConversation = activeConversation
@@ -107,6 +109,7 @@ public struct WorkbenchSnapshot: Equatable, Sendable {
         self.pendingArchiveConfirmationConversationID = pendingArchiveConfirmationConversationID
         self.isShowingArchiveSearch = isShowingArchiveSearch
         self.openedArchiveConversation = openedArchiveConversation
+        self.error = error
     }
 }
 

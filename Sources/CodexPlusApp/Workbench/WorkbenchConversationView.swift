@@ -3,12 +3,12 @@ import SwiftUI
 
 struct WorkbenchConversationView: View {
     let snapshot: WorkbenchSnapshot
-    let onArchiveConversation: (UUID) -> Void
+    let actions: ConversationActions
 
     @State private var expandedTechnicalGroupIDs = Set<UUID>()
 
     var body: some View {
-        LiquidGlassContainer(cornerRadius: 24) {
+        LiquidGlassContainer(cornerRadius: WorkbenchMetrics.conversationCornerRadius) {
             Group {
                 if let conversation = snapshot.activeConversation {
                     activeConversationView(conversation)
@@ -68,7 +68,7 @@ struct WorkbenchConversationView: View {
 
     private func archiveButton(for conversationID: UUID) -> some View {
         Button {
-            onArchiveConversation(conversationID)
+            actions.archiveConversation(conversationID)
         } label: {
             Label("归档", systemImage: "archivebox.and.arrow.down")
                 .font(.caption.weight(.semibold))
@@ -91,10 +91,10 @@ struct WorkbenchConversationView: View {
                 .font(.system(size: 28, weight: .medium))
                 .foregroundStyle(.secondary)
 
-            Text("暂无活动对话")
+            Text(WorkbenchStrings.emptyConversationTitle)
                 .font(.system(size: 16, weight: .semibold))
 
-            Text("新对话")
+            Text(WorkbenchStrings.emptyConversationSubtitle)
                 .font(.caption)
                 .foregroundStyle(.secondary)
 

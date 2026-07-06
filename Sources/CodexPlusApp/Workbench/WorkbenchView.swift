@@ -8,45 +8,67 @@ struct WorkbenchView: View {
 
     var body: some View {
         LiquidGlassScene(padding: 0, minWidth: 980, minHeight: 620) {
-            VStack(spacing: 6) {
+            VStack(spacing: WorkbenchMetrics.verticalSpacing) {
                 TopProjectStripView(
                     cards: store.snapshot.projectCards,
                     isPinned: store.snapshot.isPinned,
                     isNewConversationDisabled: !store.snapshot.canStartNewConversation,
                     isShowingArchiveSearch: store.snapshot.isShowingArchiveSearch,
-                    onNewConversation: { store.beginNewConversationDraft() },
-                    onReturnToConversation: { store.returnToConversationPage() },
-                    onOpenArchive: { store.showArchiveSearch() },
-                    onTogglePin: { store.togglePin() },
-                    onSelectProject: { store.selectProject($0) },
-                    onSelectConversation: { store.selectConversation($0) }
+                    actions: actions.projectStrip
                 )
+
+                if let error = store.snapshot.error {
+                    HStack(alignment: .top, spacing: 10) {
+                        Image(systemName: "exclamationmark.triangle.fill")
+                            .foregroundStyle(.yellow)
+
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text(error.title)
+                                .font(.caption.weight(.semibold))
+                            Text(error.message)
+                                .font(.caption2)
+                                .foregroundStyle(.secondary)
+                                .lineLimit(2)
+                        }
+
+                        Spacer(minLength: 8)
+
+                        Button(action: { store.clearError() }) {
+                            Image(systemName: "xmark.circle.fill")
+                        .font(.system(size: 14, weight: .semibold))
+                        }
+                        .buttonStyle(.plain)
+                        .accessibilityLabel(WorkbenchStrings.closeError)
+                    }
+                    .padding(.horizontal, 12)
+                    .padding(.vertical, 8)
+                    .glassEffect(
+                        .regular,
+                        in: RoundedRectangle(cornerRadius: WorkbenchMetrics.errorCornerRadius, style: .continuous)
+                    )
+                }
 
                 if store.snapshot.isShowingArchiveSearch {
                     ArchivedConversationView(
                         results: store.snapshot.archiveSearchResults,
                         openedConversation: store.snapshot.openedArchiveConversation,
-                        onSearch: { store.searchArchives($0) },
-                        onOpen: { store.openArchive($0) }
+                        actions: actions.archive
                     )
                 } else {
                     WorkbenchConversationView(
                         snapshot: store.snapshot,
-                        onArchiveConversation: { _ = store.archiveConversation($0) }
+                        actions: actions.conversation
                     )
 
                     WorkbenchComposerView(
                         snapshot: store.snapshot,
-                        onSend: { store.submitPrompt($0) },
-                        onPickWorkspace: pickWorkspace,
-                        onClearWorkspace: { store.clearDraftWorkspaceSelection() },
-                        onStop: { store.stopActiveRun() }
+                        actions: actions.composer
                     )
                 }
 
                 WorkbenchStatusBarView(state: store.snapshot.statusBar, codexUsageStatus: codexUsageMonitor.status)
             }
-            .padding(18)
+            .padding(WorkbenchMetrics.scenePadding)
             .alert("终止任务后归档？", isPresented: pendingArchiveConfirmationBinding) {
                 Button("取消", role: .cancel) {
                     store.cancelArchiveConfirmation()
@@ -58,6 +80,32 @@ struct WorkbenchView: View {
                 Text("这个对话仍在运行。归档前需要先停止当前 Codex 任务；停止后会保存完整事件流，并将对话标记为已归档。")
             }
         }
+    }
+
+    private var actions: WorkbenchActions {
+        WorkbenchActions(
+            projectStrip: ProjectStripActions(
+                newConversation: { store.beginNewConversationDraft() },
+                returnToConversation: { store.returnToConversationPage() },
+                openArchive: { store.showArchiveSearch() },
+                togglePin: { store.togglePin() },
+                selectProject: { store.selectProject($0) },
+                selectConversation: { store.selectConversation($0) }
+            ),
+            conversation: ConversationActions(
+                archiveConversation: { _ = store.archiveConversation($0) }
+            ),
+            composer: ComposerActions(
+                send: { store.submitPrompt($0) },
+                pickWorkspace: pickWorkspace,
+                clearWorkspace: { store.clearDraftWorkspaceSelection() },
+                stop: { store.stopActiveRun() }
+            ),
+            archive: ArchiveActions(
+                search: { store.searchArchives($0) },
+                open: { store.openArchive($0) }
+            )
+        )
     }
 
     private var pendingArchiveConfirmationBinding: Binding<Bool> {

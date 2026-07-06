@@ -6,16 +6,15 @@ public final class WorkbenchStore: ObservableObject {
     @Published public private(set) var snapshot: WorkbenchSnapshot
 
     private let repository: CodexPlusRepository
-    private let engine: ExecutionEngine
     private let archiveService: ArchiveSearchService
+    private let lifecycle: ConversationLifecycleService
+    private let runOrchestrator: ConversationRunOrchestrator
     private let defaultWorkspacePathProvider: () throws -> String
 
     private var workspaces: [WorkspaceSessionGroup]
     private var conversations: [ConversationSession]
     private var activeWorkspaceID: UUID?
     private var activeConversationID: UUID?
-    private var activeHandles: [UUID: ExecutionHandle] = [:]
-    private var titleGenerator: ConversationTitleGenerator
 
     public init(
         repository: CodexPlusRepository,
@@ -25,23 +24,20 @@ public final class WorkbenchStore: ObservableObject {
         }
     ) {
         self.repository = repository
-        self.engine = engine
         self.archiveService = ArchiveSearchService(repository: repository)
+        let lifecycle = ConversationLifecycleService(
+            projectRepository: repository,
+            conversationRepository: repository
+        )
+        self.lifecycle = lifecycle
+        self.runOrchestrator = ConversationRunOrchestrator(engine: engine)
         self.defaultWorkspacePathProvider = defaultWorkspacePathProvider
 
-        let loadedWorkspaces = (try? repository.loadProjects()) ?? []
-        let loadedConversations = (try? repository.loadConversations()) ?? []
-        self.workspaces = loadedWorkspaces
-        self.conversations = loadedConversations
-        self.titleGenerator = ConversationTitleGenerator()
-
-        let initialWorkspace = loadedWorkspaces.max(by: { $0.lastActivityAt < $1.lastActivityAt })
-        self.activeWorkspaceID = initialWorkspace?.id
-        self.activeConversationID = initialWorkspace.flatMap { workspace in
-            workspace.conversationIDs.compactMap { id in
-                loadedConversations.first { $0.id == id && !$0.isArchived }
-            }.first?.id
-        }
+        let initialState = (try? lifecycle.loadInitialState()) ?? .empty
+        self.workspaces = initialState.workspaces
+        self.conversations = initialState.conversations
+        self.activeWorkspaceID = initialState.activeWorkspaceID
+        self.activeConversationID = initialState.activeConversationID
         self.snapshot = WorkbenchSnapshot()
         refreshSnapshot()
     }
@@ -133,42 +129,22 @@ public final class WorkbenchStore: ObservableObject {
             return
         }
 
-        guard let workspace = ensureProject(for: workspacePath) else {
+        do {
+            let nextState = try lifecycle.createConversation(
+                prompt: trimmedPrompt,
+                workspacePath: workspacePath,
+                in: currentStateFromStore()
+            )
+            apply(nextState)
+        } catch {
+            setError(title: "无法创建对话", error: error)
             return
         }
 
-        let now = Date()
-        let session = ConversationSession(
-            title: titleGenerator.nextTitle(existingTitles: conversations.map(\.title)),
-            prompt: trimmedPrompt,
-            workspacePath: workspace.path,
-            state: .running,
-            permissionMode: .semiAutomatic,
-            createdAt: now,
-            lastActivityAt: now,
-            events: [.userPrompt(id: UUID(), text: trimmedPrompt)]
-        )
-
-        guard let updatedWorkspaces = attachedWorkspaces(
-            adding: session.id,
-            to: workspace.id,
-            now: now
-        ) else {
-            return
-        }
-
-        guard saveConversation(session, projectID: workspace.id) else {
-            return
-        }
-
-        workspaces = updatedWorkspaces
-        conversations.append(session)
-        activeWorkspaceID = workspace.id
-        activeConversationID = session.id
-        snapshot.openedArchiveConversation = nil
-        snapshot.isShowingArchiveSearch = false
         refreshSnapshot()
-        startEngineRun(for: session.id, prompt: trimmedPrompt)
+        if let conversation = snapshot.activeConversation {
+            startEngineRun(for: conversation.id, prompt: conversation.prompt)
+        }
     }
 
     public func submitPrompt(_ prompt: String) {
@@ -185,6 +161,7 @@ public final class WorkbenchStore: ObservableObject {
             do {
                 workspacePath = try defaultWorkspacePathProvider()
             } catch {
+                setError(title: "无法准备工作区", error: error)
                 return
             }
         }
@@ -262,8 +239,18 @@ public final class WorkbenchStore: ObservableObject {
         confirmStopAndArchive(id)
     }
 
+    public func clearError() {
+        snapshot.error = nil
+        refreshSnapshot()
+    }
+
     public func searchArchives(_ query: String) {
-        snapshot.archiveSearchResults = (try? archiveService.search(query)) ?? []
+        do {
+            snapshot.archiveSearchResults = try archiveService.search(query)
+        } catch {
+            setError(title: "无法搜索归档", error: error)
+            snapshot.archiveSearchResults = []
+        }
         snapshot.isShowingArchiveSearch = true
         if snapshot.openedArchiveConversation != nil {
             snapshot.openedArchiveConversation = nil
@@ -298,35 +285,23 @@ public final class WorkbenchStore: ObservableObject {
             return
         }
 
-        let request = ExecutionRequest(
-            prompt: prompt,
-            permissionMode: conversation.permissionMode,
-            sessionID: conversation.id,
-            workingDirectoryURL: URL(fileURLWithPath: conversation.workspacePath, isDirectory: true)
-        )
-
-        let handle = engine.start(
-            request: request,
-            onEvent: { [weak self] event in
-                Task { @MainActor in
-                    self?.handleEngineEvent(event, for: conversationID)
-                }
-            },
-            onFinish: { [weak self] result in
-                Task { @MainActor in
+        do {
+            try runOrchestrator.start(
+                conversation: conversation,
+                prompt: prompt,
+                onEvent: { [weak self] event in
+                    self?.appendEvent(event, to: conversationID)
+                },
+                onFinish: { [weak self] result in
                     self?.finishRun(for: conversationID, result: result)
                 }
-            }
-        )
-        activeHandles[conversationID] = handle
-    }
-
-    private func handleEngineEvent(_ event: CodexEvent, for conversationID: UUID) {
-        appendEvent(Self.displayEvent(from: event), to: conversationID)
+            )
+        } catch {
+            setError(title: "无法启动 Codex", error: error)
+        }
     }
 
     private func finishRun(for conversationID: UUID, result: CodexRunResult) {
-        activeHandles[conversationID] = nil
         guard let conversation = conversations.first(where: { $0.id == conversationID }) else {
             return
         }
@@ -349,18 +324,18 @@ public final class WorkbenchStore: ObservableObject {
 
     @discardableResult
     private func stopRun(for conversationID: UUID) -> Bool {
-        guard let handle = activeHandles[conversationID] else {
+        guard runOrchestrator.isRunning(conversationID: conversationID) else {
             return false
         }
 
         guard persistUpdatedConversation(conversationID, mutation: { session in
             session.state = .stopped
         }) else {
+            setError(title: "无法停止任务", message: "对话状态保存失败，任务仍在运行。")
             return false
         }
 
-        activeHandles[conversationID] = nil
-        handle.stop()
+        _ = runOrchestrator.stop(conversationID: conversationID)
         refreshSnapshot()
         return true
     }
@@ -460,6 +435,51 @@ public final class WorkbenchStore: ObservableObject {
         return workspaces.first { $0.id == activeWorkspaceID }
     }
 
+    private func currentStateFromStore() -> WorkbenchState {
+        WorkbenchState(
+            workspaces: workspaces,
+            conversations: conversations,
+            activeWorkspaceID: activeWorkspaceID,
+            activeConversationID: activeConversationID,
+            archiveSearchResults: snapshot.archiveSearchResults,
+            openedArchiveConversation: snapshot.openedArchiveConversation,
+            isShowingArchiveSearch: snapshot.isShowingArchiveSearch,
+            pendingArchiveConfirmationConversationID: snapshot.pendingArchiveConfirmationConversationID,
+            isPinned: snapshot.isPinned,
+            error: snapshot.error
+        )
+    }
+
+    private func apply(_ state: WorkbenchState) {
+        workspaces = state.workspaces
+        conversations = state.conversations
+        activeWorkspaceID = state.activeWorkspaceID
+        activeConversationID = state.activeConversationID
+        snapshot.archiveSearchResults = state.archiveSearchResults
+        snapshot.openedArchiveConversation = state.openedArchiveConversation
+        snapshot.isShowingArchiveSearch = state.isShowingArchiveSearch
+        snapshot.pendingArchiveConfirmationConversationID = state.pendingArchiveConfirmationConversationID
+        snapshot.isPinned = state.isPinned
+        snapshot.error = state.error
+    }
+
+    private func setError(title: String, error: Error, recoverySuggestion: String? = nil) {
+        setError(
+            title: title,
+            message: String(describing: error),
+            recoverySuggestion: recoverySuggestion
+        )
+    }
+
+    private func setError(title: String, message: String, recoverySuggestion: String? = nil) {
+        snapshot.error = WorkbenchErrorState(
+            title: title,
+            message: message,
+            recoverySuggestion: recoverySuggestion
+        )
+        refreshSnapshot()
+    }
+
     private func appendEvent(_ event: ConversationDisplayEvent, to conversationID: UUID) {
         guard persistUpdatedConversation(conversationID, mutation: { session in
             session.events.append(event)
@@ -527,6 +547,7 @@ public final class WorkbenchStore: ObservableObject {
             try repository.saveProject(project)
             return true
         } catch {
+            setError(title: "无法保存项目", error: error)
             return false
         }
     }
@@ -536,6 +557,7 @@ public final class WorkbenchStore: ObservableObject {
             try repository.saveConversation(conversation, projectID: projectID)
             return true
         } catch {
+            setError(title: "无法保存对话", error: error)
             return false
         }
     }
@@ -560,30 +582,8 @@ public final class WorkbenchStore: ObservableObject {
             isPinned: snapshot.isPinned,
             pendingArchiveConfirmationConversationID: snapshot.pendingArchiveConfirmationConversationID,
             isShowingArchiveSearch: snapshot.isShowingArchiveSearch,
-            openedArchiveConversation: snapshot.openedArchiveConversation
+            openedArchiveConversation: snapshot.openedArchiveConversation,
+            error: snapshot.error
         )
-    }
-
-    private static func displayEvent(from event: CodexEvent) -> ConversationDisplayEvent {
-        switch event {
-        case let .threadStarted(threadID):
-            return .status(id: UUID(), text: "Thread started: \(threadID)")
-        case .turnStarted:
-            return .status(id: UUID(), text: "Turn started")
-        case .turnCompleted:
-            return .status(id: UUID(), text: "Turn completed")
-        case let .turnFailed(message):
-            return .error(id: UUID(), text: message)
-        case let .agentMessage(text):
-            return .assistantMessage(id: UUID(), text: text)
-        case let .command(id, command, status):
-            return .command(id: UUID(), executionID: id, command: command, status: status)
-        case let .error(text):
-            return .error(id: UUID(), text: text)
-        case let .raw(text):
-            return .status(id: UUID(), text: text)
-        case let .parseWarning(text):
-            return .parseWarning(id: UUID(), text: text)
-        }
     }
 }

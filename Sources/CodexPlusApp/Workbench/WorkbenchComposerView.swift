@@ -3,16 +3,13 @@ import SwiftUI
 
 struct WorkbenchComposerView: View {
     let snapshot: WorkbenchSnapshot
-    let onSend: (String) -> Void
-    let onPickWorkspace: () -> Void
-    let onClearWorkspace: () -> Void
-    let onStop: () -> Void
+    let actions: ComposerActions
 
     @State private var prompt = ""
     @FocusState private var isFocused: Bool
 
     var body: some View {
-        LiquidGlassContainer(cornerRadius: 22) {
+        LiquidGlassContainer(cornerRadius: WorkbenchMetrics.composerCornerRadius) {
             HStack(alignment: .center, spacing: 12) {
                 if snapshot.activeConversation == nil {
                     workspacePickerButton
@@ -43,10 +40,10 @@ struct WorkbenchComposerView: View {
     private var composerButton: some View {
         switch snapshot.composerAction {
         case .stop:
-            Button(action: onStop) {
+            Button(action: actions.stop) {
                 Image(systemName: "stop.fill")
                     .font(.system(size: 15, weight: .semibold))
-                    .frame(width: 30, height: 30)
+                    .frame(width: WorkbenchMetrics.composerControlHeight, height: WorkbenchMetrics.composerControlHeight)
             }
             .buttonStyle(.plain)
             .disabled(snapshot.activeConversation == nil)
@@ -54,7 +51,7 @@ struct WorkbenchComposerView: View {
             Button(action: submitPrompt) {
                 Image(systemName: "arrow.up")
                     .font(.system(size: 15, weight: .semibold))
-                    .frame(width: 30, height: 30)
+                    .frame(width: WorkbenchMetrics.composerControlHeight, height: WorkbenchMetrics.composerControlHeight)
             }
             .buttonStyle(.plain)
             .disabled(
@@ -66,18 +63,18 @@ struct WorkbenchComposerView: View {
 
     private var workspacePickerButton: some View {
         HStack(spacing: 0) {
-            Button(action: onPickWorkspace) {
+            Button(action: actions.pickWorkspace) {
                 HStack(spacing: 6) {
                     Image(systemName: "folder")
                         .font(.system(size: 12, weight: .semibold))
 
-                    Text(activeProjectName ?? "选择工作目录")
+                    Text(activeProjectName ?? WorkbenchStrings.chooseWorkspace)
                         .font(.system(size: 12, weight: .semibold))
                         .lineLimit(1)
                 }
                 .padding(.leading, 10)
                 .padding(.trailing, activeProjectName == nil ? 10 : 6)
-                .frame(height: 30)
+                .frame(height: WorkbenchMetrics.composerControlHeight)
                 .frame(maxWidth: 190)
                 .contentShape(Capsule(style: .continuous))
             }
@@ -90,25 +87,25 @@ struct WorkbenchComposerView: View {
         .glassEffect(.regular, in: Capsule(style: .continuous))
         .compositingGroup()
         .mask(Capsule(style: .continuous))
-        .help(activeProjectPath ?? "选择工作目录")
-        .accessibilityLabel("选择工作目录")
+        .help(activeProjectPath ?? WorkbenchStrings.chooseWorkspace)
+        .accessibilityLabel(WorkbenchStrings.chooseWorkspace)
     }
 
     private var workspaceClearButton: some View {
-        Button(action: onClearWorkspace) {
+        Button(action: actions.clearWorkspace) {
             Image(systemName: "xmark.circle.fill")
                 .symbolRenderingMode(.hierarchical)
                 .font(.system(size: 15, weight: .semibold))
-                .frame(width: 24, height: 30)
+                .frame(width: 24, height: WorkbenchMetrics.composerControlHeight)
         }
         .buttonStyle(.plain)
         .padding(.trailing, 6)
-        .help("清除工作目录")
-        .accessibilityLabel("清除工作目录")
+        .help(WorkbenchStrings.clearWorkspace)
+        .accessibilityLabel(WorkbenchStrings.clearWorkspace)
     }
 
     private var activePlaceholder: String {
-        snapshot.activeConversation == nil ? "新对话" : "继续输入"
+        snapshot.activeConversation == nil ? WorkbenchStrings.emptyConversationSubtitle : WorkbenchStrings.continueInput
     }
 
     private var activeProjectName: String? {
@@ -125,7 +122,7 @@ struct WorkbenchComposerView: View {
             return
         }
 
-        onSend(trimmedPrompt)
+        actions.send(trimmedPrompt)
         prompt = ""
     }
 }

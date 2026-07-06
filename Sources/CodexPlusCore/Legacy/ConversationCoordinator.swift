@@ -204,7 +204,7 @@ public final class ConversationCoordinator: ObservableObject {
 
     public func appendCodexEvent(_ event: CodexEvent, to id: UUID, now: Date = Date()) {
         updateConversation(id, now: now) { session in
-            session.events.append(Self.displayEvent(from: event))
+            session.events.append(CodexEventDisplayMapper.displayEvent(from: event))
             Self.trimEvents(&session.events)
         }
     }
@@ -368,29 +368,6 @@ public final class ConversationCoordinator: ObservableObject {
             return right.id
         case (nil, nil):
             return nil
-        }
-    }
-
-    private static func displayEvent(from event: CodexEvent) -> ConversationDisplayEvent {
-        switch event {
-        case let .threadStarted(threadID):
-            return .status(id: UUID(), text: "Thread started: \(threadID)")
-        case .turnStarted:
-            return .status(id: UUID(), text: "Turn started")
-        case .turnCompleted:
-            return .status(id: UUID(), text: "Turn completed")
-        case let .turnFailed(message):
-            return .error(id: UUID(), text: message)
-        case let .agentMessage(text):
-            return .assistantMessage(id: UUID(), text: text)
-        case let .command(executionID, command, status):
-            return .command(id: UUID(), executionID: executionID, command: command, status: status)
-        case let .error(message):
-            return .error(id: UUID(), text: message)
-        case let .raw(text):
-            return .status(id: UUID(), text: text)
-        case let .parseWarning(text):
-            return .parseWarning(id: UUID(), text: text)
         }
     }
 

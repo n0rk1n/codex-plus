@@ -1,24 +1,6 @@
 import Foundation
 
-public protocol CodexPlusRepository: Sendable {
-    func saveProject(_ project: WorkspaceSessionGroup) throws
-    func loadProjects() throws -> [WorkspaceSessionGroup]
-    func saveConversation(_ conversation: ConversationSession, projectID: UUID) throws
-    func loadConversations() throws -> [ConversationSession]
-    func saveArchiveRecord(_ record: ConversationArchiveRecord) throws
-    func searchArchiveRecords(query: String) throws -> [ConversationArchiveRecord]
-    func markConversationArchived(_ id: UUID, archiveMarkdownPath: String, archivedAt: Date) throws
-    func archiveConversation(record: ConversationArchiveRecord, archiveMarkdownPath: String, archivedAt: Date) throws
-    func saveMemoryCard(_ card: MemoryCard) throws
-    func loadMemoryCards(scope: String?) throws -> [MemoryCard]
-    func deleteMemoryCard(_ id: UUID) throws
-    func saveMemorySource(_ source: MemorySource) throws
-    func loadMemorySources(memoryCardID: UUID) throws -> [MemorySource]
-    func deleteMemorySource(_ id: UUID) throws
-    func saveAttachment(_ attachment: CodexPlusAttachment) throws
-    func loadAttachments(ownerKind: String, ownerID: UUID?) throws -> [CodexPlusAttachment]
-    func deleteAttachment(_ id: UUID) throws
-}
+public protocol CodexPlusRepository: ProjectRepository, ConversationRepository, ArchiveRepository, MemoryRepository, AttachmentRepository, Sendable {}
 
 public extension CodexPlusRepository {
     func saveMemoryCard(_ card: MemoryCard) throws {
@@ -187,7 +169,11 @@ public final class SQLiteCodexPlusRepository: CodexPlusRepository, @unchecked Se
             )
 
             for (ordinal, event) in conversation.events.enumerated() {
-                let record = try EncodedConversationEvent(event: event, ordinal: ordinal, fallbackDate: conversation.createdAt)
+                let record = try ConversationEventCodec.encode(
+                    event,
+                    ordinal: ordinal,
+                    fallbackDate: conversation.createdAt
+                )
                 try database.execute(
                     """
                     INSERT INTO conversation_events (
@@ -265,7 +251,12 @@ public final class SQLiteCodexPlusRepository: CodexPlusRepository, @unchecked Se
         return try conversationRows.map { row in
             let conversationID = try uuid(for: "id", in: row)
             let conversationKey = conversationID.uuidString.lowercased()
-            let events = try (eventRowsByConversationID[conversationKey] ?? []).map(DecodedConversationEvent.init(row:)).map(\.event)
+            let events = try (eventRowsByConversationID[conversationKey] ?? []).map { eventRow in
+                try ConversationEventCodec.decode(
+                    kind: try text(for: "kind", in: eventRow),
+                    payloadJSON: try text(for: "payload_json", in: eventRow)
+                )
+            }
 
             return ConversationSession(
                 id: conversationID,
@@ -651,108 +642,12 @@ public final class SQLiteCodexPlusRepository: CodexPlusRepository, @unchecked Se
     }
 }
 
-private struct EncodedConversationEvent {
-    let id: String
-    let ordinal: Int
-    let kind: String
-    let displayText: String
-    let payloadJSON: String
-    let rawPayloadJSON: String?
-    let createdAt: Date
-    let searchableText: String
-
-    init(event: ConversationDisplayEvent, ordinal: Int, fallbackDate: Date) throws {
-        self.id = event.id.uuidString.lowercased()
-        self.ordinal = ordinal
-        self.createdAt = fallbackDate.addingTimeInterval(Double(ordinal) / 1000.0)
-
-        switch event {
-        case let .userPrompt(id, text):
-            kind = "user_prompt"
-            displayText = text
-            payloadJSON = try stableJSONString(["id": id.uuidString.lowercased(), "text": text])
-            rawPayloadJSON = nil
-            searchableText = text
-        case let .status(id, text):
-            kind = "status"
-            displayText = text
-            payloadJSON = try stableJSONString(["id": id.uuidString.lowercased(), "text": text])
-            rawPayloadJSON = nil
-            searchableText = text
-        case let .assistantMessage(id, text):
-            kind = "assistant_message"
-            displayText = text
-            payloadJSON = try stableJSONString(["id": id.uuidString.lowercased(), "text": text])
-            rawPayloadJSON = nil
-            searchableText = text
-        case let .command(id, executionID, command, status):
-            kind = "command"
-            displayText = command
-            var payload: [String: Any] = [
-                "command": command,
-                "id": id.uuidString.lowercased(),
-                "status": status.rawValue
-            ]
-            payload["execution_id"] = executionID ?? NSNull()
-            payloadJSON = try stableJSONString(payload)
-            rawPayloadJSON = nil
-            searchableText = command
-        case let .error(id, text):
-            kind = "error"
-            displayText = text
-            payloadJSON = try stableJSONString(["id": id.uuidString.lowercased(), "text": text])
-            rawPayloadJSON = nil
-            searchableText = text
-        case let .parseWarning(id, text):
-            kind = "parse_warning"
-            displayText = text
-            payloadJSON = try stableJSONString(["id": id.uuidString.lowercased(), "text": text])
-            rawPayloadJSON = nil
-            searchableText = text
-        }
-    }
-}
-
-private struct DecodedConversationEvent {
-    let event: ConversationDisplayEvent
-
-    init(row: [String: SQLiteValue]) throws {
-        let kind = try text(for: "kind", in: row)
-        let payloadObject = try jsonObject(from: try text(for: "payload_json", in: row))
-
-        switch kind {
-        case "user_prompt":
-            event = .userPrompt(id: try payloadUUID(payloadObject), text: try payloadText(payloadObject))
-        case "status":
-            event = .status(id: try payloadUUID(payloadObject), text: try payloadText(payloadObject))
-        case "assistant_message":
-            event = .assistantMessage(id: try payloadUUID(payloadObject), text: try payloadText(payloadObject))
-        case "command":
-            event = .command(
-                id: try payloadUUID(payloadObject),
-                executionID: payloadObject["execution_id"] as? String,
-                command: try payloadRequiredString(payloadObject, key: "command"),
-                status: try payloadCommandStatus(payloadObject)
-            )
-        case "error":
-            event = .error(id: try payloadUUID(payloadObject), text: try payloadText(payloadObject))
-        case "parse_warning":
-            event = .parseWarning(id: try payloadUUID(payloadObject), text: try payloadText(payloadObject))
-        default:
-            throw RepositoryError.invalidEventKind(kind)
-        }
-    }
-}
-
 private enum RepositoryError: Error, CustomStringConvertible {
     case missingColumn(String)
     case invalidValue(column: String, value: SQLiteValue)
     case invalidUUID(String)
     case invalidState(String)
     case invalidPermissionMode(String)
-    case invalidCommandStatus(String)
-    case invalidPayload(String)
-    case invalidEventKind(String)
 
     var description: String {
         switch self {
@@ -766,12 +661,6 @@ private enum RepositoryError: Error, CustomStringConvertible {
             return "Invalid conversation state: \(value)"
         case let .invalidPermissionMode(value):
             return "Invalid permission mode: \(value)"
-        case let .invalidCommandStatus(value):
-            return "Invalid command status: \(value)"
-        case let .invalidPayload(value):
-            return "Invalid payload JSON: \(value)"
-        case let .invalidEventKind(value):
-            return "Invalid event kind: \(value)"
         }
     }
 }
@@ -866,58 +755,6 @@ private func value(for column: String, in row: [String: SQLiteValue]) throws -> 
     }
 
     return value
-}
-
-private func stableJSONString(_ object: [String: Any]) throws -> String {
-    guard JSONSerialization.isValidJSONObject(object) else {
-        throw RepositoryError.invalidPayload(String(describing: object))
-    }
-
-    let data = try JSONSerialization.data(withJSONObject: object, options: [.sortedKeys])
-    guard let string = String(data: data, encoding: .utf8) else {
-        throw RepositoryError.invalidPayload(String(describing: object))
-    }
-
-    return string
-}
-
-private func jsonObject(from json: String) throws -> [String: Any] {
-    guard let data = json.data(using: .utf8),
-          let object = try JSONSerialization.jsonObject(with: data) as? [String: Any] else {
-        throw RepositoryError.invalidPayload(json)
-    }
-
-    return object
-}
-
-private func payloadUUID(_ object: [String: Any]) throws -> UUID {
-    let value = try payloadRequiredString(object, key: "id")
-    guard let uuid = UUID(uuidString: value) else {
-        throw RepositoryError.invalidUUID(value)
-    }
-
-    return uuid
-}
-
-private func payloadText(_ object: [String: Any]) throws -> String {
-    try payloadRequiredString(object, key: "text")
-}
-
-private func payloadRequiredString(_ object: [String: Any], key: String) throws -> String {
-    guard let value = object[key] as? String else {
-        throw RepositoryError.invalidPayload(String(describing: object))
-    }
-
-    return value
-}
-
-private func payloadCommandStatus(_ object: [String: Any]) throws -> CodexCommandStatus {
-    let rawValue = try payloadRequiredString(object, key: "status")
-    guard let status = CodexCommandStatus(rawValue: rawValue) else {
-        throw RepositoryError.invalidCommandStatus(rawValue)
-    }
-
-    return status
 }
 
 private func decodeArchiveRecord(_ row: [String: SQLiteValue]) throws -> ConversationArchiveRecord {

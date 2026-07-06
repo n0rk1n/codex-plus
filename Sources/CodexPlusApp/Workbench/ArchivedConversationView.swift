@@ -4,14 +4,13 @@ import SwiftUI
 struct ArchivedConversationView: View {
     let results: [ConversationArchiveRecord]
     let openedConversation: ConversationSession?
-    let onSearch: (String) -> Void
-    let onOpen: (UUID) -> Void
+    let actions: ArchiveActions
 
     @State private var query = ""
     @State private var expandedTechnicalGroupIDs = Set<UUID>()
 
     var body: some View {
-        LiquidGlassContainer(cornerRadius: 24) {
+        LiquidGlassContainer(cornerRadius: WorkbenchMetrics.conversationCornerRadius) {
             HStack(spacing: 0) {
                 searchPane
 
@@ -29,16 +28,16 @@ struct ArchivedConversationView: View {
             TextField("搜索已归档对话", text: $query)
                 .textFieldStyle(.roundedBorder)
                 .onSubmit {
-                    onSearch(query)
+                    actions.search(query)
                 }
                 .onChange(of: query) {
-                    onSearch(query)
+                    actions.search(query)
                 }
 
             List {
                 ForEach(results) { record in
                     Button {
-                        onOpen(record.id)
+                        actions.open(record.id)
                     } label: {
                         VStack(alignment: .leading, spacing: 4) {
                             Text(record.title)
