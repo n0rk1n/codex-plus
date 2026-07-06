@@ -945,8 +945,21 @@ func expectWorkbenchInterfaceIntegration() {
         workbenchPanelControllerText.contains("func recordMove(of movedPanel: GlassPanel) -> Bool")
             && workbenchPanelControllerText.contains("CompactPanelSnapPolicy.snappedFrame")
             && workbenchPanelControllerText.contains("NSHapticFeedbackManager.defaultPerformer.perform(.alignment")
-            && workbenchPanelControllerText.contains("isApplyingSnapFrame"),
+            && workbenchPanelControllerText.contains("wasNearMidline"),
         "workbench panel snaps to the screen midline while being moved"
+    )
+    expect(
+        workbenchPanelControllerText.contains("NSEvent.addLocalMonitorForEvents(matching: [.leftMouseUp]")
+            && workbenchPanelControllerText.contains("snapWorkbenchPanelToMidlineIfNeeded()")
+            && !workbenchPanelControllerText.contains("movedPanel.setFrame(snappedFrame, display: true)"),
+        "workbench panel finalizes midline snap on mouse up instead of fighting AppKit drag frames"
+    )
+    expect(
+        workbenchPanelControllerText.contains("NSEvent.addLocalMonitorForEvents(matching: [.keyDown]")
+            && workbenchPanelControllerText.contains("CompactEntryDismissPolicy.shouldDismissForKeyDown")
+            && workbenchPanelControllerText.contains("panel.isKeyWindow || panel.isMainWindow")
+            && workbenchPanelControllerText.contains("hide()"),
+        "workbench panel hides on escape only when it is the current key or main window"
     )
     expect(
         windowCoordinatorText.contains("workbenchPanelController.recordMove(of: panel)"),

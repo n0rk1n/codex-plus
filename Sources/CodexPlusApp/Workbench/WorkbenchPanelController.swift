@@ -13,8 +13,7 @@ final class WorkbenchPanelController {
 
     private var panel: GlassPanel?
     private let dismissMonitors = EventMonitorStore()
-    private var isApplyingSnapFrame = false
-    private var wasSnappedToMidline = false
+    private var wasNearMidline = false
 
     init(
         panelFactory: PanelFactory,
@@ -53,7 +52,7 @@ final class WorkbenchPanelController {
         let panel = panel ?? panelFactory.makePanel(frame: frame, delegate: panelDelegate)
         panel.hasShadow = false
         panel.setFrame(frame, display: true)
-        wasSnappedToMidline = true
+        wasNearMidline = true
         panel.contentView = WorkbenchPanelHostingView(rootView: WorkbenchView(store: store))
         panel.makeKeyAndOrderFront(nil)
         self.panel = panel
@@ -75,16 +74,12 @@ final class WorkbenchPanelController {
             return false
         }
 
-        guard !isApplyingSnapFrame else {
-            return true
-        }
-
         guard let screenFrame = (
             screen(containing: movedPanel.frame) ??
                 movedPanel.screen ??
                 screenProvider.activeScreen()
         )?.visibleFrame else {
-            wasSnappedToMidline = false
+            wasNearMidline = false
             return true
         }
 
@@ -92,20 +87,13 @@ final class WorkbenchPanelController {
             for: movedPanel.frame,
             in: screenFrame
         )
-        let isSnapped = abs(snappedFrame.midX - screenFrame.midX) < 0.5
+        let isNearMidline = abs(snappedFrame.midX - screenFrame.midX) < 0.5
 
-        if isSnapped && !wasSnappedToMidline {
+        if isNearMidline && !wasNearMidline {
             NSHapticFeedbackManager.defaultPerformer.perform(.alignment, performanceTime: .now)
         }
 
-        wasSnappedToMidline = isSnapped
-        guard snappedFrame != movedPanel.frame else {
-            return true
-        }
-
-        isApplyingSnapFrame = true
-        movedPanel.setFrame(snappedFrame, display: true)
-        isApplyingSnapFrame = false
+        wasNearMidline = isNearMidline
         return true
     }
 
@@ -124,6 +112,33 @@ final class WorkbenchPanelController {
     private func installDismissMonitorsIfNeeded() {
         guard dismissMonitors.isEmpty else {
             return
+        }
+
+        if let keyMonitor = NSEvent.addLocalMonitorForEvents(matching: [.keyDown], handler: { [weak self] event in
+            guard let self else {
+                return event
+            }
+
+            guard
+                let panel = self.panel,
+                panel.isVisible,
+                panel.isKeyWindow || panel.isMainWindow,
+                CompactEntryDismissPolicy.shouldDismissForKeyDown(keyCode: event.keyCode)
+            else {
+                return event
+            }
+
+            self.hide()
+            return nil
+        }) {
+            dismissMonitors.append(keyMonitor)
+        }
+
+        if let mouseUpMonitor = NSEvent.addLocalMonitorForEvents(matching: [.leftMouseUp], handler: { [weak self] event in
+            self?.snapWorkbenchPanelToMidlineIfNeeded()
+            return event
+        }) {
+            dismissMonitors.append(mouseUpMonitor)
         }
 
         let mouseDownMask: NSEvent.EventTypeMask = [.leftMouseDown, .rightMouseDown, .otherMouseDown]
@@ -155,6 +170,31 @@ final class WorkbenchPanelController {
         ) {
             hide()
         }
+    }
+
+    private func snapWorkbenchPanelToMidlineIfNeeded() {
+        guard let panel, panel.isVisible else {
+            return
+        }
+
+        guard let screenFrame = (
+            screen(containing: panel.frame) ??
+                panel.screen ??
+                screenProvider.activeScreen()
+        )?.visibleFrame else {
+            return
+        }
+
+        let snappedFrame = CompactPanelSnapPolicy.snappedFrame(
+            for: panel.frame,
+            in: screenFrame
+        )
+
+        guard snappedFrame != panel.frame else {
+            return
+        }
+
+        panel.setFrame(snappedFrame, display: true)
     }
 
     private func screen(containing frame: NSRect) -> NSScreen? {
