@@ -126,6 +126,7 @@ final class MemoryCodexUsageStatusCache: CodexUsageStatusCaching, @unchecked Sen
     private let lock = NSLock()
     private var storedStatus: CodexUsageStatus?
     private var savedStatusValue: CodexUsageStatus?
+    private var loadStatusCount = 0
 
     init(_ storedStatus: CodexUsageStatus? = nil) {
         self.storedStatus = storedStatus
@@ -137,6 +138,7 @@ final class MemoryCodexUsageStatusCache: CodexUsageStatusCaching, @unchecked Sen
             lock.unlock()
         }
 
+        loadStatusCount += 1
         return storedStatus
     }
 
@@ -157,6 +159,15 @@ final class MemoryCodexUsageStatusCache: CodexUsageStatusCaching, @unchecked Sen
         }
 
         return savedStatusValue
+    }
+
+    var loadCount: Int {
+        lock.lock()
+        defer {
+            lock.unlock()
+        }
+
+        return loadStatusCount
     }
 }
 
@@ -781,6 +792,7 @@ func expectWorkbenchInterfaceIntegration() {
     let topProjectStripPath = "Sources/CodexPlusApp/Workbench/TopProjectStripView.swift"
     let workbenchConversationPath = "Sources/CodexPlusApp/Workbench/WorkbenchConversationView.swift"
     let workbenchComposerPath = "Sources/CodexPlusApp/Workbench/WorkbenchComposerView.swift"
+    let archivedConversationPath = "Sources/CodexPlusApp/Workbench/ArchivedConversationView.swift"
     let workbenchStatusBarPath = "Sources/CodexPlusApp/Workbench/WorkbenchStatusBarView.swift"
     let workbenchPanelControllerPath = "Sources/CodexPlusApp/Workbench/WorkbenchPanelController.swift"
     let workbenchLauncherViewPath = "Sources/CodexPlusApp/Workbench/WorkbenchLauncherView.swift"
@@ -795,6 +807,7 @@ func expectWorkbenchInterfaceIntegration() {
         topProjectStripPath,
         workbenchConversationPath,
         workbenchComposerPath,
+        archivedConversationPath,
         workbenchStatusBarPath,
         workbenchPanelControllerPath,
         workbenchLauncherViewPath,
@@ -823,6 +836,10 @@ func expectWorkbenchInterfaceIntegration() {
     )) ?? ""
     let workbenchComposerText = (try? String(
         contentsOf: packageRoot.appendingPathComponent(workbenchComposerPath),
+        encoding: .utf8
+    )) ?? ""
+    let archivedConversationText = (try? String(
+        contentsOf: packageRoot.appendingPathComponent(archivedConversationPath),
         encoding: .utf8
     )) ?? ""
     let workbenchStatusBarText = (try? String(
@@ -873,6 +890,17 @@ func expectWorkbenchInterfaceIntegration() {
         "workbench root routes composer submit, workspace picking, workspace clearing, and pin toggle through the store"
     )
     expect(
+        topProjectStripText.contains("let isShowingArchiveSearch: Bool")
+            && topProjectStripText.contains("firstActionTitle")
+            && topProjectStripText.contains(#"isShowingArchiveSearch ? "回到对话" : "新的对话""#)
+            && topProjectStripText.contains("firstAction")
+            && topProjectStripText.contains("isShowingArchiveSearch ? onReturnToConversation : onNewConversation")
+            && workbenchViewText.contains("isShowingArchiveSearch: store.snapshot.isShowingArchiveSearch")
+            && workbenchViewText.contains("onReturnToConversation: { store.returnToConversationPage() }")
+            && !archivedConversationText.contains(#"Label("回到对话", systemImage: "bubble.left")"#),
+        "top strip swaps the first action between New Conversation and Return to Conversation"
+    )
+    expect(
         workbenchViewText.contains("import AppKit")
             && workbenchViewText.contains("let panel = NSOpenPanel()")
             && workbenchViewText.contains("panel.canChooseDirectories = true")
@@ -890,11 +918,13 @@ func expectWorkbenchInterfaceIntegration() {
         "top project strip distinguishes project and conversation labels and only shows overflow when available"
     )
     expect(
-        topProjectStripText.contains(#"title: "新对话""#)
+        topProjectStripText.contains("title: firstActionTitle")
+            && topProjectStripText.contains(#""新的对话""#)
+            && topProjectStripText.contains(#""回到对话""#)
             && topProjectStripText.contains(#"title: "已归档""#)
             && !topProjectStripText.contains("归档当前")
             && !topProjectStripText.contains("archivebox.and.arrow.down"),
-        "top project strip only shows the new-conversation and archived entry actions"
+        "top project strip only shows the primary conversation action and archived entry action"
     )
     expect(
         topProjectStripText.contains(".mask(Circle())")
@@ -955,10 +985,42 @@ func expectWorkbenchInterfaceIntegration() {
             && workbenchComposerText.contains(".symbolRenderingMode(.hierarchical)")
             && workbenchComposerText.contains(".frame(width: 24, height: 30)")
             && workbenchComposerText.contains(".padding(.trailing, 6)")
+            && workbenchComposerText.contains(".contentShape(Capsule(style: .continuous))")
             && workbenchComposerText.contains(".submitLabel(.send)")
             && workbenchComposerText.contains(".disabled(snapshot.composerAction == .stop)")
             && workbenchComposerText.contains("snapshot.canSubmitPrompt"),
-        "workbench composer sends on return and respects submit availability"
+        "workbench composer sends on return, respects submit availability, and exposes the full workspace picker hit area"
+    )
+    expect(
+        topProjectStripText.contains("let isNewConversationDisabled: Bool")
+            && topProjectStripText.contains(".disabled(!isShowingArchiveSearch && isNewConversationDisabled)")
+            && workbenchViewText.contains("isNewConversationDisabled: !store.snapshot.canStartNewConversation"),
+        "top project strip disables New Conversation only when the normal conversation page is already blank"
+    )
+    expect(
+        !topProjectStripText.contains("let codexUsageStatus: CodexUsageStatus")
+            && !topProjectStripText.contains("UsageLimitText(")
+            && workbenchStatusBarText.contains("let codexUsageStatus: CodexUsageStatus")
+            && workbenchStatusBarText.contains("usageLimitSummary(status: codexUsageStatus)")
+            && workbenchStatusBarText.contains("label: \"5h\"")
+            && workbenchStatusBarText.contains("label: \"1w\"")
+            && workbenchStatusBarText.contains("status.displayPercentText(for: .fiveHour)")
+            && workbenchStatusBarText.contains("status.displayPercentText(for: .weekly)")
+            && workbenchStatusBarText.contains("status.ringColor(for: window)")
+            && workbenchStatusBarText.contains("private struct StatusUsageLimitText: View")
+            && workbenchStatusBarText.contains("HStack(spacing: 14)")
+            && workbenchStatusBarText.contains("Spacer(minLength: 0)")
+            && workbenchViewText.contains("@ObservedObject var codexUsageMonitor: CodexUsageMonitor")
+            && workbenchViewText.contains("WorkbenchStatusBarView(state: store.snapshot.statusBar, codexUsageStatus: codexUsageMonitor.status)")
+            && workbenchPanelControllerText.contains("codexUsageMonitor: CodexUsageMonitor")
+            && workbenchPanelControllerText.contains("WorkbenchView(store: store, codexUsageMonitor: codexUsageMonitor)")
+            && windowCoordinatorText.contains("codexUsageMonitor: codexUsageMonitor"),
+        "workbench status bar renders cached Codex usage percentages on the left with gradient colors from the shared monitor"
+    )
+    expect(
+        workbenchViewText.contains("VStack(spacing: 6)")
+            && !workbenchViewText.contains("VStack(spacing: 12)"),
+        "workbench root uses the reduced top strip gap"
     )
     expect(
         workbenchStatusBarText.contains("Codex CLI 可用")
@@ -972,7 +1034,7 @@ func expectWorkbenchInterfaceIntegration() {
         "workbench status bar does not show pin or background-task state"
     )
     expect(
-        workbenchPanelControllerText.contains("WorkbenchPanelHostingView(rootView: WorkbenchView(store: store))")
+        workbenchPanelControllerText.contains("WorkbenchPanelHostingView(rootView: WorkbenchView(store: store, codexUsageMonitor: codexUsageMonitor))")
             && !workbenchPanelControllerText.contains("WorkbenchPanelPlaceholderView"),
         "workbench panel controller hosts the real workbench view instead of a placeholder root"
     )
@@ -1677,8 +1739,8 @@ let fixedDateComponents = DateComponents(
 let fixedDate = fixedDateComponents.date!
 expect(
     ConversationWorkspacePolicy.defaultParentPath(homeDirectoryPath: "/Users/oriki") ==
-        "/Users/oriki/Documents/Codex-plus",
-    "default workspace parent uses Codex-plus documents path"
+        "/Users/oriki/.codex-plus/workspaces",
+    "default workspace parent uses .codex-plus workspaces path"
 )
 expect(
     ConversationWorkspacePolicy.defaultDateDirectoryName(
@@ -1697,7 +1759,7 @@ expect(
         date: fixedDate,
         randomSuffix: 4821,
         calendar: Calendar(identifier: .gregorian)
-    ) == "/Users/oriki/Documents/Codex-plus/2026-07-03/4821",
+    ) == "/Users/oriki/.codex-plus/workspaces/2026-07-03/4821",
     "default workspace path joins parent, date, and random directories"
 )
 expect(
@@ -2300,10 +2362,10 @@ expect(
     "codex usage display text shows known five-hour percent"
 )
 
-let stableGreenCodexUsage = CodexUsageStatus(fiveHourPercent: 65, weeklyPercent: 70, observedAt: nil)
+let stableGreenCodexUsage = CodexUsageStatus(fiveHourPercent: 60, weeklyPercent: 60, observedAt: nil)
 expect(
     stableGreenCodexUsage.ringColor(for: .fiveHour) == .lowUsageGreen,
-    "codex usage at sixty-five percent still uses the shared green"
+    "codex usage at sixty percent still uses the shared green"
 )
 expect(
     stableGreenCodexUsage.ringColor(for: .weekly) == .lowUsageGreen,
@@ -2314,12 +2376,15 @@ let yellowCodexUsage = CodexUsageStatus(fiveHourPercent: 80, weeklyPercent: 75, 
 expect(yellowCodexUsage.ringColor(for: .fiveHour) == .midUsageYellow, "codex usage at eighty percent is yellow")
 expect(
     yellowCodexUsage.ringColor(for: .weekly) != .lowUsageGreen,
-    "codex usage between seventy and eighty percent interpolates away from green"
+    "codex usage between sixty and eighty percent interpolates away from green"
 )
 
 let redCodexUsage = CodexUsageStatus(fiveHourPercent: 96, weeklyPercent: 100, observedAt: nil)
 expect(redCodexUsage.ringColor(for: .fiveHour) != .midUsageYellow, "codex usage above eighty percent interpolates away from yellow")
-expect(redCodexUsage.ringColor(for: .weekly) == .highUsageRed, "codex usage at one hundred percent is red")
+expect(
+    redCodexUsage.ringColor(for: .weekly) == CodexUsageRingColor(red: 0.55, green: 0.55, blue: 0.58),
+    "codex usage at one hundred percent is gray"
+)
 
 let clampedCodexUsage = CodexUsageStatus(fiveHourPercent: -5, weeklyPercent: 140, observedAt: nil)
 expect(clampedCodexUsage.fiveHourPercent == 0, "codex usage clamps low percent to zero")
@@ -2630,8 +2695,8 @@ let codexUsageMonitorProvider = SequenceCodexUsageProvider([
     CodexUsageStatus(fiveHourPercent: 33, weeklyPercent: 44, observedAt: nil)
 ])
 expect(
-    CodexUsageMonitor.defaultRefreshInterval == 120,
-    "codex usage monitor defaults to a two-minute refresh interval"
+    CodexUsageMonitor.defaultRefreshInterval == 180,
+    "codex usage monitor defaults to a three-minute refresh interval"
 )
 let codexUsageMonitor = CodexUsageMonitor(provider: codexUsageMonitorProvider, statusCache: nil)
 expect(codexUsageMonitor.status == .unknown, "codex usage monitor starts unknown before refresh")
@@ -2678,28 +2743,28 @@ let cachedCodexUsageMonitorUpdated = waitUntil(timeout: 2) {
 }
 expect(
     cachedCodexUsageMonitorUpdated,
-    "codex usage monitor replaces cached status after provider refresh"
+    "codex usage monitor replaces cached status by reloading local cache after provider refresh"
 )
 expect(
     codexUsageStatusCache.savedStatus == refreshedCodexUsageStatus,
     "codex usage monitor saves refreshed status to local cache"
 )
+expect(
+    codexUsageStatusCache.loadCount >= 2,
+    "codex usage monitor reads status from local cache again after saving refreshed provider data"
+)
 
-let codexUsageCacheSuiteName = "CodexPlusCoreTests.codexUsage.\(UUID().uuidString)"
-if let codexUsageDefaults = UserDefaults(suiteName: codexUsageCacheSuiteName) {
-    defer {
-        codexUsageDefaults.removePersistentDomain(forName: codexUsageCacheSuiteName)
-    }
-
-    let persistedCodexUsageCache = UserDefaultsCodexUsageStatusCache(defaults: codexUsageDefaults)
-    persistedCodexUsageCache.saveStatus(refreshedCodexUsageStatus)
-    expect(
-        UserDefaultsCodexUsageStatusCache(defaults: codexUsageDefaults).loadStatus() == refreshedCodexUsageStatus,
-        "codex usage status cache persists and reloads status locally"
-    )
-} else {
-    expect(false, "codex usage status cache test can create an isolated UserDefaults suite")
+let codexUsageCacheDirectory = makeTemporaryDirectory(named: "codex-usage-cache")
+defer {
+    try? FileManager.default.removeItem(at: codexUsageCacheDirectory)
 }
+let codexUsageCachePath = codexUsageCacheDirectory.appendingPathComponent("status/codex-usage.json")
+let persistedCodexUsageCache = FileCodexUsageStatusCache(fileURL: codexUsageCachePath)
+persistedCodexUsageCache.saveStatus(refreshedCodexUsageStatus)
+expect(
+    FileCodexUsageStatusCache(fileURL: codexUsageCachePath).loadStatus() == refreshedCodexUsageStatus,
+    "codex usage status cache persists and reloads status from a local file"
+)
 
 let lowVolumeDailyTokenStatus = DailyTokenStatus(
     inputTokens: 998_000,
@@ -2791,45 +2856,41 @@ expect(
 var dailyTokenCacheCalendar = Calendar(identifier: .gregorian)
 dailyTokenCacheCalendar.timeZone = TimeZone(secondsFromGMT: 0) ?? .current
 let dailyTokenCacheNow = Date(timeIntervalSince1970: 90)
-let dailyTokenCacheSuiteName = "CodexPlusCoreTests.dailyTokens.\(UUID().uuidString)"
-if let dailyTokenDefaults = UserDefaults(suiteName: dailyTokenCacheSuiteName) {
-    defer {
-        dailyTokenDefaults.removePersistentDomain(forName: dailyTokenCacheSuiteName)
-    }
-
-    let persistedDailyTokenCache = UserDefaultsDailyTokenStatusCache(
-        defaults: dailyTokenDefaults,
+let dailyTokenCacheDirectory = makeTemporaryDirectory(named: "daily-token-cache")
+defer {
+    try? FileManager.default.removeItem(at: dailyTokenCacheDirectory)
+}
+let dailyTokenCachePath = dailyTokenCacheDirectory.appendingPathComponent("status/daily-token.json")
+let persistedDailyTokenCache = FileDailyTokenStatusCache(
+    fileURL: dailyTokenCachePath,
+    calendar: dailyTokenCacheCalendar,
+    now: { dailyTokenCacheNow }
+)
+persistedDailyTokenCache.saveStatus(refreshedDailyTokenStatus)
+expect(
+    FileDailyTokenStatusCache(
+        fileURL: dailyTokenCachePath,
         calendar: dailyTokenCacheCalendar,
         now: { dailyTokenCacheNow }
-    )
-    persistedDailyTokenCache.saveStatus(refreshedDailyTokenStatus)
-    expect(
-        UserDefaultsDailyTokenStatusCache(
-            defaults: dailyTokenDefaults,
-            calendar: dailyTokenCacheCalendar,
-            now: { dailyTokenCacheNow }
-        ).loadStatus() == refreshedDailyTokenStatus,
-        "daily token status cache persists and reloads today's status locally"
-    )
+    ).loadStatus() == refreshedDailyTokenStatus,
+    "daily token status cache persists and reloads today's status from a local file"
+)
 
-    let staleDailyTokenStatus = DailyTokenStatus(
-        inputTokens: 1,
-        outputTokens: 1,
-        cachedInputTokens: 0,
-        observedAt: dailyTokenCacheNow.addingTimeInterval(-86_400)
-    )
-    persistedDailyTokenCache.saveStatus(staleDailyTokenStatus)
-    expect(
-        UserDefaultsDailyTokenStatusCache(
-            defaults: dailyTokenDefaults,
-            calendar: dailyTokenCacheCalendar,
-            now: { dailyTokenCacheNow }
-        ).loadStatus() == nil,
-        "daily token status cache ignores statuses from previous days"
-    )
-} else {
-    expect(false, "daily token status cache test can create an isolated UserDefaults suite")
-}
+let staleDailyTokenStatus = DailyTokenStatus(
+    inputTokens: 1,
+    outputTokens: 1,
+    cachedInputTokens: 0,
+    observedAt: dailyTokenCacheNow.addingTimeInterval(-86_400)
+)
+persistedDailyTokenCache.saveStatus(staleDailyTokenStatus)
+expect(
+    FileDailyTokenStatusCache(
+        fileURL: dailyTokenCachePath,
+        calendar: dailyTokenCacheCalendar,
+        now: { dailyTokenCacheNow }
+    ).loadStatus() == nil,
+    "daily token status cache ignores statuses from previous days"
+)
 
 let asyncDailyTokenStatus = DailyTokenStatus(
     inputTokens: 15_000,

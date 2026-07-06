@@ -130,6 +130,10 @@ public struct ArchiveSearchService: Sendable {
     }
 
     public static func defaultArchiveRootPath(homeDirectoryPath: String) -> String {
+        ApplicationSupportPaths.archiveRootPath(homeDirectoryPath: homeDirectoryPath)
+    }
+
+    public static func legacyArchiveRootPath(homeDirectoryPath: String) -> String {
         let libraryPath = NSString(string: homeDirectoryPath).appendingPathComponent("Library")
         let applicationSupportPath = NSString(string: libraryPath).appendingPathComponent("Application Support")
         let codexPlusPath = NSString(string: applicationSupportPath).appendingPathComponent("CodexPlus")

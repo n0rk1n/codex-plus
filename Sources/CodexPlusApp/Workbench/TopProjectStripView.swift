@@ -4,7 +4,10 @@ import SwiftUI
 struct TopProjectStripView: View {
     let cards: [WorkbenchProjectCard]
     let isPinned: Bool
+    let isNewConversationDisabled: Bool
+    let isShowingArchiveSearch: Bool
     let onNewConversation: () -> Void
+    let onReturnToConversation: () -> Void
     let onOpenArchive: () -> Void
     let onTogglePin: () -> Void
     let onSelectProject: (UUID) -> Void
@@ -13,21 +16,37 @@ struct TopProjectStripView: View {
     var body: some View {
         VStack(spacing: 10) {
             HStack(spacing: 8) {
-                stripActionButton(title: "新对话", systemName: "square.and.pencil", action: onNewConversation)
+                stripActionButton(title: firstActionTitle, systemName: firstActionSystemName, action: firstAction)
+                    .disabled(!isShowingArchiveSearch && isNewConversationDisabled)
+                    .opacity(!isShowingArchiveSearch && isNewConversationDisabled ? 0.45 : 1)
                 stripActionButton(title: "已归档", systemName: "archivebox", action: onOpenArchive)
                 Spacer(minLength: 0)
                 pinButton
             }
 
-            ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: 10) {
-                    ForEach(cards) { card in
-                        projectCard(card)
+            if WorkbenchInteractionPolicies.shouldShowProjectCardRail(projectCardCount: cards.count) {
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(spacing: 10) {
+                        ForEach(cards) { card in
+                            projectCard(card)
+                        }
                     }
+                    .padding(.vertical, 2)
                 }
-                .padding(.vertical, 2)
             }
         }
+    }
+
+    private var firstActionTitle: String {
+        isShowingArchiveSearch ? "回到对话" : "新的对话"
+    }
+
+    private var firstActionSystemName: String {
+        isShowingArchiveSearch ? "bubble.left" : "square.and.pencil"
+    }
+
+    private var firstAction: () -> Void {
+        isShowingArchiveSearch ? onReturnToConversation : onNewConversation
     }
 
     private var pinButton: some View {

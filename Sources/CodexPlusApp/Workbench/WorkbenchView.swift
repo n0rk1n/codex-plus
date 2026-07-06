@@ -4,14 +4,18 @@ import SwiftUI
 
 struct WorkbenchView: View {
     @ObservedObject var store: WorkbenchStore
+    @ObservedObject var codexUsageMonitor: CodexUsageMonitor
 
     var body: some View {
         LiquidGlassScene(padding: 0, minWidth: 980, minHeight: 620) {
-            VStack(spacing: 12) {
+            VStack(spacing: 6) {
                 TopProjectStripView(
                     cards: store.snapshot.projectCards,
                     isPinned: store.snapshot.isPinned,
+                    isNewConversationDisabled: !store.snapshot.canStartNewConversation,
+                    isShowingArchiveSearch: store.snapshot.isShowingArchiveSearch,
                     onNewConversation: { store.beginNewConversationDraft() },
+                    onReturnToConversation: { store.returnToConversationPage() },
                     onOpenArchive: { store.showArchiveSearch() },
                     onTogglePin: { store.togglePin() },
                     onSelectProject: { store.selectProject($0) },
@@ -40,7 +44,7 @@ struct WorkbenchView: View {
                     )
                 }
 
-                WorkbenchStatusBarView(state: store.snapshot.statusBar)
+                WorkbenchStatusBarView(state: store.snapshot.statusBar, codexUsageStatus: codexUsageMonitor.status)
             }
             .padding(18)
             .alert("终止任务后归档？", isPresented: pendingArchiveConfirmationBinding) {

@@ -3,7 +3,7 @@ import Foundation
 
 @MainActor
 public final class CodexUsageMonitor: ObservableObject {
-    public static let defaultRefreshInterval: TimeInterval = 120
+    public static let defaultRefreshInterval: TimeInterval = 180
 
     @Published public private(set) var status: CodexUsageStatus
     @Published public private(set) var isRefreshing = false
@@ -18,7 +18,7 @@ public final class CodexUsageMonitor: ObservableObject {
     public init(
         provider: any CodexUsageProviding,
         initialStatus: CodexUsageStatus = .unknown,
-        statusCache: (any CodexUsageStatusCaching)? = UserDefaultsCodexUsageStatusCache(),
+        statusCache: (any CodexUsageStatusCaching)? = FileCodexUsageStatusCache(),
         interval: TimeInterval = CodexUsageMonitor.defaultRefreshInterval
     ) {
         self.provider = provider
@@ -69,10 +69,10 @@ public final class CodexUsageMonitor: ObservableObject {
                     return
                 }
 
-                self.status = nextStatus
                 if nextStatus != .unknown {
                     self.statusCache?.saveStatus(nextStatus)
                 }
+                self.status = self.statusCache?.loadStatus() ?? nextStatus
                 self.isRefreshing = false
             }
         }

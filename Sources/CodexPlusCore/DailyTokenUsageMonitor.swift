@@ -19,7 +19,7 @@ public final class DailyTokenUsageMonitor: ObservableObject {
     public init(
         provider: any DailyTokenUsageProviding,
         initialStatus: DailyTokenStatus = .unknown,
-        statusCache: (any DailyTokenStatusCaching)? = UserDefaultsDailyTokenStatusCache()
+        statusCache: (any DailyTokenStatusCaching)? = FileDailyTokenStatusCache()
     ) {
         self.provider = provider
         self.statusCache = statusCache

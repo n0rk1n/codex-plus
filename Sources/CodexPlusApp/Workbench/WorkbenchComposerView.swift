@@ -79,6 +79,7 @@ struct WorkbenchComposerView: View {
                 .padding(.trailing, activeProjectName == nil ? 10 : 6)
                 .frame(height: 30)
                 .frame(maxWidth: 190)
+                .contentShape(Capsule(style: .continuous))
             }
             .buttonStyle(.plain)
 

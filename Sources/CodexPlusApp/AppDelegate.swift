@@ -46,6 +46,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     private func makeWorkbenchStore() throws -> WorkbenchStore {
+        try ApplicationDataMigrator.migrateLegacyLocalDataIfNeeded()
         let databasePath = try makeDatabasePath()
         let database = try SQLiteDatabase(path: databasePath)
         try CodexPlusSchema.migrate(database)

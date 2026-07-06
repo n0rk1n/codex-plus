@@ -44,8 +44,13 @@ func runArchiveTests() {
 
     let defaultArchiveRoot = ArchiveSearchService.defaultArchiveRootPath(homeDirectoryPath: "/Users/tester")
     expect(
-        defaultArchiveRoot == "/Users/tester/Library/Application Support/CodexPlus/Archives",
-        "default archive root path uses global app data archives directory"
+        defaultArchiveRoot == "/Users/tester/.codex-plus/Archives",
+        "default archive root path uses the unified .codex-plus archives directory"
+    )
+    expect(
+        ArchiveSearchService.legacyArchiveRootPath(homeDirectoryPath: "/Users/tester") ==
+            "/Users/tester/Library/Application Support/CodexPlus/Archives",
+        "legacy archive root remains available only for one-time migration"
     )
 
     let defaultArchivePath = ArchiveSearchService.defaultArchiveMarkdownPath(

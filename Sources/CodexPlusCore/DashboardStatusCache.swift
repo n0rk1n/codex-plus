@@ -10,20 +10,17 @@ public protocol DailyTokenStatusCaching: Sendable {
     func saveStatus(_ status: DailyTokenStatus)
 }
 
-public final class UserDefaultsCodexUsageStatusCache: CodexUsageStatusCaching, @unchecked Sendable {
-    private let defaults: UserDefaults
-    private let key: String
+public final class FileCodexUsageStatusCache: CodexUsageStatusCaching, @unchecked Sendable {
+    private let fileURL: URL
 
     public init(
-        defaults: UserDefaults = .standard,
-        key: String = "CodexPlus.codexUsageStatus"
+        fileURL: URL = URL(fileURLWithPath: ApplicationSupportPaths.codexUsageStatusCachePath())
     ) {
-        self.defaults = defaults
-        self.key = key
+        self.fileURL = fileURL
     }
 
     public func loadStatus() -> CodexUsageStatus? {
-        guard let data = defaults.data(forKey: key) else {
+        guard let data = try? Data(contentsOf: fileURL) else {
             return nil
         }
 
@@ -35,30 +32,35 @@ public final class UserDefaultsCodexUsageStatusCache: CodexUsageStatusCaching, @
             return
         }
 
-        defaults.set(data, forKey: key)
+        do {
+            try FileManager.default.createDirectory(
+                at: fileURL.deletingLastPathComponent(),
+                withIntermediateDirectories: true
+            )
+            try data.write(to: fileURL, options: .atomic)
+        } catch {
+            return
+        }
     }
 }
 
-public final class UserDefaultsDailyTokenStatusCache: DailyTokenStatusCaching, @unchecked Sendable {
-    private let defaults: UserDefaults
-    private let key: String
+public final class FileDailyTokenStatusCache: DailyTokenStatusCaching, @unchecked Sendable {
+    private let fileURL: URL
     private let calendar: Calendar
     private let now: @Sendable () -> Date
 
     public init(
-        defaults: UserDefaults = .standard,
-        key: String = "CodexPlus.dailyTokenStatus",
+        fileURL: URL = URL(fileURLWithPath: ApplicationSupportPaths.dailyTokenStatusCachePath()),
         calendar: Calendar = .current,
         now: @escaping @Sendable () -> Date = { Date() }
     ) {
-        self.defaults = defaults
-        self.key = key
+        self.fileURL = fileURL
         self.calendar = calendar
         self.now = now
     }
 
     public func loadStatus() -> DailyTokenStatus? {
-        guard let data = defaults.data(forKey: key),
+        guard let data = try? Data(contentsOf: fileURL),
               let status = try? JSONDecoder().decode(DailyTokenStatus.self, from: data),
               let observedAt = status.observedAt,
               calendar.isDate(observedAt, inSameDayAs: now())
@@ -74,6 +76,14 @@ public final class UserDefaultsDailyTokenStatusCache: DailyTokenStatusCaching, @
             return
         }
 
-        defaults.set(data, forKey: key)
+        do {
+            try FileManager.default.createDirectory(
+                at: fileURL.deletingLastPathComponent(),
+                withIntermediateDirectories: true
+            )
+            try data.write(to: fileURL, options: .atomic)
+        } catch {
+            return
+        }
     }
 }

@@ -72,6 +72,7 @@ public struct WorkbenchSnapshot: Equatable, Sendable {
     public var composerAction: WorkbenchComposerAction
     public var statusBar: WorkbenchStatusBarState
     public var canSubmitPrompt: Bool
+    public var canStartNewConversation: Bool
     public var archiveSearchResults: [ConversationArchiveRecord]
     public var isPinned: Bool
     public var pendingArchiveConfirmationConversationID: UUID?
@@ -88,6 +89,7 @@ public struct WorkbenchSnapshot: Equatable, Sendable {
             archiveIndexState: "ready"
         ),
         canSubmitPrompt: Bool = false,
+        canStartNewConversation: Bool = false,
         archiveSearchResults: [ConversationArchiveRecord] = [],
         isPinned: Bool = false,
         pendingArchiveConfirmationConversationID: UUID? = nil,
@@ -99,6 +101,7 @@ public struct WorkbenchSnapshot: Equatable, Sendable {
         self.composerAction = composerAction
         self.statusBar = statusBar
         self.canSubmitPrompt = canSubmitPrompt
+        self.canStartNewConversation = canStartNewConversation
         self.archiveSearchResults = archiveSearchResults
         self.isPinned = isPinned
         self.pendingArchiveConfirmationConversationID = pendingArchiveConfirmationConversationID

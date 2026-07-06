@@ -282,6 +282,12 @@ public final class WorkbenchStore: ObservableObject {
         searchArchives("")
     }
 
+    public func returnToConversationPage() {
+        snapshot.openedArchiveConversation = nil
+        snapshot.isShowingArchiveSearch = false
+        refreshSnapshot()
+    }
+
     public func togglePin() {
         snapshot.isPinned.toggle()
         refreshSnapshot()
@@ -547,6 +553,9 @@ public final class WorkbenchStore: ObservableObject {
             composerAction: WorkbenchInteractionPolicies.composerAction(for: activeConversation?.state),
             statusBar: snapshot.statusBar,
             canSubmitPrompt: activeConversation?.state != .running,
+            canStartNewConversation: WorkbenchInteractionPolicies.canStartNewConversation(
+                activeConversationState: activeConversation?.state
+            ),
             archiveSearchResults: snapshot.archiveSearchResults,
             isPinned: snapshot.isPinned,
             pendingArchiveConfirmationConversationID: snapshot.pendingArchiveConfirmationConversationID,

@@ -70,6 +70,15 @@ func runWorkbenchProjectionTests() {
     expect(cards[0].isActive, "active workspace card is marked active")
 
     expect(
+        !WorkbenchInteractionPolicies.shouldShowProjectCardRail(projectCardCount: 0),
+        "empty workbench top strip does not reserve project card rail height"
+    )
+    expect(
+        WorkbenchInteractionPolicies.shouldShowProjectCardRail(projectCardCount: cards.count),
+        "workbench top strip shows the project card rail when cards exist"
+    )
+
+    expect(
         WorkbenchInteractionPolicies.composerAction(for: .running) == .stop,
         "running conversation shows stop action"
     )
@@ -80,6 +89,22 @@ func runWorkbenchProjectionTests() {
     expect(
         WorkbenchInteractionPolicies.composerAction(for: .failed) == .send,
         "failed conversation shows send action"
+    )
+    expect(
+        !WorkbenchInteractionPolicies.canStartNewConversation(activeConversationState: nil),
+        "blank workbench cannot start another blank new conversation"
+    )
+    expect(
+        WorkbenchInteractionPolicies.canStartNewConversation(activeConversationState: .completed),
+        "completed conversation can start a new conversation"
+    )
+    expect(
+        WorkbenchInteractionPolicies.canStartNewConversation(activeConversationState: .stopped),
+        "stopped conversation can start a new conversation"
+    )
+    expect(
+        !WorkbenchInteractionPolicies.canStartNewConversation(activeConversationState: .running),
+        "running conversation cannot start a new conversation"
     )
     expect(
         WorkbenchInteractionPolicies.shouldHideForOutsideClick(

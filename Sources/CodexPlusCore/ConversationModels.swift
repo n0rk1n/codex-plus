@@ -195,11 +195,12 @@ public struct ConversationArchiveResult: Equatable, Sendable {
 }
 
 public enum ConversationWorkspacePolicy {
-    public static let defaultParentDirectoryName = "Codex-plus"
+    public static let defaultParentDirectoryName = ApplicationSupportPaths.workspacesDirectoryName
 
     public static func defaultParentPath(homeDirectoryPath: String) -> String {
-        NSString(string: NSString(string: homeDirectoryPath).appendingPathComponent("Documents"))
-            .appendingPathComponent(defaultParentDirectoryName)
+        URL(fileURLWithPath: ApplicationSupportPaths.rootDirectoryPath(homeDirectoryPath: homeDirectoryPath), isDirectory: true)
+            .appendingPathComponent(defaultParentDirectoryName, isDirectory: true)
+            .path
     }
 
     public static func defaultDateDirectoryName(

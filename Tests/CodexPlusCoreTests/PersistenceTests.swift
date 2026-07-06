@@ -3,13 +3,26 @@ import CodexPlusCore
 
 @MainActor
 func runPersistenceTests() {
+    let localDataRoot = ApplicationSupportPaths.rootDirectoryPath(homeDirectoryPath: "/Users/test")
+    expect(
+        localDataRoot == "/Users/test/.codex-plus",
+        "local app data root is the user's .codex-plus directory"
+    )
+
     let appSupportDatabasePath = ApplicationSupportPaths.databasePath(
         bundleIdentifier: "com.example.CodexPlusTests",
         homeDirectoryPath: "/Users/test"
     )
     expect(
-        appSupportDatabasePath == "/Users/test/Library/Application Support/com.example.CodexPlusTests/CodexPlus.sqlite",
-        "application support database path is deterministic"
+        appSupportDatabasePath == "/Users/test/.codex-plus/CodexPlus.sqlite",
+        "database path stays under .codex-plus"
+    )
+    expect(
+        ApplicationSupportPaths.legacyDatabasePath(
+            bundleIdentifier: "com.example.CodexPlusTests",
+            homeDirectoryPath: "/Users/test"
+        ) == "/Users/test/Library/Application Support/com.example.CodexPlusTests/CodexPlus.sqlite",
+        "legacy database path remains available only for one-time migration"
     )
 
     let dbURL = URL(fileURLWithPath: NSTemporaryDirectory())

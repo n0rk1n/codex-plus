@@ -47,6 +47,7 @@ final class WindowCoordinator: NSObject, NSWindowDelegate {
         panelFactory: panelFactory,
         screenProvider: screenProvider,
         store: workbenchStore,
+        codexUsageMonitor: codexUsageMonitor,
         panelDelegate: self,
         onShow: { [weak self] in
             self?.workbenchLauncherPanelController.hide()

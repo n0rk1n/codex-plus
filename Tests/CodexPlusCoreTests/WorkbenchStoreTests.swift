@@ -117,6 +117,7 @@ private func runFreshWorkbenchSubmitTests() {
         expect(store.snapshot.activeConversation == nil, "fresh workbench starts without active conversation")
         expect(store.snapshot.projectCards.isEmpty, "fresh workbench starts without project cards")
         expect(store.snapshot.canSubmitPrompt, "fresh workbench can submit the first prompt")
+        expect(!store.snapshot.canStartNewConversation, "fresh blank workbench disables redundant new conversation")
 
         store.submitPrompt("first prompt")
 
@@ -139,8 +140,8 @@ private func runFreshWorkbenchSubmitTests() {
             day: 5
         ).date!
         let expectedWorkspacePath = tempHome
-            .appendingPathComponent("Documents", isDirectory: true)
-            .appendingPathComponent("Codex-plus", isDirectory: true)
+            .appendingPathComponent(".codex-plus", isDirectory: true)
+            .appendingPathComponent("workspaces", isDirectory: true)
             .appendingPathComponent("2026-07-05", isDirectory: true)
             .appendingPathComponent("2217", isDirectory: true)
             .path
@@ -181,6 +182,7 @@ private func runWorkbenchSmokeTests() {
         expect(store.snapshot.projectCards.count == 1, "store produces project cards")
         expect(store.snapshot.projectCards[0].conversationTitle != "暂无对话", "store card shows active conversation")
         expect(store.snapshot.composerAction == .stop, "store shows stop while running")
+        expect(!store.snapshot.canStartNewConversation, "running workbench disables new conversation")
 
         let runningID = store.snapshot.activeConversation?.id
         store.beginNewConversationDraft()
@@ -199,10 +201,12 @@ private func runWorkbenchSmokeTests() {
         expect(store.snapshot.activeConversation?.state == .stopped, "store marks stopped")
         expect(engine.stopCount == 1, "store stops active engine handle")
         expect(store.snapshot.composerAction == .send, "store shows send after stop")
+        expect(store.snapshot.canStartNewConversation, "stopped workbench can open a new conversation draft")
 
         store.beginNewConversationDraft()
         expect(store.snapshot.activeConversation == nil, "new conversation draft clears terminal active conversation")
         expect(store.snapshot.canSubmitPrompt, "new conversation draft can submit a first prompt")
+        expect(!store.snapshot.canStartNewConversation, "blank new conversation draft disables redundant new conversation")
 
         store.submitPrompt("fresh task")
         expect(engine.requests.count == 2, "submitting a new draft starts a new engine run")
@@ -242,6 +246,7 @@ private func runArchiveLifecycleTests() {
 
         store.showArchiveSearch()
         expect(store.snapshot.isShowingArchiveSearch, "archived entry opens the archive page")
+        expect(!store.snapshot.canStartNewConversation, "archive page keeps the top new conversation action disabled")
         expect(
             store.snapshot.archiveSearchResults.contains(where: { $0.conversationID == conversationID }),
             "archive page lists archived conversations by default"
@@ -264,6 +269,11 @@ private func runArchiveLifecycleTests() {
             store.snapshot.activeConversation == nil,
             "opening an archived conversation does not restore it to active conversations"
         )
+
+        store.returnToConversationPage()
+        expect(!store.snapshot.isShowingArchiveSearch, "return to conversation exits the archive page")
+        expect(store.snapshot.openedArchiveConversation == nil, "return to conversation clears the opened archive detail")
+        expect(!store.snapshot.canStartNewConversation, "blank conversation page keeps redundant new conversation disabled")
     }
 }
 
