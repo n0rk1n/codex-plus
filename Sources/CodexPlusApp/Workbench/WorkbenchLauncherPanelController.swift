@@ -1,4 +1,5 @@
 import AppKit
+import CodexPlusCore
 import SwiftUI
 
 enum WorkbenchLauncherMetrics {
@@ -9,7 +10,10 @@ enum WorkbenchLauncherMetrics {
 
 @MainActor
 final class WorkbenchLauncherPanelController {
+    private static let cachedFrameKey = "WorkbenchLauncherPanelController.cachedFrame"
+
     private let screenProvider: ActiveScreenProvider
+    private let defaults: UserDefaults
     private weak var panelDelegate: NSWindowDelegate?
     private let onOpenWorkbench: () -> Void
 
@@ -17,10 +21,12 @@ final class WorkbenchLauncherPanelController {
 
     init(
         screenProvider: ActiveScreenProvider,
+        defaults: UserDefaults = .standard,
         panelDelegate: NSWindowDelegate?,
         onOpenWorkbench: @escaping () -> Void
     ) {
         self.screenProvider = screenProvider
+        self.defaults = defaults
         self.panelDelegate = panelDelegate
         self.onOpenWorkbench = onOpenWorkbench
     }
@@ -34,7 +40,12 @@ final class WorkbenchLauncherPanelController {
             return
         }
 
-        let frame = Self.defaultFrame(in: screen.visibleFrame)
+        let defaultFrame = Self.defaultFrame(in: screen.visibleFrame)
+        let frame = WorkbenchLauncherFramePolicy.frame(
+            cachedFrame: cachedFrame(),
+            defaultFrame: defaultFrame,
+            visibleFrames: NSScreen.screens.map(\.visibleFrame)
+        )
         let panel = panel ?? makePanel(frame: frame)
         panel.isMovableByWindowBackground = false
         panel.setFrame(frame, display: true)
@@ -45,6 +56,15 @@ final class WorkbenchLauncherPanelController {
 
     func hide() {
         panel?.orderOut(nil)
+    }
+
+    func recordMove(of movedPanel: GlassPanel) -> Bool {
+        guard movedPanel === panel else {
+            return false
+        }
+
+        cacheFrame(movedPanel.frame)
+        return true
     }
 
     static func defaultFrame(in visibleFrame: NSRect) -> NSRect {
@@ -64,6 +84,18 @@ final class WorkbenchLauncherPanelController {
         panel.acceptsMouseMovedEvents = true
         panel.delegate = panelDelegate
         return panel
+    }
+
+    private func cachedFrame() -> NSRect? {
+        guard let string = defaults.string(forKey: Self.cachedFrameKey), !string.isEmpty else {
+            return nil
+        }
+
+        return NSRectFromString(string)
+    }
+
+    private func cacheFrame(_ frame: NSRect) {
+        defaults.set(NSStringFromRect(frame), forKey: Self.cachedFrameKey)
     }
 }
 

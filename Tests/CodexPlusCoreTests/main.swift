@@ -3110,6 +3110,7 @@ runPersistenceTests()
 runExecutionEngineTests()
 runArchiveTests()
 runWorkbenchStoreTests()
+runWorkbenchLauncherFramePolicyTests()
 
 if failures.isEmpty {
     print("CodexPlusCoreTests passed: \(assertionCount) assertions")
