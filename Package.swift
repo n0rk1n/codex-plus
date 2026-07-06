@@ -12,7 +12,10 @@ let package = Package(
     ],
     targets: [
         .target(
-            name: "CodexPlusCore"
+            name: "CodexPlusCore",
+            linkerSettings: [
+                .linkedLibrary("sqlite3")
+            ]
         ),
         .executableTarget(
             name: "CodexPlusApp",

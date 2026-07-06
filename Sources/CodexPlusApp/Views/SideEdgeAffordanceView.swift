@@ -7,7 +7,8 @@ struct SideEdgeAffordanceView: View {
         Button(action: onActivate) {
             Capsule(style: .continuous)
                 .glassEffect(.regular, in: Capsule(style: .continuous))
-                .shadow(color: Color.black.opacity(0.18), radius: 8, x: 0, y: 4)
+                .compositingGroup()
+                .mask(Capsule(style: .continuous))
                 .padding(2)
         }
         .buttonStyle(.plain)

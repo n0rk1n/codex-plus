@@ -513,7 +513,6 @@ func expectCodexDesktopLauncherIntegration() {
     let conversationViewPath = "Sources/CodexPlusApp/Views/ConversationView.swift"
     let compactControllerPath = "Sources/CodexPlusApp/CompactPanelController.swift"
     let sidePanelControllerPath = "Sources/CodexPlusApp/SidePanelController.swift"
-    let draggableHostingViewPath = "Sources/CodexPlusApp/DraggableHostingView.swift"
     let windowCoordinatorPath = "Sources/CodexPlusApp/WindowCoordinator.swift"
     let liquidGlassPath = "Sources/CodexPlusApp/Views/LiquidGlassContainer.swift"
     let glassPanelPath = "Sources/CodexPlusApp/GlassPanel.swift"
@@ -699,8 +698,10 @@ func expectCodexDesktopLauncherIntegration() {
     )
     expect(
         liquidGlassText.contains("content\n            .glassEffect(")
+            && liquidGlassText.contains(".compositingGroup()")
+            && liquidGlassText.contains(".mask(glassShape)")
             && !liquidGlassText.contains(".background {"),
-        "liquid glass container applies system glass directly to content so foreground stays readable"
+        "liquid glass container masks the rendered system glass to its shape so the halo does not bleed outside"
     )
     expect(
         !liquidGlassText.contains("LiquidGlassSurface")
@@ -726,6 +727,13 @@ func expectCodexDesktopLauncherIntegration() {
         glassPanelText.contains("hasShadow = false")
             && !glassPanelText.contains("hasShadow = true"),
         "transparent glass panels disable AppKit system shadow so active windows do not draw a dark outer outline"
+    )
+    expect(
+        glassPanelText.contains("override var canBecomeKey: Bool")
+            && glassPanelText.contains("override var canBecomeMain: Bool")
+            && glassPanelText.contains("canBecomeMain: Bool {\n        false")
+            && glassPanelText.contains("styleMask: [.borderless, .nonactivatingPanel]"),
+        "floating glass panels can accept keyboard focus without becoming a main activating window"
     )
 
     let compactControllerText = (try? String(
@@ -753,19 +761,6 @@ func expectCodexDesktopLauncherIntegration() {
             && sidePanelControllerText.contains("private func dismissIfNeededForMouseDown"),
         "side panel ignores outside mouse dismiss while pinned"
     )
-    let draggableHostingViewText = (try? String(
-        contentsOf: packageRoot.appendingPathComponent(draggableHostingViewPath),
-        encoding: .utf8
-    )) ?? ""
-    expect(
-        draggableHostingViewText.contains("case sidePanel")
-            && sidePanelControllerText.contains("contentView.windowDragMode = .sidePanel"),
-        "side panel opts into manual drag mode for live midline snapping"
-    )
-    expect(
-        sidePanelControllerText.contains("panel.isKeyWindow || panel.isMainWindow"),
-        "side panel escape dismissal only applies to the current key or main window"
-    )
 
     let windowCoordinatorText = (try? String(
         contentsOf: packageRoot.appendingPathComponent(windowCoordinatorPath),
@@ -776,6 +771,240 @@ func expectCodexDesktopLauncherIntegration() {
             && windowCoordinatorText.contains("conversationCoordinator.selectConversation(conversationID)")
             && windowCoordinatorText.contains("case .openFreshEntry:"),
         "global shortcut selects an existing conversation before opening the side panel"
+    )
+}
+
+@MainActor
+func expectWorkbenchInterfaceIntegration() {
+    let packageRoot = URL(fileURLWithPath: FileManager.default.currentDirectoryPath, isDirectory: true)
+    let workbenchViewPath = "Sources/CodexPlusApp/Workbench/WorkbenchView.swift"
+    let topProjectStripPath = "Sources/CodexPlusApp/Workbench/TopProjectStripView.swift"
+    let workbenchConversationPath = "Sources/CodexPlusApp/Workbench/WorkbenchConversationView.swift"
+    let workbenchComposerPath = "Sources/CodexPlusApp/Workbench/WorkbenchComposerView.swift"
+    let workbenchStatusBarPath = "Sources/CodexPlusApp/Workbench/WorkbenchStatusBarView.swift"
+    let workbenchPanelControllerPath = "Sources/CodexPlusApp/Workbench/WorkbenchPanelController.swift"
+    let workbenchLauncherViewPath = "Sources/CodexPlusApp/Workbench/WorkbenchLauncherView.swift"
+    let workbenchLauncherPanelControllerPath = "Sources/CodexPlusApp/Workbench/WorkbenchLauncherPanelController.swift"
+    let sideEdgeAffordancePath = "Sources/CodexPlusApp/Views/SideEdgeAffordanceView.swift"
+    let windowCoordinatorPath = "Sources/CodexPlusApp/WindowCoordinator.swift"
+
+    for sourceFile in [
+        workbenchViewPath,
+        topProjectStripPath,
+        workbenchConversationPath,
+        workbenchComposerPath,
+        workbenchStatusBarPath,
+        workbenchPanelControllerPath,
+        workbenchLauncherViewPath,
+        workbenchLauncherPanelControllerPath,
+        sideEdgeAffordancePath
+    ] {
+        let exists = FileManager.default.fileExists(
+            atPath: packageRoot.appendingPathComponent(sourceFile).path
+        )
+        expect(exists, "workbench source exists: \(sourceFile)")
+    }
+
+    let workbenchViewText = (try? String(
+        contentsOf: packageRoot.appendingPathComponent(workbenchViewPath),
+        encoding: .utf8
+    )) ?? ""
+    let topProjectStripText = (try? String(
+        contentsOf: packageRoot.appendingPathComponent(topProjectStripPath),
+        encoding: .utf8
+    )) ?? ""
+    let workbenchConversationText = (try? String(
+        contentsOf: packageRoot.appendingPathComponent(workbenchConversationPath),
+        encoding: .utf8
+    )) ?? ""
+    let workbenchComposerText = (try? String(
+        contentsOf: packageRoot.appendingPathComponent(workbenchComposerPath),
+        encoding: .utf8
+    )) ?? ""
+    let workbenchStatusBarText = (try? String(
+        contentsOf: packageRoot.appendingPathComponent(workbenchStatusBarPath),
+        encoding: .utf8
+    )) ?? ""
+    let workbenchPanelControllerText = (try? String(
+        contentsOf: packageRoot.appendingPathComponent(workbenchPanelControllerPath),
+        encoding: .utf8
+    )) ?? ""
+    let workbenchLauncherViewText = (try? String(
+        contentsOf: packageRoot.appendingPathComponent(workbenchLauncherViewPath),
+        encoding: .utf8
+    )) ?? ""
+    let workbenchLauncherPanelControllerText = (try? String(
+        contentsOf: packageRoot.appendingPathComponent(workbenchLauncherPanelControllerPath),
+        encoding: .utf8
+    )) ?? ""
+    let sideEdgeAffordanceText = (try? String(
+        contentsOf: packageRoot.appendingPathComponent(sideEdgeAffordancePath),
+        encoding: .utf8
+    )) ?? ""
+    let windowCoordinatorText = (try? String(
+        contentsOf: packageRoot.appendingPathComponent(windowCoordinatorPath),
+        encoding: .utf8
+    )) ?? ""
+
+    expect(
+        workbenchViewText.contains("TopProjectStripView")
+            && workbenchViewText.contains("WorkbenchConversationView")
+            && workbenchViewText.contains("WorkbenchComposerView")
+            && workbenchViewText.contains("WorkbenchStatusBarView"),
+        "workbench root view composes the strip, conversation, composer, and status bar"
+    )
+    expect(
+        workbenchViewText.contains("onSend: { store.submitPrompt($0) }")
+            && workbenchViewText.contains("onTogglePin: { store.togglePin() }"),
+        "workbench root routes composer submit and pin toggle through the store"
+    )
+    expect(
+        topProjectStripText.contains(#"Text("项目：")"#)
+            && topProjectStripText.contains(#"Text("对话：")"#)
+            && topProjectStripText.contains(#"Image(systemName: "folder")"#)
+            && topProjectStripText.contains(#"Image(systemName: "text.bubble")"#)
+            && topProjectStripText.contains("card.overflowCount != nil"),
+        "top project strip distinguishes project and conversation labels and only shows overflow when available"
+    )
+    expect(
+        topProjectStripText.contains(#"title: "新对话""#)
+            && topProjectStripText.contains(#"title: "已归档""#)
+            && !topProjectStripText.contains("归档当前")
+            && !topProjectStripText.contains("archivebox.and.arrow.down"),
+        "top project strip only shows the new-conversation and archived entry actions"
+    )
+    expect(
+        topProjectStripText.contains(".mask(Circle())")
+            && topProjectStripText.contains(".mask(Capsule(style: .continuous))"),
+        "top project strip masks rendered direct glass buttons to avoid exterior halo on light backgrounds"
+    )
+    expect(
+        topProjectStripText.contains(#"Image(systemName: isPinned ? "pin.fill" : "pin")"#)
+            && topProjectStripText.contains("Button(action: onTogglePin)")
+            && topProjectStripText.contains("conversationSummaries"),
+        "top project strip exposes pin and overflow conversation selection"
+    )
+    expect(
+        workbenchConversationText.contains("snapshot.activeConversation")
+            && workbenchConversationText.contains("ConversationTimelineBuilder.items")
+            && workbenchConversationText.contains("ConversationEventRow")
+            && workbenchConversationText.contains("ConversationTechnicalEventGroupRow")
+            && workbenchConversationText.contains(#"Label("归档", systemImage: "archivebox.and.arrow.down")"#)
+            && workbenchConversationText.contains("archiveButton(for: conversation.id)")
+            && workbenchConversationText.contains("onArchiveConversation(conversationID)"),
+        "workbench conversation view renders the active timeline and a visible per-conversation archive action"
+    )
+    expect(
+        workbenchConversationText.contains(".glassEffect(.regular, in: Capsule(style: .continuous))")
+            && workbenchConversationText.contains(".compositingGroup()")
+            && workbenchConversationText.contains(".mask(Capsule(style: .continuous))"),
+        "workbench conversation archive button masks rendered glass to avoid exterior halo"
+    )
+    expect(
+        workbenchComposerText.contains("switch snapshot.composerAction")
+            && workbenchComposerText.contains("TextField(activePlaceholder, text: $prompt)")
+            && !workbenchComposerText.contains("axis: .vertical")
+            && workbenchComposerText.contains(#"Image(systemName: "stop.fill")"#)
+            && workbenchComposerText.contains(#"Image(systemName: "arrow.up")"#)
+            && workbenchComposerText.contains(".submitLabel(.send)")
+            && workbenchComposerText.contains(".disabled(snapshot.composerAction == .stop)")
+            && workbenchComposerText.contains("snapshot.canSubmitPrompt"),
+        "workbench composer sends on return and respects submit availability"
+    )
+    expect(
+        workbenchStatusBarText.contains("Codex CLI 可用")
+            && workbenchStatusBarText.contains("SQLite 已连接")
+            && workbenchStatusBarText.contains("归档索引 待更新"),
+        "workbench status bar shows the three required technical items"
+    )
+    expect(
+        !workbenchStatusBarText.contains("pin")
+            && !workbenchStatusBarText.contains("background"),
+        "workbench status bar does not show pin or background-task state"
+    )
+    expect(
+        workbenchPanelControllerText.contains("WorkbenchPanelHostingView(rootView: WorkbenchView(store: store))")
+            && !workbenchPanelControllerText.contains("WorkbenchPanelPlaceholderView"),
+        "workbench panel controller hosts the real workbench view instead of a placeholder root"
+    )
+    expect(
+        !windowCoordinatorText.contains("NSApp.activate(ignoringOtherApps: true)")
+            && windowCoordinatorText.contains("workbenchPanelController.toggle()")
+            && windowCoordinatorText.contains("workbenchPanelController.show()"),
+        "workbench opens as a non-activating floating panel instead of switching the app into active glass appearance"
+    )
+    expect(
+        workbenchPanelControllerText.contains("configureTransparentBacking()")
+            && workbenchPanelControllerText.contains("wantsLayer = true")
+            && workbenchPanelControllerText.contains("NSColor.clear.cgColor")
+            && workbenchPanelControllerText.contains("layer?.shadowOpacity = 0")
+            && workbenchPanelControllerText.contains("panel.hasShadow = false"),
+        "workbench panel keeps the active key window backing and shadow transparent"
+    )
+    expect(
+        workbenchLauncherViewText.contains("struct WorkbenchLauncherView")
+            && workbenchLauncherViewText.contains(".glassEffect(")
+            && workbenchLauncherViewText.contains(".compositingGroup()")
+            && workbenchLauncherViewText.contains(".mask(Circle())")
+            && workbenchLauncherViewText.contains("WorkbenchLauncherMetrics.sphereSize")
+            && workbenchLauncherViewText.contains(".accessibilityAddTraits(.isButton)"),
+        "workbench launcher renders a smaller masked liquid glass clickable sphere"
+    )
+    expect(
+        workbenchLauncherViewText.contains("symbolColor")
+            && workbenchLauncherViewText.contains("Color.white")
+            && workbenchLauncherViewText.contains(".blendMode(.difference)")
+            && !workbenchLauncherViewText.contains(#"@Environment(\.colorScheme)"#),
+        "workbench launcher symbol inverts against light and dark glass backgrounds"
+    )
+    expect(
+        workbenchLauncherPanelControllerText.contains("final class WorkbenchLauncherPanelController")
+            && workbenchLauncherPanelControllerText.contains("WorkbenchLauncherHostingView")
+            && workbenchLauncherPanelControllerText.contains("WorkbenchLauncherView()")
+            && workbenchLauncherPanelControllerText.contains("static func defaultFrame"),
+        "workbench launcher panel owns the draggable small floating entry window"
+    )
+    expect(
+        workbenchLauncherPanelControllerText.contains("final class WorkbenchLauncherPanel")
+            && workbenchLauncherPanelControllerText.contains("override var canBecomeKey: Bool")
+            && workbenchLauncherPanelControllerText.contains("override var canBecomeMain: Bool")
+            && workbenchLauncherPanelControllerText.contains("false"),
+        "workbench launcher uses a non-key panel to avoid active square focus shadow"
+    )
+    expect(
+        sideEdgeAffordanceText.contains(".glassEffect(.regular, in: Capsule(style: .continuous))")
+            && sideEdgeAffordanceText.contains(".compositingGroup()")
+            && sideEdgeAffordanceText.contains(".mask(Capsule(style: .continuous))")
+            && !sideEdgeAffordanceText.contains(".shadow("),
+        "side edge affordance uses masked glass without an exterior shadow haze"
+    )
+    expect(
+        workbenchLauncherPanelControllerText.contains("static let panelSize = CGFloat(48)")
+            && workbenchLauncherPanelControllerText.contains("static let sphereSize = CGFloat(38)")
+            && workbenchLauncherPanelControllerText.contains("performWindowDrag")
+            && workbenchLauncherPanelControllerText.contains("onClick()"),
+        "workbench launcher is 40 percent smaller and distinguishes click from drag"
+    )
+    expect(
+        workbenchLauncherPanelControllerText.contains("configureTransparentBacking()")
+            && workbenchLauncherPanelControllerText.contains("wantsLayer = true")
+            && workbenchLauncherPanelControllerText.contains("NSColor.clear.cgColor")
+            && workbenchLauncherPanelControllerText.contains("layer?.isOpaque = false"),
+        "workbench launcher hosting view keeps the square panel backing transparent"
+    )
+    expect(
+        workbenchPanelControllerText.contains("let onHide: () -> Void")
+            && workbenchPanelControllerText.contains("let onShow: () -> Void")
+            && workbenchPanelControllerText.contains("onHide()")
+            && workbenchPanelControllerText.contains("onShow()"),
+        "workbench panel controller announces show and hide transitions"
+    )
+    expect(
+        windowCoordinatorText.contains("workbenchLauncherPanelController.show()")
+            && windowCoordinatorText.contains("workbenchLauncherPanelController.hide()")
+            && windowCoordinatorText.contains("private func showWorkbenchFromLauncher()")
+            && windowCoordinatorText.contains("workbenchPanelController.show()"),
+        "window coordinator hides the launcher while the main workbench is visible"
     )
 }
 
@@ -825,6 +1054,7 @@ expect(
 )
 expectNoCodexDesktopHandoffIntegration()
 expectCodexDesktopLauncherIntegration()
+expectWorkbenchInterfaceIntegration()
 expectCodexPlusNaming()
 
 expect(CodexRunResult(exitCode: 0, stderr: "").succeeded, "codex run result succeeds on exit zero")
@@ -1367,16 +1597,19 @@ let fixedDateComponents = DateComponents(
 let fixedDate = fixedDateComponents.date!
 expect(
     ConversationWorkspacePolicy.defaultParentPath(homeDirectoryPath: "/Users/oriki") ==
-        "/Users/oriki/Documents/Codex Plus Workspace",
-    "default workspace parent uses corrected Codex Plus Workspace path"
+        "/Users/oriki/Documents/Codex-plus",
+    "default workspace parent uses Codex-plus documents path"
 )
 expect(
-    ConversationWorkspacePolicy.defaultDirectoryName(
+    ConversationWorkspacePolicy.defaultDateDirectoryName(
         date: fixedDate,
-        randomSuffix: 4821,
         calendar: Calendar(identifier: .gregorian)
-    ) == "2026-07-03-4821",
-    "default workspace child uses date and random suffix"
+    ) == "2026-07-03",
+    "default workspace date directory uses yyyy-MM-dd"
+)
+expect(
+    ConversationWorkspacePolicy.defaultRandomDirectoryName(randomSuffix: 4821) == "4821",
+    "default workspace random directory uses four digits"
 )
 expect(
     ConversationWorkspacePolicy.defaultWorkspacePath(
@@ -1384,8 +1617,8 @@ expect(
         date: fixedDate,
         randomSuffix: 4821,
         calendar: Calendar(identifier: .gregorian)
-    ) == "/Users/oriki/Documents/Codex Plus Workspace/2026-07-03-4821",
-    "default workspace path joins parent and child"
+    ) == "/Users/oriki/Documents/Codex-plus/2026-07-03/4821",
+    "default workspace path joins parent, date, and random directories"
 )
 expect(
     ConversationWorkspacePolicy.displayName(for: "/Users/oriki/Documents/codex-plus") == "codex-plus",
@@ -1967,15 +2200,6 @@ expect(
         in: offsetSnapScreen
     ) == CGRect(x: 390, y: 260, width: 420, height: 210),
     "compact panel snap uses the active screen midline"
-)
-
-let sidePanelNearMidlineFrame = CGRect(x: 298, y: 80, width: 860, height: 720)
-expect(
-    CompactPanelSnapPolicy.snappedFrame(
-        for: sidePanelNearMidlineFrame,
-        in: compactSnapScreen
-    ) == CGRect(x: 290, y: 80, width: 860, height: 720),
-    "side-panel-sized frames snap their center to the screen midline"
 )
 
 let unknownCodexUsage = CodexUsageStatus.unknown
@@ -2739,6 +2963,12 @@ if case let .technicalGroup(id, events) = timelineItems[3] {
 } else {
     expect(false, "timeline builder creates second technical group")
 }
+
+runWorkbenchProjectionTests()
+runPersistenceTests()
+runExecutionEngineTests()
+runArchiveTests()
+runWorkbenchStoreTests()
 
 if failures.isEmpty {
     print("CodexPlusCoreTests passed: \(assertionCount) assertions")

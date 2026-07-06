@@ -46,6 +46,8 @@ struct LiquidGlassContainer<Content: View>: View {
                 .regular,
                 in: glassShape
             )
+            .compositingGroup()
+            .mask(glassShape)
     }
 
     private var glassShape: RoundedRectangle {

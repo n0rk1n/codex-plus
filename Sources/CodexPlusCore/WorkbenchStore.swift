@@ -1,0 +1,574 @@
+import Combine
+import Foundation
+
+@MainActor
+public final class WorkbenchStore: ObservableObject {
+    @Published public private(set) var snapshot: WorkbenchSnapshot
+
+    private let repository: CodexPlusRepository
+    private let engine: ExecutionEngine
+    private let archiveService: ArchiveSearchService
+    private let defaultWorkspacePathProvider: () throws -> String
+
+    private var workspaces: [WorkspaceSessionGroup]
+    private var conversations: [ConversationSession]
+    private var activeWorkspaceID: UUID?
+    private var activeConversationID: UUID?
+    private var activeHandles: [UUID: ExecutionHandle] = [:]
+    private var titleGenerator: ConversationTitleGenerator
+
+    public init(
+        repository: CodexPlusRepository,
+        engine: ExecutionEngine,
+        defaultWorkspacePathProvider: @escaping () throws -> String = {
+            try ConversationWorkspacePolicy.createDefaultWorkspaceDirectory()
+        }
+    ) {
+        self.repository = repository
+        self.engine = engine
+        self.archiveService = ArchiveSearchService(repository: repository)
+        self.defaultWorkspacePathProvider = defaultWorkspacePathProvider
+
+        let loadedWorkspaces = (try? repository.loadProjects()) ?? []
+        let loadedConversations = (try? repository.loadConversations()) ?? []
+        self.workspaces = loadedWorkspaces
+        self.conversations = loadedConversations
+        self.titleGenerator = ConversationTitleGenerator()
+
+        let initialWorkspace = loadedWorkspaces.max(by: { $0.lastActivityAt < $1.lastActivityAt })
+        self.activeWorkspaceID = initialWorkspace?.id
+        self.activeConversationID = initialWorkspace.flatMap { workspace in
+            workspace.conversationIDs.compactMap { id in
+                loadedConversations.first { $0.id == id && !$0.isArchived }
+            }.first?.id
+        }
+        self.snapshot = WorkbenchSnapshot()
+        refreshSnapshot()
+    }
+
+    public func createProject(path: String, displayName: String) {
+        let normalizedPath = ConversationWorkspacePolicy.normalizedPath(path)
+        let now = Date()
+
+        if let index = workspaces.firstIndex(where: { $0.path == normalizedPath }) {
+            var updatedWorkspace = workspaces[index]
+            updatedWorkspace.displayName = displayName
+            updatedWorkspace.lastActivityAt = now
+
+            guard saveProject(updatedWorkspace) else {
+                return
+            }
+
+            workspaces[index] = updatedWorkspace
+            activeWorkspaceID = updatedWorkspace.id
+            refreshSnapshot()
+            return
+        }
+
+        let project = WorkspaceSessionGroup(
+            path: normalizedPath,
+            displayName: displayName,
+            conversationIDs: [],
+            lastActivityAt: now
+        )
+
+        guard saveProject(project) else {
+            return
+        }
+
+        workspaces.append(project)
+        activeWorkspaceID = project.id
+        refreshSnapshot()
+    }
+
+    public func beginNewConversationDraft() {
+        if snapshot.activeConversation?.state == .running {
+            return
+        }
+
+        if activeWorkspaceID == nil {
+            activeWorkspaceID = workspaces.max(by: { $0.lastActivityAt < $1.lastActivityAt })?.id
+        }
+
+        activeConversationID = nil
+        snapshot.openedArchiveConversation = nil
+        snapshot.isShowingArchiveSearch = false
+        refreshSnapshot()
+    }
+
+    public func selectProject(_ id: UUID) {
+        guard let workspace = workspaces.first(where: { $0.id == id }) else {
+            return
+        }
+
+        activeWorkspaceID = workspace.id
+        activeConversationID = visibleConversations(in: workspace.id).first?.id
+        snapshot.openedArchiveConversation = nil
+        snapshot.isShowingArchiveSearch = false
+        refreshSnapshot()
+    }
+
+    public func selectConversation(_ id: UUID) {
+        guard let conversation = conversations.first(where: { $0.id == id && !$0.isArchived }),
+              let workspace = workspace(containing: id) else {
+            return
+        }
+
+        activeWorkspaceID = workspace.id
+        activeConversationID = conversation.id
+        snapshot.openedArchiveConversation = nil
+        snapshot.isShowingArchiveSearch = false
+        refreshSnapshot()
+    }
+
+    public func startConversation(prompt: String, workspacePath: String) {
+        let trimmedPrompt = prompt.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmedPrompt.isEmpty else {
+            return
+        }
+
+        guard let workspace = ensureProject(for: workspacePath) else {
+            return
+        }
+
+        let now = Date()
+        let session = ConversationSession(
+            title: titleGenerator.nextTitle(existingTitles: conversations.map(\.title)),
+            prompt: trimmedPrompt,
+            workspacePath: workspace.path,
+            state: .running,
+            permissionMode: .semiAutomatic,
+            createdAt: now,
+            lastActivityAt: now,
+            events: [.userPrompt(id: UUID(), text: trimmedPrompt)]
+        )
+
+        guard let updatedWorkspaces = attachedWorkspaces(
+            adding: session.id,
+            to: workspace.id,
+            now: now
+        ) else {
+            return
+        }
+
+        guard saveConversation(session, projectID: workspace.id) else {
+            return
+        }
+
+        workspaces = updatedWorkspaces
+        conversations.append(session)
+        activeWorkspaceID = workspace.id
+        activeConversationID = session.id
+        snapshot.openedArchiveConversation = nil
+        snapshot.isShowingArchiveSearch = false
+        refreshSnapshot()
+        startEngineRun(for: session.id, prompt: trimmedPrompt)
+    }
+
+    public func submitPrompt(_ prompt: String) {
+        if let activeConversationID,
+           conversations.contains(where: { $0.id == activeConversationID && !$0.isArchived }) {
+            sendFollowUp(prompt)
+            return
+        }
+
+        let workspacePath: String
+        if let activeWorkspace {
+            workspacePath = activeWorkspace.path
+        } else {
+            do {
+                workspacePath = try defaultWorkspacePathProvider()
+            } catch {
+                return
+            }
+        }
+
+        startConversation(prompt: prompt, workspacePath: workspacePath)
+    }
+
+    public func sendFollowUp(_ prompt: String) {
+        let trimmedPrompt = prompt.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmedPrompt.isEmpty, let conversationID = activeConversationID else {
+            return
+        }
+
+        guard let conversation = conversations.first(where: { $0.id == conversationID && !$0.isArchived }) else {
+            return
+        }
+
+        if conversation.state == .running {
+            appendEvent(.error(id: UUID(), text: "任务运行中，当前不能发送新的消息。"), to: conversationID)
+            return
+        }
+
+        guard persistUpdatedConversation(conversationID, mutation: { session in
+            session.state = .running
+            session.prompt = trimmedPrompt
+            session.events.append(.userPrompt(id: UUID(), text: trimmedPrompt))
+        }) else {
+            return
+        }
+        refreshSnapshot()
+        startEngineRun(for: conversationID, prompt: trimmedPrompt)
+    }
+
+    public func stopActiveRun() {
+        guard let conversationID = activeConversationID else {
+            return
+        }
+
+        _ = stopRun(for: conversationID)
+    }
+
+    public func archiveConversation(_ id: UUID) -> ArchiveRequestResult {
+        guard let conversation = conversations.first(where: { $0.id == id }) else {
+            return .notFound
+        }
+
+        if WorkbenchInteractionPolicies.requiresStopBeforeArchive(state: conversation.state) {
+            snapshot.pendingArchiveConfirmationConversationID = id
+            refreshSnapshot()
+            return .needsStopConfirmation(id)
+        }
+
+        return archiveConversationNow(id) ? .archived : .notFound
+    }
+
+    public func confirmStopAndArchive(_ id: UUID) {
+        guard stopRun(for: id) else {
+            return
+        }
+
+        snapshot.pendingArchiveConfirmationConversationID = nil
+        _ = archiveConversationNow(id)
+    }
+
+    public func cancelArchiveConfirmation() {
+        snapshot.pendingArchiveConfirmationConversationID = nil
+        refreshSnapshot()
+    }
+
+    public func confirmPendingStopAndArchive() {
+        guard let id = snapshot.pendingArchiveConfirmationConversationID else {
+            return
+        }
+
+        confirmStopAndArchive(id)
+    }
+
+    public func searchArchives(_ query: String) {
+        snapshot.archiveSearchResults = (try? archiveService.search(query)) ?? []
+        snapshot.isShowingArchiveSearch = true
+        if snapshot.openedArchiveConversation != nil {
+            snapshot.openedArchiveConversation = nil
+        }
+        refreshSnapshot()
+    }
+
+    public func openArchive(_ archiveID: UUID) {
+        let archivedConversation = conversations.first { $0.id == archiveID && $0.isArchived }
+        snapshot.openedArchiveConversation = archivedConversation
+        snapshot.isShowingArchiveSearch = true
+        refreshSnapshot()
+    }
+
+    public func showArchiveSearch() {
+        searchArchives("")
+    }
+
+    public func togglePin() {
+        snapshot.isPinned.toggle()
+        refreshSnapshot()
+    }
+
+    private func startEngineRun(for conversationID: UUID, prompt: String) {
+        guard let conversation = conversations.first(where: { $0.id == conversationID }) else {
+            return
+        }
+
+        let request = ExecutionRequest(
+            prompt: prompt,
+            permissionMode: conversation.permissionMode,
+            sessionID: conversation.id,
+            workingDirectoryURL: URL(fileURLWithPath: conversation.workspacePath, isDirectory: true)
+        )
+
+        let handle = engine.start(
+            request: request,
+            onEvent: { [weak self] event in
+                Task { @MainActor in
+                    self?.handleEngineEvent(event, for: conversationID)
+                }
+            },
+            onFinish: { [weak self] result in
+                Task { @MainActor in
+                    self?.finishRun(for: conversationID, result: result)
+                }
+            }
+        )
+        activeHandles[conversationID] = handle
+    }
+
+    private func handleEngineEvent(_ event: CodexEvent, for conversationID: UUID) {
+        appendEvent(Self.displayEvent(from: event), to: conversationID)
+    }
+
+    private func finishRun(for conversationID: UUID, result: CodexRunResult) {
+        activeHandles[conversationID] = nil
+        guard let conversation = conversations.first(where: { $0.id == conversationID }) else {
+            return
+        }
+
+        guard conversation.state == .running else {
+            refreshSnapshot()
+            return
+        }
+
+        guard persistUpdatedConversation(conversationID, mutation: { session in
+            session.state = result.succeeded ? .completed : .failed
+            if !result.succeeded, !result.stderr.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                session.events.append(.error(id: UUID(), text: result.stderr))
+            }
+        }) else {
+            return
+        }
+        refreshSnapshot()
+    }
+
+    @discardableResult
+    private func stopRun(for conversationID: UUID) -> Bool {
+        guard let handle = activeHandles[conversationID] else {
+            return false
+        }
+
+        guard persistUpdatedConversation(conversationID, mutation: { session in
+            session.state = .stopped
+        }) else {
+            return false
+        }
+
+        activeHandles[conversationID] = nil
+        handle.stop()
+        refreshSnapshot()
+        return true
+    }
+
+    @discardableResult
+    private func archiveConversationNow(_ id: UUID) -> Bool {
+        guard let conversationIndex = conversations.firstIndex(where: { $0.id == id }),
+              let workspaceIndex = workspaces.firstIndex(where: { $0.conversationIDs.contains(id) })
+        else {
+            return false
+        }
+
+        let conversation = conversations[conversationIndex]
+        let workspace = workspaces[workspaceIndex]
+
+        do {
+            _ = try archiveService.archive(conversation: conversation, project: workspace)
+        } catch {
+            return false
+        }
+
+        var updatedConversations = conversations
+        var updatedWorkspaces = workspaces
+        updatedConversations[conversationIndex].isArchived = true
+        updatedWorkspaces[workspaceIndex].conversationIDs.removeAll { $0 == id }
+
+        var nextActiveWorkspaceID = activeWorkspaceID
+        var nextActiveConversationID = activeConversationID == id ? nil : activeConversationID
+
+        if nextActiveWorkspaceID == nil {
+            nextActiveWorkspaceID = workspace.id
+        }
+
+        if let workspaceID = nextActiveWorkspaceID {
+            let visibleConversationIDs = updatedWorkspaces
+                .first(where: { $0.id == workspaceID })?
+                .conversationIDs
+                .filter { candidateID in
+                    updatedConversations.contains(where: { $0.id == candidateID && !$0.isArchived })
+                } ?? []
+
+            if nextActiveConversationID == nil || !visibleConversationIDs.contains(nextActiveConversationID!) {
+                nextActiveConversationID = visibleConversationIDs.first
+            }
+        }
+
+        conversations = updatedConversations
+        workspaces = updatedWorkspaces
+        activeWorkspaceID = nextActiveWorkspaceID
+        activeConversationID = nextActiveConversationID
+        snapshot.pendingArchiveConfirmationConversationID = nil
+        refreshSnapshot()
+        return true
+    }
+
+    private func ensureProject(for workspacePath: String) -> WorkspaceSessionGroup? {
+        let normalizedPath = ConversationWorkspacePolicy.normalizedPath(workspacePath)
+
+        if let workspace = workspaces.first(where: { $0.path == normalizedPath }) {
+            return workspace
+        }
+
+        let workspace = WorkspaceSessionGroup(
+            path: normalizedPath,
+            displayName: ConversationWorkspacePolicy.displayName(for: normalizedPath),
+            conversationIDs: [],
+            lastActivityAt: Date()
+        )
+
+        guard saveProject(workspace) else {
+            return nil
+        }
+
+        workspaces.append(workspace)
+        return workspace
+    }
+
+    private func workspace(containing conversationID: UUID) -> WorkspaceSessionGroup? {
+        workspaces.first { $0.conversationIDs.contains(conversationID) }
+    }
+
+    private func visibleConversations(in workspaceID: UUID) -> [ConversationSession] {
+        guard let workspace = workspaces.first(where: { $0.id == workspaceID }) else {
+            return []
+        }
+
+        return workspace.conversationIDs.compactMap { id in
+            conversations.first { $0.id == id && !$0.isArchived }
+        }
+    }
+
+    private var activeWorkspace: WorkspaceSessionGroup? {
+        guard let activeWorkspaceID else {
+            return nil
+        }
+
+        return workspaces.first { $0.id == activeWorkspaceID }
+    }
+
+    private func appendEvent(_ event: ConversationDisplayEvent, to conversationID: UUID) {
+        guard persistUpdatedConversation(conversationID, mutation: { session in
+            session.events.append(event)
+        }) else {
+            return
+        }
+
+        refreshSnapshot()
+    }
+
+    @discardableResult
+    private func persistUpdatedConversation(
+        _ id: UUID,
+        mutation: (inout ConversationSession) -> Void
+    ) -> Bool {
+        guard let index = conversations.firstIndex(where: { $0.id == id }) else {
+            return false
+        }
+
+        let now = Date()
+        var updatedConversation = conversations[index]
+        mutation(&updatedConversation)
+        updatedConversation.lastActivityAt = now
+
+        var updatedWorkspaces = workspaces
+        if let workspaceIndex = updatedWorkspaces.firstIndex(where: { $0.path == updatedConversation.workspacePath }) {
+            updatedWorkspaces[workspaceIndex].lastActivityAt = updatedConversation.lastActivityAt
+            guard saveProject(updatedWorkspaces[workspaceIndex]) else {
+                return false
+            }
+        }
+
+        guard let projectID = updatedWorkspaces.first(where: { $0.path == updatedConversation.workspacePath })?.id,
+              saveConversation(updatedConversation, projectID: projectID) else {
+            return false
+        }
+
+        workspaces = updatedWorkspaces
+        conversations[index] = updatedConversation
+        return true
+    }
+
+    private func attachedWorkspaces(
+        adding conversationID: UUID,
+        to workspaceID: UUID,
+        now: Date
+    ) -> [WorkspaceSessionGroup]? {
+        guard let index = workspaces.firstIndex(where: { $0.id == workspaceID }) else {
+            return nil
+        }
+
+        var updatedWorkspaces = workspaces
+        updatedWorkspaces[index].conversationIDs.append(conversationID)
+        updatedWorkspaces[index].lastActivityAt = now
+
+        guard saveProject(updatedWorkspaces[index]) else {
+            return nil
+        }
+
+        return updatedWorkspaces
+    }
+
+    private func saveProject(_ project: WorkspaceSessionGroup) -> Bool {
+        do {
+            try repository.saveProject(project)
+            return true
+        } catch {
+            return false
+        }
+    }
+
+    private func saveConversation(_ conversation: ConversationSession, projectID: UUID) -> Bool {
+        do {
+            try repository.saveConversation(conversation, projectID: projectID)
+            return true
+        } catch {
+            return false
+        }
+    }
+
+    private func refreshSnapshot() {
+        let activeConversation = conversations.first { $0.id == activeConversationID && !$0.isArchived }
+        snapshot = WorkbenchSnapshot(
+            projectCards: WorkbenchProjection.projectCards(
+                workspaces: workspaces,
+                conversations: conversations,
+                activeWorkspaceID: activeWorkspaceID,
+                activeConversationID: activeConversationID
+            ),
+            activeConversation: activeConversation,
+            composerAction: WorkbenchInteractionPolicies.composerAction(for: activeConversation?.state),
+            statusBar: snapshot.statusBar,
+            canSubmitPrompt: activeConversation?.state != .running,
+            archiveSearchResults: snapshot.archiveSearchResults,
+            isPinned: snapshot.isPinned,
+            pendingArchiveConfirmationConversationID: snapshot.pendingArchiveConfirmationConversationID,
+            isShowingArchiveSearch: snapshot.isShowingArchiveSearch,
+            openedArchiveConversation: snapshot.openedArchiveConversation
+        )
+    }
+
+    private static func displayEvent(from event: CodexEvent) -> ConversationDisplayEvent {
+        switch event {
+        case let .threadStarted(threadID):
+            return .status(id: UUID(), text: "Thread started: \(threadID)")
+        case .turnStarted:
+            return .status(id: UUID(), text: "Turn started")
+        case .turnCompleted:
+            return .status(id: UUID(), text: "Turn completed")
+        case let .turnFailed(message):
+            return .error(id: UUID(), text: message)
+        case let .agentMessage(text):
+            return .assistantMessage(id: UUID(), text: text)
+        case let .command(id, command, status):
+            return .command(id: UUID(), executionID: id, command: command, status: status)
+        case let .error(text):
+            return .error(id: UUID(), text: text)
+        case let .raw(text):
+            return .status(id: UUID(), text: text)
+        case let .parseWarning(text):
+            return .parseWarning(id: UUID(), text: text)
+        }
+    }
+}

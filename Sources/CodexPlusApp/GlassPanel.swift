@@ -1,12 +1,12 @@
 import AppKit
 
-final class GlassPanel: NSPanel {
+class GlassPanel: NSPanel {
     override var canBecomeKey: Bool {
         true
     }
 
     override var canBecomeMain: Bool {
-        true
+        false
     }
 
     init(contentRect: NSRect) {

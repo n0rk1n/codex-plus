@@ -1,0 +1,137 @@
+import AppKit
+import CodexPlusCore
+import SwiftUI
+
+@MainActor
+final class WorkbenchPanelController {
+    private let panelFactory: PanelFactory
+    private let screenProvider: ActiveScreenProvider
+    private let store: WorkbenchStore
+    private weak var panelDelegate: NSWindowDelegate?
+    private let onShow: () -> Void
+    private let onHide: () -> Void
+
+    private var panel: GlassPanel?
+    private let dismissMonitors = EventMonitorStore()
+
+    init(
+        panelFactory: PanelFactory,
+        screenProvider: ActiveScreenProvider,
+        store: WorkbenchStore,
+        panelDelegate: NSWindowDelegate?,
+        onShow: @escaping () -> Void,
+        onHide: @escaping () -> Void
+    ) {
+        self.panelFactory = panelFactory
+        self.screenProvider = screenProvider
+        self.store = store
+        self.panelDelegate = panelDelegate
+        self.onShow = onShow
+        self.onHide = onHide
+    }
+
+    deinit {
+        dismissMonitors.removeAll()
+    }
+
+    func toggle() {
+        if panel?.isVisible == true {
+            hide()
+        } else {
+            show()
+        }
+    }
+
+    func show() {
+        guard let screen = screenProvider.activeScreen() else {
+            return
+        }
+
+        let frame = Self.defaultFrame(in: screen.visibleFrame)
+        let panel = panel ?? panelFactory.makePanel(frame: frame, delegate: panelDelegate)
+        panel.hasShadow = false
+        panel.setFrame(frame, display: true)
+        panel.contentView = WorkbenchPanelHostingView(rootView: WorkbenchView(store: store))
+        panel.makeKeyAndOrderFront(nil)
+        self.panel = panel
+        installDismissMonitorsIfNeeded()
+        onShow()
+    }
+
+    func hide() {
+        let wasVisible = panel?.isVisible == true
+        panel?.orderOut(nil)
+        dismissMonitors.removeAll()
+        if wasVisible {
+            onHide()
+        }
+    }
+
+    static func defaultFrame(in visibleFrame: NSRect) -> NSRect {
+        let width = min(CGFloat(1240), visibleFrame.width > 96 ? visibleFrame.width - 96 : visibleFrame.width)
+        let height = min(CGFloat(720), visibleFrame.height > 96 ? visibleFrame.height - 96 : visibleFrame.height)
+
+        return NSRect(
+            x: visibleFrame.midX - (width / 2),
+            y: visibleFrame.midY - (height / 2),
+            width: width,
+            height: height
+        )
+    }
+
+    private func installDismissMonitorsIfNeeded() {
+        guard dismissMonitors.isEmpty else {
+            return
+        }
+
+        let mouseDownMask: NSEvent.EventTypeMask = [.leftMouseDown, .rightMouseDown, .otherMouseDown]
+        if let localMouseMonitor = NSEvent.addLocalMonitorForEvents(matching: mouseDownMask, handler: { [weak self] event in
+            self?.hideIfNeededForOutsideClick(at: NSEvent.mouseLocation)
+            return event
+        }) {
+            dismissMonitors.append(localMouseMonitor)
+        }
+
+        if let globalMouseMonitor = NSEvent.addGlobalMonitorForEvents(matching: mouseDownMask, handler: { [weak self] _ in
+            Task { @MainActor in
+                self?.hideIfNeededForOutsideClick(at: NSEvent.mouseLocation)
+            }
+        }) {
+            dismissMonitors.append(globalMouseMonitor)
+        }
+    }
+
+    private func hideIfNeededForOutsideClick(at point: NSPoint) {
+        guard let panel, panel.isVisible else {
+            return
+        }
+
+        if WorkbenchInteractionPolicies.shouldHideForOutsideClick(
+            isPinned: store.snapshot.isPinned,
+            clickPoint: point,
+            panelFrame: panel.frame
+        ) {
+            hide()
+        }
+    }
+}
+
+private final class WorkbenchPanelHostingView<Content: View>: NSHostingView<Content> {
+    required init(rootView: Content) {
+        super.init(rootView: rootView)
+        configureTransparentBacking()
+    }
+
+    @available(*, unavailable)
+    required dynamic init?(coder: NSCoder) {
+        fatalError("init(coder:) has not been implemented")
+    }
+
+    private func configureTransparentBacking() {
+        wantsLayer = true
+        layer?.backgroundColor = NSColor.clear.cgColor
+        layer?.isOpaque = false
+        layer?.shadowOpacity = 0
+        layer?.shadowColor = NSColor.clear.cgColor
+    }
+}

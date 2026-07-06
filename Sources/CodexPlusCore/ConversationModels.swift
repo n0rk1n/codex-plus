@@ -195,16 +195,15 @@ public struct ConversationArchiveResult: Equatable, Sendable {
 }
 
 public enum ConversationWorkspacePolicy {
-    public static let defaultParentDirectoryName = "Codex Plus Workspace"
+    public static let defaultParentDirectoryName = "Codex-plus"
 
     public static func defaultParentPath(homeDirectoryPath: String) -> String {
         NSString(string: NSString(string: homeDirectoryPath).appendingPathComponent("Documents"))
             .appendingPathComponent(defaultParentDirectoryName)
     }
 
-    public static func defaultDirectoryName(
+    public static func defaultDateDirectoryName(
         date: Date,
-        randomSuffix: Int,
         calendar: Calendar = Calendar(identifier: .gregorian)
     ) -> String {
         let calendar = calendar
@@ -212,7 +211,11 @@ public enum ConversationWorkspacePolicy {
         let year = components.year ?? 1970
         let month = components.month ?? 1
         let day = components.day ?? 1
-        return String(format: "%04d-%02d-%02d-%04d", year, month, day, randomSuffix)
+        return String(format: "%04d-%02d-%02d", year, month, day)
+    }
+
+    public static func defaultRandomDirectoryName(randomSuffix: Int) -> String {
+        String(format: "%04d", randomSuffix)
     }
 
     public static func defaultWorkspacePath(
@@ -221,8 +224,37 @@ public enum ConversationWorkspacePolicy {
         randomSuffix: Int,
         calendar: Calendar = Calendar(identifier: .gregorian)
     ) -> String {
-        NSString(string: defaultParentPath(homeDirectoryPath: homeDirectoryPath))
-            .appendingPathComponent(defaultDirectoryName(date: date, randomSuffix: randomSuffix, calendar: calendar))
+        URL(fileURLWithPath: defaultParentPath(homeDirectoryPath: homeDirectoryPath), isDirectory: true)
+            .appendingPathComponent(defaultDateDirectoryName(date: date, calendar: calendar), isDirectory: true)
+            .appendingPathComponent(defaultRandomDirectoryName(randomSuffix: randomSuffix), isDirectory: true)
+            .path
+    }
+
+    public static func createDefaultWorkspaceDirectory(
+        homeDirectoryPath: String = FileManager.default.homeDirectoryForCurrentUser.path,
+        date: Date = Date(),
+        randomSuffixes: [Int]? = nil,
+        calendar: Calendar = Calendar(identifier: .gregorian),
+        fileManager: FileManager = .default
+    ) throws -> String {
+        let suffixes = randomSuffixes ?? (0..<20).map { _ in Int.random(in: 1000...9999) }
+
+        for suffix in suffixes {
+            let path = defaultWorkspacePath(
+                homeDirectoryPath: homeDirectoryPath,
+                date: date,
+                randomSuffix: suffix,
+                calendar: calendar
+            )
+            let url = URL(fileURLWithPath: path, isDirectory: true)
+
+            if !fileManager.fileExists(atPath: url.path) {
+                try fileManager.createDirectory(at: url, withIntermediateDirectories: true)
+                return normalizedPath(url.path)
+            }
+        }
+
+        throw CocoaError(.fileWriteFileExists)
     }
 
     public static func normalizedPath(_ path: String) -> String {

@@ -157,7 +157,7 @@ final class SidePanelController {
         model: ConversationPanelModel,
         actions: SidePanelActions
     ) {
-        let contentView = DraggableHostingView(
+        panel.contentView = DraggableHostingView(
             rootView: ConversationPanelHostView(
                 model: model,
                 onSubmitDraft: actions.onSubmitDraft,
@@ -175,8 +175,6 @@ final class SidePanelController {
                 onReorderConversation: actions.onReorderConversation
             )
         )
-        contentView.windowDragMode = .sidePanel
-        panel.contentView = contentView
         isContentInstalled = true
     }
 
@@ -292,9 +290,7 @@ final class SidePanelController {
             }
 
             guard
-                let panel = self.panel,
-                panel.isVisible,
-                panel.isKeyWindow || panel.isMainWindow,
+                self.panel?.isVisible == true,
                 CompactEntryDismissPolicy.shouldDismissForKeyDown(keyCode: event.keyCode)
             else {
                 return event

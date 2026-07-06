@@ -6,7 +6,6 @@ final class DraggableHostingView<Content: View>: NSHostingView<Content> {
     enum WindowDragMode {
         case automatic
         case compactPrompt
-        case sidePanel
     }
 
     var windowDragMode = WindowDragMode.automatic
@@ -15,7 +14,7 @@ final class DraggableHostingView<Content: View>: NSHostingView<Content> {
         switch windowDragMode {
         case .automatic:
             return true
-        case .compactPrompt, .sidePanel:
+        case .compactPrompt:
             return false
         }
     }
@@ -26,7 +25,7 @@ final class DraggableHostingView<Content: View>: NSHostingView<Content> {
             return
         }
 
-        performManualWindowDrag(from: event)
+        performCompactPromptDrag(from: event)
     }
 
     private func shouldPerformManualWindowDrag(for event: NSEvent) -> Bool {
@@ -39,12 +38,10 @@ final class DraggableHostingView<Content: View>: NSHostingView<Content> {
                 panelBounds: bounds,
                 verticalOrigin: isFlipped ? .top : .bottom
             )
-        case .sidePanel:
-            return true
         }
     }
 
-    private func performManualWindowDrag(from initialEvent: NSEvent) {
+    private func performCompactPromptDrag(from initialEvent: NSEvent) {
         guard let window else {
             return
         }
@@ -70,7 +67,7 @@ final class DraggableHostingView<Content: View>: NSHostingView<Content> {
                     dx: mouseLocation.x - initialMouseLocation.x,
                     dy: mouseLocation.y - initialMouseLocation.y
                 )
-                let dragResult = snappedDragResult(for: proposedFrame, window: window)
+                let dragResult = compactPromptDragResult(for: proposedFrame, window: window)
                 if dragResult.isSnapped && !wasSnapped {
                     NSHapticFeedbackManager.defaultPerformer.perform(.alignment, performanceTime: .now)
                 }
@@ -84,7 +81,7 @@ final class DraggableHostingView<Content: View>: NSHostingView<Content> {
         }
     }
 
-    private func snappedDragResult(for proposedFrame: NSRect, window: NSWindow) -> (frame: NSRect, isSnapped: Bool) {
+    private func compactPromptDragResult(for proposedFrame: NSRect, window: NSWindow) -> (frame: NSRect, isSnapped: Bool) {
         let screenFrame = (screen(containing: proposedFrame) ?? window.screen ?? NSScreen.main)?.visibleFrame
         guard let screenFrame else {
             return (proposedFrame, false)

@@ -5,6 +5,7 @@ import SwiftUI
 @MainActor
 final class WindowCoordinator: NSObject, NSWindowDelegate {
     private let conversationCoordinator: ConversationCoordinator
+    private let workbenchStore: WorkbenchStore
     private let batteryMonitor: BatteryStatusMonitor
     private let codexUsageMonitor: CodexUsageMonitor
     private let dailyTokenUsageMonitor: DailyTokenUsageMonitor
@@ -42,13 +43,34 @@ final class WindowCoordinator: NSObject, NSWindowDelegate {
         dailyTokenUsageMonitor: dailyTokenUsageMonitor,
         panelDelegate: self
     )
+    private lazy var workbenchPanelController = WorkbenchPanelController(
+        panelFactory: panelFactory,
+        screenProvider: screenProvider,
+        store: workbenchStore,
+        panelDelegate: self,
+        onShow: { [weak self] in
+            self?.workbenchLauncherPanelController.hide()
+        },
+        onHide: { [weak self] in
+            self?.workbenchLauncherPanelController.show()
+        }
+    )
+    private lazy var workbenchLauncherPanelController = WorkbenchLauncherPanelController(
+        screenProvider: screenProvider,
+        panelDelegate: self,
+        onOpenWorkbench: { [weak self] in
+            self?.showWorkbenchFromLauncher()
+        }
+    )
 
     init(
         conversationCoordinator: ConversationCoordinator,
         batteryProvider: any BatteryStatusProviding,
-        codexRunner: ProcessCodexRunner
+        codexRunner: ProcessCodexRunner,
+        workbenchStore: WorkbenchStore
     ) {
         self.conversationCoordinator = conversationCoordinator
+        self.workbenchStore = workbenchStore
         self.batteryMonitor = BatteryStatusMonitor(provider: batteryProvider)
         self.codexUsageMonitor = CodexUsageMonitor(provider: LocalCodexUsageProvider())
         self.dailyTokenUsageMonitor = DailyTokenUsageMonitor(provider: LocalDailyTokenUsageProvider())
@@ -57,11 +79,19 @@ final class WindowCoordinator: NSObject, NSWindowDelegate {
         super.init()
         codexUsageMonitor.start()
         dailyTokenUsageMonitor.start()
+        workbenchLauncherPanelController.show()
     }
 
     func handleGlobalShortcut() {
-        NSApp.activate(ignoringOtherApps: true)
+        workbenchPanelController.toggle()
+    }
 
+    private func showWorkbenchFromLauncher() {
+        workbenchLauncherPanelController.hide()
+        workbenchPanelController.show()
+    }
+
+    private func handleLegacyGlobalShortcutRouting() {
         switch conversationCoordinator.shortcutDecision() {
         case let .recallConversation(conversationID):
             conversationCoordinator.selectConversation(conversationID)
