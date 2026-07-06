@@ -513,6 +513,7 @@ func expectCodexDesktopLauncherIntegration() {
     let conversationViewPath = "Sources/CodexPlusApp/Views/ConversationView.swift"
     let compactControllerPath = "Sources/CodexPlusApp/CompactPanelController.swift"
     let sidePanelControllerPath = "Sources/CodexPlusApp/SidePanelController.swift"
+    let draggableHostingViewPath = "Sources/CodexPlusApp/DraggableHostingView.swift"
     let windowCoordinatorPath = "Sources/CodexPlusApp/WindowCoordinator.swift"
     let liquidGlassPath = "Sources/CodexPlusApp/Views/LiquidGlassContainer.swift"
     let glassPanelPath = "Sources/CodexPlusApp/GlassPanel.swift"
@@ -751,6 +752,19 @@ func expectCodexDesktopLauncherIntegration() {
         sidePanelControllerText.contains("guard !isPinned() else")
             && sidePanelControllerText.contains("private func dismissIfNeededForMouseDown"),
         "side panel ignores outside mouse dismiss while pinned"
+    )
+    let draggableHostingViewText = (try? String(
+        contentsOf: packageRoot.appendingPathComponent(draggableHostingViewPath),
+        encoding: .utf8
+    )) ?? ""
+    expect(
+        draggableHostingViewText.contains("case sidePanel")
+            && sidePanelControllerText.contains("contentView.windowDragMode = .sidePanel"),
+        "side panel opts into manual drag mode for live midline snapping"
+    )
+    expect(
+        sidePanelControllerText.contains("panel.isKeyWindow || panel.isMainWindow"),
+        "side panel escape dismissal only applies to the current key or main window"
     )
 
     let windowCoordinatorText = (try? String(
@@ -1953,6 +1967,15 @@ expect(
         in: offsetSnapScreen
     ) == CGRect(x: 390, y: 260, width: 420, height: 210),
     "compact panel snap uses the active screen midline"
+)
+
+let sidePanelNearMidlineFrame = CGRect(x: 298, y: 80, width: 860, height: 720)
+expect(
+    CompactPanelSnapPolicy.snappedFrame(
+        for: sidePanelNearMidlineFrame,
+        in: compactSnapScreen
+    ) == CGRect(x: 290, y: 80, width: 860, height: 720),
+    "side-panel-sized frames snap their center to the screen midline"
 )
 
 let unknownCodexUsage = CodexUsageStatus.unknown
