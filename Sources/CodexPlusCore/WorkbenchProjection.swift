@@ -7,10 +7,14 @@ public enum WorkbenchProjection {
         activeWorkspaceID: UUID?,
         activeConversationID: UUID?
     ) -> [WorkbenchProjectCard] {
-        workspaces.map { workspace in
+        workspaces.compactMap { workspace in
             let visibleConversations = workspace.conversationIDs.compactMap { id in
                 conversations.first { $0.id == id && !$0.isArchived }
             }
+            guard !visibleConversations.isEmpty else {
+                return nil
+            }
+
             let selectedConversation = visibleConversations.first { $0.id == activeConversationID } ?? visibleConversations.first
             let count = visibleConversations.count
             let conversationSummaries = visibleConversations.map { conversation in
@@ -26,7 +30,7 @@ public enum WorkbenchProjection {
                 projectName: workspace.displayName,
                 projectPath: workspace.path,
                 conversationID: selectedConversation?.id,
-                conversationTitle: selectedConversation?.title ?? "暂无对话",
+                conversationTitle: selectedConversation?.title ?? "",
                 conversationState: selectedConversation?.state,
                 conversationSummaries: conversationSummaries,
                 visibleConversationCount: count,

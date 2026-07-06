@@ -13,7 +13,6 @@ final class WorkbenchPanelController {
 
     private var panel: GlassPanel?
     private let dismissMonitors = EventMonitorStore()
-    private var wasNearMidline = false
 
     init(
         panelFactory: PanelFactory,
@@ -52,7 +51,6 @@ final class WorkbenchPanelController {
         let panel = panel ?? panelFactory.makePanel(frame: frame, delegate: panelDelegate)
         panel.hasShadow = false
         panel.setFrame(frame, display: true)
-        wasNearMidline = true
         panel.contentView = WorkbenchPanelHostingView(rootView: WorkbenchView(store: store))
         panel.makeKeyAndOrderFront(nil)
         self.panel = panel
@@ -74,26 +72,6 @@ final class WorkbenchPanelController {
             return false
         }
 
-        guard let screenFrame = (
-            screen(containing: movedPanel.frame) ??
-                movedPanel.screen ??
-                screenProvider.activeScreen()
-        )?.visibleFrame else {
-            wasNearMidline = false
-            return true
-        }
-
-        let snappedFrame = CompactPanelSnapPolicy.snappedFrame(
-            for: movedPanel.frame,
-            in: screenFrame
-        )
-        let isNearMidline = abs(snappedFrame.midX - screenFrame.midX) < 0.5
-
-        if isNearMidline && !wasNearMidline {
-            NSHapticFeedbackManager.defaultPerformer.perform(.alignment, performanceTime: .now)
-        }
-
-        wasNearMidline = isNearMidline
         return true
     }
 
@@ -134,13 +112,6 @@ final class WorkbenchPanelController {
             dismissMonitors.append(keyMonitor)
         }
 
-        if let mouseUpMonitor = NSEvent.addLocalMonitorForEvents(matching: [.leftMouseUp], handler: { [weak self] event in
-            self?.snapWorkbenchPanelToMidlineIfNeeded()
-            return event
-        }) {
-            dismissMonitors.append(mouseUpMonitor)
-        }
-
         let mouseDownMask: NSEvent.EventTypeMask = [.leftMouseDown, .rightMouseDown, .otherMouseDown]
         if let localMouseMonitor = NSEvent.addLocalMonitorForEvents(matching: mouseDownMask, handler: { [weak self] event in
             self?.hideIfNeededForOutsideClick(at: NSEvent.mouseLocation)
@@ -172,36 +143,6 @@ final class WorkbenchPanelController {
         }
     }
 
-    private func snapWorkbenchPanelToMidlineIfNeeded() {
-        guard let panel, panel.isVisible else {
-            return
-        }
-
-        guard let screenFrame = (
-            screen(containing: panel.frame) ??
-                panel.screen ??
-                screenProvider.activeScreen()
-        )?.visibleFrame else {
-            return
-        }
-
-        let snappedFrame = CompactPanelSnapPolicy.snappedFrame(
-            for: panel.frame,
-            in: screenFrame
-        )
-
-        guard snappedFrame != panel.frame else {
-            return
-        }
-
-        panel.setFrame(snappedFrame, display: true)
-    }
-
-    private func screen(containing frame: NSRect) -> NSScreen? {
-        NSScreen.screens.max { first, second in
-            first.visibleFrame.intersection(frame).area < second.visibleFrame.intersection(frame).area
-        }
-    }
 }
 
 private final class WorkbenchPanelHostingView<Content: View>: NSHostingView<Content> {
@@ -221,11 +162,5 @@ private final class WorkbenchPanelHostingView<Content: View>: NSHostingView<Cont
         layer?.isOpaque = false
         layer?.shadowOpacity = 0
         layer?.shadowColor = NSColor.clear.cgColor
-    }
-}
-
-private extension NSRect {
-    var area: CGFloat {
-        width * height
     }
 }

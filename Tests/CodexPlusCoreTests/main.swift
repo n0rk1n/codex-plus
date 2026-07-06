@@ -787,6 +787,8 @@ func expectWorkbenchInterfaceIntegration() {
     let workbenchLauncherPanelControllerPath = "Sources/CodexPlusApp/Workbench/WorkbenchLauncherPanelController.swift"
     let sideEdgeAffordancePath = "Sources/CodexPlusApp/Views/SideEdgeAffordanceView.swift"
     let windowCoordinatorPath = "Sources/CodexPlusApp/WindowCoordinator.swift"
+    let glassPanelPath = "Sources/CodexPlusApp/GlassPanel.swift"
+    let draggableHostingViewPath = "Sources/CodexPlusApp/DraggableHostingView.swift"
 
     for sourceFile in [
         workbenchViewPath,
@@ -797,7 +799,9 @@ func expectWorkbenchInterfaceIntegration() {
         workbenchPanelControllerPath,
         workbenchLauncherViewPath,
         workbenchLauncherPanelControllerPath,
-        sideEdgeAffordancePath
+        sideEdgeAffordancePath,
+        glassPanelPath,
+        draggableHostingViewPath
     ] {
         let exists = FileManager.default.fileExists(
             atPath: packageRoot.appendingPathComponent(sourceFile).path
@@ -845,6 +849,14 @@ func expectWorkbenchInterfaceIntegration() {
         contentsOf: packageRoot.appendingPathComponent(windowCoordinatorPath),
         encoding: .utf8
     )) ?? ""
+    let glassPanelText = (try? String(
+        contentsOf: packageRoot.appendingPathComponent(glassPanelPath),
+        encoding: .utf8
+    )) ?? ""
+    let draggableHostingViewText = (try? String(
+        contentsOf: packageRoot.appendingPathComponent(draggableHostingViewPath),
+        encoding: .utf8
+    )) ?? ""
 
     expect(
         workbenchViewText.contains("TopProjectStripView")
@@ -855,8 +867,19 @@ func expectWorkbenchInterfaceIntegration() {
     )
     expect(
         workbenchViewText.contains("onSend: { store.submitPrompt($0) }")
+            && workbenchViewText.contains("onPickWorkspace: pickWorkspace")
+            && workbenchViewText.contains("onClearWorkspace: { store.clearDraftWorkspaceSelection() }")
             && workbenchViewText.contains("onTogglePin: { store.togglePin() }"),
-        "workbench root routes composer submit and pin toggle through the store"
+        "workbench root routes composer submit, workspace picking, workspace clearing, and pin toggle through the store"
+    )
+    expect(
+        workbenchViewText.contains("import AppKit")
+            && workbenchViewText.contains("let panel = NSOpenPanel()")
+            && workbenchViewText.contains("panel.canChooseDirectories = true")
+            && workbenchViewText.contains("panel.canChooseFiles = false")
+            && workbenchViewText.contains("store.createProject(")
+            && workbenchViewText.contains("ConversationWorkspacePolicy.displayName(for: url.path)"),
+        "workbench root opens a directory picker and selects the chosen workspace as the active project"
     )
     expect(
         topProjectStripText.contains(#"Text("项目：")"#)
@@ -885,6 +908,13 @@ func expectWorkbenchInterfaceIntegration() {
         "top project strip exposes pin and overflow conversation selection"
     )
     expect(
+        !topProjectStripText.contains("workbenchLabel")
+            && !topProjectStripText.contains("workbenchTint")
+            && !topProjectStripText.contains(#""运行中""#)
+            && !topProjectStripText.contains(#""已完成""#),
+        "top project strip does not render conversation run-state labels"
+    )
+    expect(
         workbenchConversationText.contains("snapshot.activeConversation")
             && workbenchConversationText.contains("ConversationTimelineBuilder.items")
             && workbenchConversationText.contains("ConversationEventRow")
@@ -895,6 +925,14 @@ func expectWorkbenchInterfaceIntegration() {
         "workbench conversation view renders the active timeline and a visible per-conversation archive action"
     )
     expect(
+        !workbenchConversationText.contains("workbenchLabel")
+            && !workbenchConversationText.contains("workbenchTint")
+            && !workbenchConversationText.contains("conversation.state")
+            && !workbenchConversationText.contains(#""运行中""#)
+            && !workbenchConversationText.contains(#""已完成""#),
+        "workbench conversation header does not render conversation run-state labels"
+    )
+    expect(
         workbenchConversationText.contains(".glassEffect(.regular, in: Capsule(style: .continuous))")
             && workbenchConversationText.contains(".compositingGroup()")
             && workbenchConversationText.contains(".mask(Capsule(style: .continuous))"),
@@ -902,10 +940,21 @@ func expectWorkbenchInterfaceIntegration() {
     )
     expect(
         workbenchComposerText.contains("switch snapshot.composerAction")
+            && workbenchComposerText.contains("HStack(alignment: .center, spacing: 12)")
             && workbenchComposerText.contains("TextField(activePlaceholder, text: $prompt)")
             && !workbenchComposerText.contains("axis: .vertical")
             && workbenchComposerText.contains(#"Image(systemName: "stop.fill")"#)
             && workbenchComposerText.contains(#"Image(systemName: "arrow.up")"#)
+            && workbenchComposerText.contains(#"Image(systemName: "folder")"#)
+            && workbenchComposerText.contains("workspacePickerButton")
+            && workbenchComposerText.contains("snapshot.activeConversation == nil")
+            && workbenchComposerText.contains("onPickWorkspace")
+            && workbenchComposerText.contains("onClearWorkspace")
+            && workbenchComposerText.contains("workspaceClearButton")
+            && workbenchComposerText.contains(#"Image(systemName: "xmark.circle.fill")"#)
+            && workbenchComposerText.contains(".symbolRenderingMode(.hierarchical)")
+            && workbenchComposerText.contains(".frame(width: 24, height: 30)")
+            && workbenchComposerText.contains(".padding(.trailing, 6)")
             && workbenchComposerText.contains(".submitLabel(.send)")
             && workbenchComposerText.contains(".disabled(snapshot.composerAction == .stop)")
             && workbenchComposerText.contains("snapshot.canSubmitPrompt"),
@@ -942,17 +991,24 @@ func expectWorkbenchInterfaceIntegration() {
         "workbench panel keeps the active key window backing and shadow transparent"
     )
     expect(
-        workbenchPanelControllerText.contains("func recordMove(of movedPanel: GlassPanel) -> Bool")
-            && workbenchPanelControllerText.contains("CompactPanelSnapPolicy.snappedFrame")
-            && workbenchPanelControllerText.contains("NSHapticFeedbackManager.defaultPerformer.perform(.alignment")
-            && workbenchPanelControllerText.contains("wasNearMidline"),
-        "workbench panel snaps to the screen midline while being moved"
+        !glassPanelText.contains("snapsToScreenMidline")
+            && !glassPanelText.contains("constrainFrameRect")
+            && workbenchPanelControllerText.contains("func recordMove(of movedPanel: GlassPanel) -> Bool")
+            && !workbenchPanelControllerText.contains("midlineSnapDistance")
+            && !workbenchPanelControllerText.contains("CompactPanelSnapPolicy")
+            && !workbenchPanelControllerText.contains("NSHapticFeedbackManager")
+            && !workbenchPanelControllerText.contains("wasNearMidline")
+            && !workbenchPanelControllerText.contains("windowDragMode = .workbenchPanel")
+            && !draggableHostingViewText.contains("case workbenchPanel")
+            && !draggableHostingViewText.contains("workbenchSnap")
+            && !draggableHostingViewText.contains("workbenchPanelDragResult")
+            && !draggableHostingViewText.contains("WorkbenchPanelDragGestureHandler"),
+        "workbench panel uses native dragging without midline snap behavior"
     )
     expect(
-        workbenchPanelControllerText.contains("NSEvent.addLocalMonitorForEvents(matching: [.leftMouseUp]")
-            && workbenchPanelControllerText.contains("snapWorkbenchPanelToMidlineIfNeeded()")
-            && !workbenchPanelControllerText.contains("movedPanel.setFrame(snappedFrame, display: true)"),
-        "workbench panel finalizes midline snap on mouse up instead of fighting AppKit drag frames"
+        !workbenchPanelControllerText.contains("NSEvent.addLocalMonitorForEvents(matching: [.leftMouseUp]")
+            && !workbenchPanelControllerText.contains("snapWorkbenchPanelToMidlineIfNeeded()"),
+        "workbench panel relies on native drag constraints instead of mouse-up snap correction"
     )
     expect(
         workbenchPanelControllerText.contains("NSEvent.addLocalMonitorForEvents(matching: [.keyDown]")
@@ -963,7 +1019,7 @@ func expectWorkbenchInterfaceIntegration() {
     )
     expect(
         windowCoordinatorText.contains("workbenchPanelController.recordMove(of: panel)"),
-        "window coordinator routes workbench panel move events into snap handling"
+        "window coordinator routes workbench panel move events into move ownership handling"
     )
     expect(
         workbenchLauncherViewText.contains("struct WorkbenchLauncherView")

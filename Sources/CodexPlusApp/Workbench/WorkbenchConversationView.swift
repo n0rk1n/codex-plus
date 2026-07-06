@@ -37,10 +37,6 @@ struct WorkbenchConversationView: View {
 
                 Spacer(minLength: 12)
 
-                Text(conversation.state.workbenchLabel)
-                    .font(.caption.weight(.semibold))
-                    .foregroundStyle(conversation.state.workbenchTint)
-
                 archiveButton(for: conversation.id)
             }
             .padding(.horizontal, 16)
@@ -136,38 +132,6 @@ struct WorkbenchConversationView: View {
             expandedTechnicalGroupIDs.remove(id)
         } else {
             expandedTechnicalGroupIDs.insert(id)
-        }
-    }
-}
-
-private extension ConversationRunState {
-    var workbenchLabel: String {
-        switch self {
-        case .idle:
-            return "待命"
-        case .running:
-            return "运行中"
-        case .completed:
-            return "已完成"
-        case .failed:
-            return "失败"
-        case .stopped:
-            return "已停止"
-        }
-    }
-
-    var workbenchTint: Color {
-        switch self {
-        case .idle:
-            return .secondary
-        case .running:
-            return .blue
-        case .completed:
-            return .green
-        case .failed:
-            return .red
-        case .stopped:
-            return .orange
         }
     }
 }

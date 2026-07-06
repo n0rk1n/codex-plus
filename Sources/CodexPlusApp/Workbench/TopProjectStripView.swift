@@ -105,12 +105,6 @@ struct TopProjectStripView: View {
                             Text("\(card.visibleConversationCount) 条")
                                 .font(.caption2.weight(.medium))
                                 .foregroundStyle(.secondary)
-
-                            if let state = card.conversationState {
-                                Text(state.workbenchLabel)
-                                    .font(.caption2.weight(.semibold))
-                                    .foregroundStyle(state.workbenchTint)
-                            }
                         }
                     }
 
@@ -122,10 +116,7 @@ struct TopProjectStripView: View {
                                 Button {
                                     onSelectConversation(conversation.id)
                                 } label: {
-                                    HStack {
-                                        Text(conversation.title)
-                                        Text(conversation.state.workbenchLabel)
-                                    }
+                                    Text(conversation.title)
                                 }
                             }
                         } label: {
@@ -145,37 +136,5 @@ struct TopProjectStripView: View {
             }
         }
         .buttonStyle(.plain)
-    }
-}
-
-private extension ConversationRunState {
-    var workbenchLabel: String {
-        switch self {
-        case .idle:
-            return "待命"
-        case .running:
-            return "运行中"
-        case .completed:
-            return "已完成"
-        case .failed:
-            return "失败"
-        case .stopped:
-            return "已停止"
-        }
-    }
-
-    var workbenchTint: Color {
-        switch self {
-        case .idle:
-            return .secondary
-        case .running:
-            return .blue
-        case .completed:
-            return .green
-        case .failed:
-            return .red
-        case .stopped:
-            return .orange
-        }
     }
 }

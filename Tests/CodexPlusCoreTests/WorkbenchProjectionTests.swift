@@ -57,18 +57,17 @@ func runWorkbenchProjectionTests() {
         activeConversationID: conversationB1ID
     )
 
-    expect(cards.count == 2, "workbench projection creates one card per workspace")
-    expect(cards[0].conversationTitle == "暂无对话", "empty workspace shows no conversation")
-    expect(cards[0].visibleConversationCount == 0, "empty workspace visible count is zero")
-    expect(cards[1].projectName == "codex-plus", "project card keeps workspace display name")
-    expect(cards[1].conversationTitle == "重设计 Codex 软件", "active conversation is displayed first")
-    expect(cards[1].visibleConversationCount == 2, "archived conversations are excluded from count")
-    expect(cards[1].overflowCount == 2, "multiple visible conversations produce a dropdown count")
+    expect(cards.count == 1, "workbench projection hides workspaces without visible conversations")
+    expect(!cards.contains(where: { $0.projectPath == "/tmp/mft-project" }), "empty workspace does not render a project card")
+    expect(cards[0].projectName == "codex-plus", "project card keeps workspace display name")
+    expect(cards[0].conversationTitle == "重设计 Codex 软件", "active conversation is displayed first")
+    expect(cards[0].visibleConversationCount == 2, "archived conversations are excluded from count")
+    expect(cards[0].overflowCount == 2, "multiple visible conversations produce a dropdown count")
     expect(
-        cards[1].conversationSummaries.map(\.id) == [conversationB1ID, conversationB2ID],
+        cards[0].conversationSummaries.map(\.id) == [conversationB1ID, conversationB2ID],
         "multiple visible conversations are available for overflow selection"
     )
-    expect(cards[1].isActive, "active workspace card is marked active")
+    expect(cards[0].isActive, "active workspace card is marked active")
 
     expect(
         WorkbenchInteractionPolicies.composerAction(for: .running) == .stop,

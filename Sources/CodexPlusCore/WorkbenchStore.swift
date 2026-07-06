@@ -86,13 +86,19 @@ public final class WorkbenchStore: ObservableObject {
             return
         }
 
-        if activeWorkspaceID == nil {
-            activeWorkspaceID = workspaces.max(by: { $0.lastActivityAt < $1.lastActivityAt })?.id
-        }
-
+        activeWorkspaceID = nil
         activeConversationID = nil
         snapshot.openedArchiveConversation = nil
         snapshot.isShowingArchiveSearch = false
+        refreshSnapshot()
+    }
+
+    public func clearDraftWorkspaceSelection() {
+        guard activeConversationID == nil else {
+            return
+        }
+
+        activeWorkspaceID = nil
         refreshSnapshot()
     }
 

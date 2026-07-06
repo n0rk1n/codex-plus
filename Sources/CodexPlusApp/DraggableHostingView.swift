@@ -25,7 +25,7 @@ final class DraggableHostingView<Content: View>: NSHostingView<Content> {
             return
         }
 
-        performCompactPromptDrag(from: event)
+        performManualWindowDrag(from: event)
     }
 
     private func shouldPerformManualWindowDrag(for event: NSEvent) -> Bool {
@@ -41,7 +41,7 @@ final class DraggableHostingView<Content: View>: NSHostingView<Content> {
         }
     }
 
-    private func performCompactPromptDrag(from initialEvent: NSEvent) {
+    private func performManualWindowDrag(from initialEvent: NSEvent) {
         guard let window else {
             return
         }
@@ -67,7 +67,7 @@ final class DraggableHostingView<Content: View>: NSHostingView<Content> {
                     dx: mouseLocation.x - initialMouseLocation.x,
                     dy: mouseLocation.y - initialMouseLocation.y
                 )
-                let dragResult = compactPromptDragResult(for: proposedFrame, window: window)
+                let dragResult = snappedDragResult(for: proposedFrame, window: window)
                 if dragResult.isSnapped && !wasSnapped {
                     NSHapticFeedbackManager.defaultPerformer.perform(.alignment, performanceTime: .now)
                 }
@@ -81,7 +81,7 @@ final class DraggableHostingView<Content: View>: NSHostingView<Content> {
         }
     }
 
-    private func compactPromptDragResult(for proposedFrame: NSRect, window: NSWindow) -> (frame: NSRect, isSnapped: Bool) {
+    private func snappedDragResult(for proposedFrame: NSRect, window: NSWindow) -> (frame: NSRect, isSnapped: Bool) {
         let screenFrame = (screen(containing: proposedFrame) ?? window.screen ?? NSScreen.main)?.visibleFrame
         guard let screenFrame else {
             return (proposedFrame, false)

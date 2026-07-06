@@ -1,3 +1,4 @@
+import AppKit
 import CodexPlusCore
 import SwiftUI
 
@@ -33,6 +34,8 @@ struct WorkbenchView: View {
                     WorkbenchComposerView(
                         snapshot: store.snapshot,
                         onSend: { store.submitPrompt($0) },
+                        onPickWorkspace: pickWorkspace,
+                        onClearWorkspace: { store.clearDraftWorkspaceSelection() },
                         onStop: { store.stopActiveRun() }
                     )
                 }
@@ -61,6 +64,23 @@ struct WorkbenchView: View {
                     store.cancelArchiveConfirmation()
                 }
             }
+        )
+    }
+
+    private func pickWorkspace() {
+        let panel = NSOpenPanel()
+        panel.canChooseDirectories = true
+        panel.canChooseFiles = false
+        panel.allowsMultipleSelection = false
+        panel.canCreateDirectories = true
+
+        guard panel.runModal() == .OK, let url = panel.url else {
+            return
+        }
+
+        store.createProject(
+            path: url.path,
+            displayName: ConversationWorkspacePolicy.displayName(for: url.path)
         )
     }
 }

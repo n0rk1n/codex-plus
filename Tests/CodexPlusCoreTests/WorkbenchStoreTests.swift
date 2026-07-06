@@ -4,12 +4,103 @@ import CodexPlusCore
 @MainActor
 func runWorkbenchStoreTests() {
     runFreshWorkbenchSubmitTests()
+    runWorkbenchDraftWorkspaceSelectionTests()
     runWorkbenchSmokeTests()
     runArchiveLifecycleTests()
     runArchiveRestartConsistencyTests()
     runRunningArchiveConfirmationTests()
     runRunningStopPersistenceFailureTests()
     runArchivePersistenceFailureTests()
+}
+
+@MainActor
+private func runWorkbenchDraftWorkspaceSelectionTests() {
+    withSQLiteRepositoryTest("new workbench draft defaults to generated workspace") { _, repository in
+        let engine = ManualExecutionEngine()
+        let defaultWorkspacePath = "/tmp/codex-plus-generated-draft"
+        let store = WorkbenchStore(
+            repository: repository,
+            engine: engine,
+            defaultWorkspacePathProvider: { defaultWorkspacePath }
+        )
+
+        store.createProject(path: "/tmp/codex-plus-existing", displayName: "codex-plus-existing")
+
+        store.beginNewConversationDraft()
+
+        expect(
+            !store.snapshot.projectCards.contains(where: { $0.isActive }),
+            "new conversation draft starts without a selected workspace"
+        )
+
+        store.submitPrompt("draft without workspace")
+
+        expect(
+            store.snapshot.activeConversation?.workspacePath == defaultWorkspacePath,
+            "unselected new draft submit uses a generated default workspace"
+        )
+        expect(
+            engine.requests.first?.workingDirectoryURL.path == defaultWorkspacePath,
+            "engine starts unselected new draft in the generated default workspace"
+        )
+    }
+
+    withSQLiteRepositoryTest("new workbench draft can use selected workspace") { _, repository in
+        let engine = ManualExecutionEngine()
+        let store = WorkbenchStore(
+            repository: repository,
+            engine: engine,
+            defaultWorkspacePathProvider: { "/tmp/codex-plus-generated-draft" }
+        )
+
+        store.createProject(path: "/tmp/codex-plus-existing", displayName: "codex-plus-existing")
+        store.beginNewConversationDraft()
+        store.createProject(path: "/tmp/codex-plus-selected", displayName: "codex-plus-selected")
+        store.submitPrompt("draft with workspace")
+
+        expect(
+            store.snapshot.activeConversation?.workspacePath == "/tmp/codex-plus-selected",
+            "selected new draft submit uses the user-selected workspace"
+        )
+        expect(
+            engine.requests.first?.workingDirectoryURL.path == "/tmp/codex-plus-selected",
+            "engine starts selected new draft in the user-selected workspace"
+        )
+    }
+
+    withSQLiteRepositoryTest("new workbench draft can clear selected workspace") { _, repository in
+        let engine = ManualExecutionEngine()
+        let defaultWorkspacePath = "/tmp/codex-plus-generated-after-clear"
+        let store = WorkbenchStore(
+            repository: repository,
+            engine: engine,
+            defaultWorkspacePathProvider: { defaultWorkspacePath }
+        )
+
+        store.beginNewConversationDraft()
+        store.createProject(path: "/tmp/codex-plus-selected", displayName: "codex-plus-selected")
+        store.clearDraftWorkspaceSelection()
+
+        expect(
+            !store.snapshot.projectCards.contains(where: { $0.projectPath == "/tmp/codex-plus-selected" }),
+            "clearing the draft workspace hides empty project cards from the top strip"
+        )
+        expect(
+            !store.snapshot.projectCards.contains(where: { $0.isActive }),
+            "clearing the draft workspace removes the active project selection"
+        )
+
+        store.submitPrompt("draft after clearing workspace")
+
+        expect(
+            store.snapshot.activeConversation?.workspacePath == defaultWorkspacePath,
+            "cleared new draft submit uses a generated default workspace"
+        )
+        expect(
+            engine.requests.first?.workingDirectoryURL.path == defaultWorkspacePath,
+            "engine starts cleared new draft in the generated default workspace"
+        )
+    }
 }
 
 @MainActor
@@ -143,8 +234,7 @@ private func runArchiveLifecycleTests() {
 
         let result = store.archiveConversation(conversationID)
         expect(result == .archived, "completed conversation archives successfully")
-        expect(store.snapshot.projectCards.count == 1, "archived last conversation keeps project card visible")
-        expect(store.snapshot.projectCards[0].conversationTitle == "暂无对话", "project card shows empty state after archive")
+        expect(store.snapshot.projectCards.isEmpty, "archiving the last conversation hides the empty project card")
         expect(
             !store.snapshot.projectCards.contains(where: { $0.conversationID == conversationID }),
             "archived conversation is removed from active project cards"
@@ -198,26 +288,20 @@ private func runArchiveRestartConsistencyTests() {
         expect(store.snapshot.activeConversation?.state == .completed, "restart setup finishes the conversation")
         _ = store.archiveConversation(conversationID)
 
-        guard let projectCard = store.snapshot.projectCards.first(where: { $0.projectPath == "/tmp/codex-plus" }) else {
-            expect(false, "restart test finds existing project card")
-            return
-        }
-
-        expect(projectCard.conversationTitle == "暂无对话", "project card stays empty before restart")
-        expect(projectCard.conversationID == nil, "project card has no active conversation before restart")
+        expect(
+            !store.snapshot.projectCards.contains(where: { $0.projectPath == "/tmp/codex-plus" }),
+            "empty project card stays hidden before restart"
+        )
 
         do {
             let database = try SQLiteDatabase(path: dbURL.path)
             let restartedRepository = SQLiteCodexPlusRepository(database: database)
             let restartedStore = WorkbenchStore(repository: restartedRepository, engine: ManualExecutionEngine())
 
-            guard let restartedCard = restartedStore.snapshot.projectCards.first(where: { $0.projectPath == "/tmp/codex-plus" }) else {
-                expect(false, "restart test preserves project card after relaunch")
-                return
-            }
-
-            expect(restartedCard.conversationTitle == "暂无对话", "restart keeps empty project card title")
-            expect(restartedCard.conversationID == nil, "restart does not resurrect archived conversation")
+            expect(
+                !restartedStore.snapshot.projectCards.contains(where: { $0.projectPath == "/tmp/codex-plus" }),
+                "restart does not restore empty project cards"
+            )
         } catch {
             expect(false, "restart consistency test should not throw: \(error)")
         }
