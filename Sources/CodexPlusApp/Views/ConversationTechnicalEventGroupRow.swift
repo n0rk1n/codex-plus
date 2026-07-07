@@ -29,10 +29,10 @@ struct ConversationTechnicalEventGroupRow: View {
 
                     Spacer(minLength: 0)
                 }
-                .contentShape(Rectangle())
                 .padding(.vertical, 6)
             }
             .buttonStyle(.plain)
+            .codexRectangleButtonHitArea()
             .accessibilityLabel(accessibilityText)
 
             if isExpanded {

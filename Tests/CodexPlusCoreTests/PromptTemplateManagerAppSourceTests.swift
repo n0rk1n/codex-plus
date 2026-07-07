@@ -75,6 +75,10 @@ func runPromptTemplateManagerAppSourceTests() {
         "prompt manager header copy and delete actions are color-coded"
     )
     expect(
+        managerView.contains(".codexCapsuleButtonHitArea()"),
+        "prompt template manager action buttons use the shared capsule hit-area modifier"
+    )
+    expect(
         settingsPanelController.contains("PromptTemplateSettingsStore(repository: repository)") &&
             settingsPanelController.contains("PromptTemplateManagerView(store: store)"),
         "settings panel keeps one prompt template store instead of recreating it on every show"
@@ -117,8 +121,8 @@ func runPromptTemplateManagerAppSourceTests() {
     )
     expect(
         topProjectStripView.contains("systemName: \"gearshape\"") &&
-            topProjectStripView.contains(".contentShape(Circle())"),
-        "workbench circular icon buttons use the full visible circle as the hit target"
+            topProjectStripView.contains(".codexCircularButtonHitArea()"),
+        "workbench circular icon buttons use the shared full-circle hit-area modifier"
     )
 }
 

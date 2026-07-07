@@ -26,6 +26,7 @@ struct ConversationDraftView: View {
                 .frame(height: 34)
             }
             .buttonStyle(.plain)
+            .codexRoundedButtonHitArea(cornerRadius: 8)
             .background {
                 RoundedRectangle(cornerRadius: 8, style: .continuous)
                     .fill(Color.primary.opacity(0.06))
@@ -54,6 +55,7 @@ struct ConversationDraftView: View {
                             .font(.system(size: 20, weight: .semibold))
                     }
                     .buttonStyle(.plain)
+                    .codexCircularButtonHitArea()
                     .help("Send")
                     .accessibilityLabel("Send")
                     .disabled(prompt.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)

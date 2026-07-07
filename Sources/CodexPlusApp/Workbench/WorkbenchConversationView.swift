@@ -80,6 +80,7 @@ struct WorkbenchConversationView: View {
         .glassEffect(.regular, in: Capsule(style: .continuous))
         .compositingGroup()
         .mask(Capsule(style: .continuous))
+        .codexCapsuleButtonHitArea()
         .help("归档当前对话")
     }
 

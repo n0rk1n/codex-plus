@@ -72,9 +72,9 @@ struct ArchivedConversationView: View {
                         }
                         .frame(maxWidth: .infinity, alignment: .leading)
                         .padding(.vertical, 4)
-                        .contentShape(Rectangle())
                     }
                     .buttonStyle(.plain)
+                    .codexRectangleButtonHitArea()
                     .swipeActions(edge: .trailing) {
                         Button(role: .destructive) {
                             pendingDeleteRecord = record
@@ -184,6 +184,7 @@ struct ArchivedConversationView: View {
                     .foregroundStyle(Color.blue.opacity(0.72))
             }
             .buttonStyle(.plain)
+            .codexRectangleButtonHitArea()
         }
         .font(.system(size: 13, weight: .medium))
         .padding(.horizontal, 14)

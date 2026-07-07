@@ -39,6 +39,7 @@ struct WorkbenchView: View {
                         .font(.system(size: 14, weight: .semibold))
                         }
                         .buttonStyle(.plain)
+                        .codexCircularButtonHitArea()
                         .accessibilityLabel(WorkbenchStrings.closeError)
                     }
                     .padding(.horizontal, 12)
