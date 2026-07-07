@@ -68,7 +68,7 @@ struct CompactEntryView: View {
                                 .frame(width: 32, height: 32)
                         }
                         .buttonStyle(.plain)
-                        .contentShape(Rectangle())
+                        .codexRectangleButtonHitArea()
                         .help("Choose Workspace")
                         .accessibilityLabel("Choose Workspace")
 

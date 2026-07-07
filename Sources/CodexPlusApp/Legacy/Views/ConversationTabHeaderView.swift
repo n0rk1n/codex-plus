@@ -49,6 +49,7 @@ struct ConversationTabHeaderView: View {
                         .frame(width: 28, height: 26)
                 }
                 .buttonStyle(.plain)
+                .codexRectangleButtonHitArea()
                 .help("New Conversation")
                 .accessibilityLabel("New Conversation")
             }
@@ -82,7 +83,7 @@ struct ConversationTabHeaderView: View {
         }
         .buttonStyle(.plain)
         .help(workspace.path)
-        .contentShape(Rectangle())
+        .codexRectangleButtonHitArea()
         .onDrag {
             draggedWorkspaceID = workspace.id
             return NSItemProvider(object: workspace.id.uuidString as NSString)
@@ -102,6 +103,7 @@ struct ConversationTabHeaderView: View {
                     .frame(width: 20, height: 24)
             }
             .buttonStyle(.plain)
+            .codexRectangleButtonHitArea()
             .help("Archive")
             .accessibilityLabel("Archive Conversation")
 
@@ -120,12 +122,13 @@ struct ConversationTabHeaderView: View {
                 .frame(height: 24)
             }
             .buttonStyle(.plain)
+            .codexRectangleButtonHitArea()
             .help(conversation.title)
             .accessibilityLabel(conversation.title)
         }
         .padding(.leading, 4)
         .background(tabBackground(isActive: snapshot.activeConversationID == conversation.id))
-        .contentShape(Rectangle())
+        .codexRectangleButtonHitArea()
         .onDrag {
             draggedConversationID = conversation.id
             return NSItemProvider(object: conversation.id.uuidString as NSString)

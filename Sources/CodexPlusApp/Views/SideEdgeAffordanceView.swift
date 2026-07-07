@@ -12,6 +12,7 @@ struct SideEdgeAffordanceView: View {
                 .padding(2)
         }
         .buttonStyle(.plain)
+        .codexCapsuleButtonHitArea()
         .help("Show Conversation")
         .accessibilityLabel("Show Conversation")
     }

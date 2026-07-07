@@ -1942,11 +1942,11 @@ func runLegacyMainActorTests() {
         + "/Sources/CodexPlusApp/Workbench/ArchivedConversationView.swift"
     let archiveViewSource = (try? String(contentsOfFile: archiveViewPath, encoding: .utf8)) ?? ""
     if let actionRange = archiveViewSource.range(of: "actions.open(record.id)"),
-       let buttonEndRange = archiveViewSource[actionRange.upperBound...].range(of: ".buttonStyle(.plain)") {
+       let buttonEndRange = archiveViewSource[actionRange.upperBound...].range(of: ".swipeActions(edge: .trailing)") {
         let rowButtonSource = archiveViewSource[actionRange.lowerBound..<buttonEndRange.upperBound]
         expect(
-            rowButtonSource.contains(".contentShape(Rectangle())"),
-            "archived conversation result rows declare full-row hit shape"
+            rowButtonSource.contains(".codexRectangleButtonHitArea()"),
+            "archived conversation result rows use the shared full-row hit-area modifier"
         )
         expect(
             archiveViewSource.contains(".swipeActions(edge: .trailing)"),
@@ -2014,9 +2014,9 @@ func runLegacyMainActorTests() {
         let projectCardButtonSource = topProjectStripSource[actionRange.lowerBound..<buttonEndRange.upperBound]
         expect(
             projectCardButtonSource.contains(
-                ".contentShape(RoundedRectangle(cornerRadius: WorkbenchMetrics.projectCardCornerRadius, style: .continuous))"
+                ".codexRoundedButtonHitArea(cornerRadius: WorkbenchMetrics.projectCardCornerRadius)"
             ),
-            "top project cards declare a rounded full-card hit shape"
+            "top project cards use the shared rounded full-card hit-area modifier"
         )
         expect(
             !projectCardButtonSource.contains(".opacity(card.isActive ? 1 : 0.82)"),

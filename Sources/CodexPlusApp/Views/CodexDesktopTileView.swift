@@ -13,6 +13,7 @@ struct CodexDesktopTileView: View {
             }
         }
         .buttonStyle(.plain)
+        .codexRoundedButtonHitArea(cornerRadius: 22)
         .accessibilityLabel("Open Codex Desktop")
     }
 

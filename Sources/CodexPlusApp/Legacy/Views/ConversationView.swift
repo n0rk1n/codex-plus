@@ -156,6 +156,7 @@ struct ConversationView: View {
                         .font(.system(size: 20, weight: .semibold))
                 }
                 .buttonStyle(.plain)
+                .codexCircularButtonHitArea()
                 .help("Send")
                 .accessibilityLabel("Send Follow-Up")
                 .disabled(followUp.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
@@ -202,7 +203,7 @@ struct ConversationView: View {
                 .frame(width: 28, height: 28)
         }
         .buttonStyle(.plain)
-        .contentShape(Rectangle())
+        .codexRectangleButtonHitArea()
         .help(help)
         .accessibilityLabel(accessibilityLabel)
         .disabled(isDisabled)
