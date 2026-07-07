@@ -14,7 +14,7 @@
 
 ## verification
 - `env CLANG_MODULE_CACHE_PATH=/private/tmp/codex-clang-cache SWIFT_MODULECACHE_PATH=/private/tmp/codex-swift-cache swift build`
-  - Result: blocked by sandbox during SwiftPM manifest compilation with `sandbox-exec: sandbox_apply: Operation not permitted`.
+  - Result: pass after rerunning outside the SwiftPM sandbox restriction.
 - `git diff --check`
   - Result: pass.
 
@@ -22,4 +22,4 @@
 - Implementation commit: `b08df02`
 
 ## concerns
-- Required `swift build` verification could not complete in the managed sandbox. The environment rejected an unsandboxed retry, so compile success is not confirmed in this run.
+- The sandboxed build path remains blocked by `sandbox-exec: sandbox_apply: Operation not permitted`, but the same command passes with external permission.
