@@ -8,6 +8,8 @@ Implemented the core prompt-template model types and in-memory library for the p
 
 - `Sources/CodexPlusCore/PromptTemplates/PromptTemplateModels.swift`
 - `Sources/CodexPlusCore/PromptTemplates/PromptTemplateLibrary.swift`
+- `Tests/CodexPlusCoreTests/PromptTemplateLibraryLegacyTests.swift`
+- `Tests/CodexPlusCoreTests/main.swift`
 - `Tests/CodexPlusCoreXCTests/PromptTemplateLibraryTests.swift`
 
 ## Behavior Added
@@ -15,6 +17,7 @@ Implemented the core prompt-template model types and in-memory library for the p
 - Added `PromptTemplateSource`, `PromptTemplateType`, `PromptTemplate`, `PromptTemplateDraft`, and `PromptTemplateValidationError`.
 - Added `PromptTemplateLibrary` with built-in templates, validation, sorting, filtering, and copy-draft helpers.
 - Covered the required behaviors with XCTest cases for built-ins, validation, type filtering, search, sorting, and copy behavior.
+- Mirrored the same critical coverage in the executable legacy test runner because the local XCTest target cannot currently execute.
 
 ## Verification
 
@@ -44,6 +47,18 @@ Result:
 - Passed.
 - Confirmed `PromptTemplateModels.swift` and `PromptTemplateLibrary.swift` compile cleanly in the package.
 
+Command:
+
+```bash
+env CLANG_MODULE_CACHE_PATH=/private/tmp/codex-clang-cache SWIFT_MODULECACHE_PATH=/private/tmp/codex-swift-cache swift run CodexPlusCoreLegacyTests
+```
+
+Result:
+
+- Passed.
+- Output: `CodexPlusCoreTests passed: 434 assertions`.
+- Executed prompt-template coverage for built-ins, validation, multi-select type filtering, search, sorting, and copy behavior.
+
 ### XCTest Limitation
 
 Command:
@@ -55,7 +70,7 @@ env CLANG_MODULE_CACHE_PATH=/private/tmp/codex-clang-cache SWIFT_MODULECACHE_PAT
 Result:
 
 - Failed in the shared test target setup with `no such module 'XCTest'` before the new test file could run.
-- Because of that local environment issue, `swift build` is the available compile verification for this task.
+- Because of that local environment issue, the executable legacy runner is the available runtime regression verification for this task.
 
 ## Notes
 

@@ -124,6 +124,36 @@ func runPromptTemplateLibraryTests() {
         )
     }
 
+    let older = Date(timeIntervalSince1970: 10)
+    let newer = Date(timeIntervalSince1970: 20)
+    let customOld = PromptTemplate(
+        id: UUID(uuidString: "44444444-4444-4444-4444-444444444444")!,
+        source: .userCustom,
+        type: .archiveConversationSummary,
+        name: "旧",
+        systemPrompt: "旧",
+        userPrompt: "",
+        note: "",
+        createdAt: older,
+        updatedAt: older
+    )
+    let customNew = PromptTemplate(
+        id: UUID(uuidString: "55555555-5555-5555-5555-555555555555")!,
+        source: .userCustom,
+        type: .archiveConversationSummary,
+        name: "新",
+        systemPrompt: "新",
+        userPrompt: "",
+        note: "",
+        createdAt: newer,
+        updatedAt: newer
+    )
+    expect(
+        PromptTemplateLibrary.sortedTemplates([customOld, builtIns[0], customNew]).map(\.id) ==
+            [builtIns[0].id, customNew.id, customOld.id],
+        "prompt template sorting puts built-ins first then custom templates by update time"
+    )
+
     let copied = PromptTemplateLibrary.copyDraft(
         from: builtIns[0],
         now: Date(timeIntervalSince1970: 200)
@@ -132,4 +162,6 @@ func runPromptTemplateLibraryTests() {
     expect(copied.type == builtIns[0].type, "prompt template copy keeps the selected type")
     expect(copied.systemPrompt == builtIns[0].systemPrompt, "prompt template copy keeps system prompt")
     expect(copied.userPrompt == builtIns[0].userPrompt, "prompt template copy keeps user prompt")
+    expect(copied.note == builtIns[0].note, "prompt template copy keeps note")
+    expect(copied.name.contains("副本"), "prompt template copy marks the draft name as a copy")
 }
