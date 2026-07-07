@@ -71,11 +71,13 @@ struct WorkbenchComposerView: View {
                     Text(activeProjectName ?? WorkbenchStrings.chooseWorkspace)
                         .font(.system(size: 12, weight: .semibold))
                         .lineLimit(1)
+                        .truncationMode(.tail)
+                        .frame(maxWidth: workspacePickerTextMaxWidth, alignment: .leading)
                 }
                 .padding(.leading, 10)
                 .padding(.trailing, activeProjectName == nil ? 10 : 6)
                 .frame(height: WorkbenchMetrics.composerControlHeight)
-                .frame(maxWidth: 190)
+                .fixedSize(horizontal: true, vertical: false)
                 .contentShape(Capsule(style: .continuous))
             }
             .buttonStyle(.plain)
@@ -114,6 +116,10 @@ struct WorkbenchComposerView: View {
 
     private var activeProjectPath: String? {
         snapshot.selectedDraftWorkspace?.projectPath ?? snapshot.projectCards.first { $0.isActive }?.projectPath
+    }
+
+    private var workspacePickerTextMaxWidth: CGFloat {
+        activeProjectName == nil ? 92 : 86
     }
 
     private func submitPrompt() {

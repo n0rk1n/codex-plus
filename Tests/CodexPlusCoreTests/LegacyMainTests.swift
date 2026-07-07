@@ -2026,4 +2026,19 @@ func runLegacyMainActorTests() {
         expect(false, "top project card button source is discoverable")
     }
 
+    let workbenchComposerPath = FileManager.default.currentDirectoryPath
+        + "/Sources/CodexPlusApp/Workbench/WorkbenchComposerView.swift"
+    let workbenchComposerSource = (try? String(contentsOfFile: workbenchComposerPath, encoding: .utf8)) ?? ""
+    expect(
+        workbenchComposerSource.contains("workspacePickerTextMaxWidth"),
+        "workspace picker limits text width instead of stretching the full button"
+    )
+    expect(
+        workbenchComposerSource.contains(".fixedSize(horizontal: true, vertical: false)"),
+        "workspace picker keeps short selected workspace names compact"
+    )
+    expect(
+        !workbenchComposerSource.contains(".frame(maxWidth: 190)"),
+        "workspace picker no longer uses the old wide max width"
+    )
 }
