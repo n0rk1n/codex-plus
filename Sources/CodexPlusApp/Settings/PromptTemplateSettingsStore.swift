@@ -127,20 +127,24 @@ final class PromptTemplateSettingsStore: ObservableObject {
         }
 
         if let fallbackSelectionID,
-           templates.contains(where: { $0.id == fallbackSelectionID }) {
-            select(fallbackSelectionID)
+           let visibleFallbackSelectionID = visibleSelectionID(for: fallbackSelectionID) {
+            select(visibleFallbackSelectionID)
             return
         }
 
-        if let firstTemplateID = templates.first?.id {
-            select(firstTemplateID)
+        if let firstVisibleTemplateID = visibleTemplates.first?.id {
+            select(firstVisibleTemplateID)
         } else {
             clearSelection()
         }
     }
 
     func save() {
-        guard let draft else {
+        guard isEditable, let draft else {
+            return
+        }
+
+        if selectedTemplate?.source == .systemBuiltIn {
             return
         }
 
@@ -196,17 +200,21 @@ final class PromptTemplateSettingsStore: ObservableObject {
 
     private func reconcileSelection(preferredSelectionID: UUID?) {
         if let preferredSelectionID,
-           templates.contains(where: { $0.id == preferredSelectionID }) {
-            select(preferredSelectionID)
+           let visiblePreferredSelectionID = visibleSelectionID(for: preferredSelectionID) {
+            select(visiblePreferredSelectionID)
             return
         }
 
-        if let firstTemplateID = templates.first?.id {
-            select(firstTemplateID)
+        if let firstVisibleTemplateID = visibleTemplates.first?.id {
+            select(firstVisibleTemplateID)
             return
         }
 
         clearSelection()
+    }
+
+    private func visibleSelectionID(for id: UUID) -> UUID? {
+        visibleTemplates.first(where: { $0.id == id })?.id
     }
 
     private func clearSelection() {
