@@ -54,6 +54,16 @@ public struct WorkbenchConversationSummary: Equatable, Identifiable, Sendable {
     }
 }
 
+public struct WorkbenchDraftWorkspaceSelection: Equatable, Sendable {
+    public var projectName: String
+    public var projectPath: String
+
+    public init(projectName: String, projectPath: String) {
+        self.projectName = projectName
+        self.projectPath = projectPath
+    }
+}
+
 public struct WorkbenchStatusBarState: Equatable, Sendable {
     public var codexCLIAvailable: Bool
     public var sqliteConnected: Bool
@@ -68,6 +78,7 @@ public struct WorkbenchStatusBarState: Equatable, Sendable {
 
 public struct WorkbenchSnapshot: Equatable, Sendable {
     public var projectCards: [WorkbenchProjectCard]
+    public var selectedDraftWorkspace: WorkbenchDraftWorkspaceSelection?
     public var activeConversation: ConversationSession?
     public var composerAction: WorkbenchComposerAction
     public var statusBar: WorkbenchStatusBarState
@@ -82,6 +93,7 @@ public struct WorkbenchSnapshot: Equatable, Sendable {
 
     public init(
         projectCards: [WorkbenchProjectCard] = [],
+        selectedDraftWorkspace: WorkbenchDraftWorkspaceSelection? = nil,
         activeConversation: ConversationSession? = nil,
         composerAction: WorkbenchComposerAction = .send,
         statusBar: WorkbenchStatusBarState = WorkbenchStatusBarState(
@@ -99,6 +111,7 @@ public struct WorkbenchSnapshot: Equatable, Sendable {
         error: WorkbenchErrorState? = nil
     ) {
         self.projectCards = projectCards
+        self.selectedDraftWorkspace = selectedDraftWorkspace
         self.activeConversation = activeConversation
         self.composerAction = composerAction
         self.statusBar = statusBar

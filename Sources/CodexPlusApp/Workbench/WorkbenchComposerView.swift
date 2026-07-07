@@ -109,11 +109,11 @@ struct WorkbenchComposerView: View {
     }
 
     private var activeProjectName: String? {
-        snapshot.projectCards.first { $0.isActive }?.projectName
+        snapshot.selectedDraftWorkspace?.projectName ?? snapshot.projectCards.first { $0.isActive }?.projectName
     }
 
     private var activeProjectPath: String? {
-        snapshot.projectCards.first { $0.isActive }?.projectPath
+        snapshot.selectedDraftWorkspace?.projectPath ?? snapshot.projectCards.first { $0.isActive }?.projectPath
     }
 
     private func submitPrompt() {

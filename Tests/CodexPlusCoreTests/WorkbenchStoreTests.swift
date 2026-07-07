@@ -69,6 +69,31 @@ private func runWorkbenchDraftWorkspaceSelectionTests() {
         )
     }
 
+    withSQLiteRepositoryTest("new workbench draft exposes selected empty workspace") { _, repository in
+        let engine = ManualExecutionEngine()
+        let store = WorkbenchStore(
+            repository: repository,
+            engine: engine,
+            defaultWorkspacePathProvider: { "/tmp/codex-plus-generated-draft" }
+        )
+
+        store.beginNewConversationDraft()
+        store.createProject(path: "/tmp/codex-plus-empty-selection", displayName: "codex-plus-empty-selection")
+
+        expect(
+            store.snapshot.selectedDraftWorkspace?.projectName == "codex-plus-empty-selection",
+            "selected empty draft workspace exposes a display name for the composer button"
+        )
+        expect(
+            store.snapshot.selectedDraftWorkspace?.projectPath == "/tmp/codex-plus-empty-selection",
+            "selected empty draft workspace exposes a path for the composer button help"
+        )
+        expect(
+            store.snapshot.projectCards.isEmpty,
+            "selected empty draft workspace stays hidden from the top project strip"
+        )
+    }
+
     withSQLiteRepositoryTest("new workbench draft can clear selected workspace") { _, repository in
         let engine = ManualExecutionEngine()
         let defaultWorkspacePath = "/tmp/codex-plus-generated-after-clear"

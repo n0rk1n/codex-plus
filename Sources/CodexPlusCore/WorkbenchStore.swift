@@ -633,6 +633,10 @@ public final class WorkbenchStore: ObservableObject {
 
     private func refreshSnapshot() {
         let activeConversation = conversations.first { $0.id == activeConversationID && !$0.isArchived }
+        let selectedDraftWorkspace = activeConversation == nil ? activeWorkspace.map {
+            WorkbenchDraftWorkspaceSelection(projectName: $0.displayName, projectPath: $0.path)
+        } : nil
+
         snapshot = WorkbenchSnapshot(
             projectCards: WorkbenchProjection.projectCards(
                 workspaces: workspaces,
@@ -640,6 +644,7 @@ public final class WorkbenchStore: ObservableObject {
                 activeWorkspaceID: activeWorkspaceID,
                 activeConversationID: activeConversationID
             ),
+            selectedDraftWorkspace: selectedDraftWorkspace,
             activeConversation: activeConversation,
             composerAction: WorkbenchInteractionPolicies.composerAction(for: activeConversation?.state),
             statusBar: snapshot.statusBar,
