@@ -58,6 +58,14 @@ public extension CodexPlusRepository {
     func deletePromptTemplate(_ id: UUID) throws {
         throw UnsupportedRepositoryOperation()
     }
+
+    func setDefaultPromptTemplateID(_ id: UUID, for type: PromptTemplateType) throws {
+        throw UnsupportedRepositoryOperation()
+    }
+
+    func loadDefaultPromptTemplateIDs() throws -> [PromptTemplateType: UUID] {
+        throw UnsupportedRepositoryOperation()
+    }
 }
 
 private struct UnsupportedRepositoryOperation: Error {}
@@ -838,6 +846,43 @@ public final class SQLiteCodexPlusRepository: CodexPlusRepository, @unchecked Se
             "DELETE FROM prompt_templates WHERE id = ?;",
             [.text(id.uuidString.lowercased())]
         )
+    }
+
+    public func setDefaultPromptTemplateID(_ id: UUID, for type: PromptTemplateType) throws {
+        try database.execute(
+            """
+            INSERT INTO prompt_template_defaults (type, template_id)
+            VALUES (?, ?)
+            ON CONFLICT(type) DO UPDATE SET
+                template_id = excluded.template_id;
+            """,
+            [
+                .text(type.rawValue),
+                .text(id.uuidString.lowercased())
+            ]
+        )
+    }
+
+    public func loadDefaultPromptTemplateIDs() throws -> [PromptTemplateType: UUID] {
+        let rows = try database.query(
+            """
+            SELECT type, template_id
+            FROM prompt_template_defaults
+            ORDER BY type ASC;
+            """
+        )
+
+        var defaults: [PromptTemplateType: UUID] = [:]
+        for row in rows {
+            let rawType = try text(for: "type", in: row)
+            guard let type = PromptTemplateType(rawValue: rawType) else {
+                throw PromptTemplatePersistenceError.invalidPromptTemplateType(rawType)
+            }
+
+            defaults[type] = try uuid(for: "template_id", in: row)
+        }
+
+        return defaults
     }
 }
 

@@ -6,6 +6,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
     private struct AppRuntime {
         var store: WorkbenchStore
         var repository: any CodexPlusRepository
+        var promptOptimizationService: PromptOptimizationService
     }
 
     private var windowCoordinator: WindowCoordinator?
@@ -17,7 +18,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             self.windowCoordinator = WindowCoordinator(
                 batteryProvider: IOKitBatteryStatusProvider(),
                 workbenchStore: runtime.store,
-                promptTemplateRepository: runtime.repository
+                promptTemplateRepository: runtime.repository,
+                promptOptimizationService: runtime.promptOptimizationService
             )
         } catch {
             presentInitializationFailure(error)
@@ -48,7 +50,8 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         let engine = CodexCLIEngine(runner: ProcessCodexRunner())
         return AppRuntime(
             store: WorkbenchStore(repository: repository, engine: engine),
-            repository: repository
+            repository: repository,
+            promptOptimizationService: PromptOptimizationService(repository: repository, engine: engine)
         )
     }
 

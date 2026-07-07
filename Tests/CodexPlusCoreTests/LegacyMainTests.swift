@@ -2041,4 +2041,16 @@ func runLegacyMainActorTests() {
         !workbenchComposerSource.contains(".frame(maxWidth: 190)"),
         "workspace picker no longer uses the old wide max width"
     )
+    expect(
+        workbenchComposerSource.contains("isTextInputDisabled"),
+        "prompt optimization disables the text input while the background task is running"
+    )
+    expect(
+        workbenchComposerSource.contains("optimizingPromptOverlay"),
+        "prompt optimization shows an animated in-field status overlay while running"
+    )
+    expect(
+        workbenchComposerSource.contains("正在优化提示词"),
+        "prompt optimization status overlay tells the user that optimization is running"
+    )
 }

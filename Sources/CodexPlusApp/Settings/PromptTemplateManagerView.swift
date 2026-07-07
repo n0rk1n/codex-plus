@@ -1,4 +1,3 @@
-import AppKit
 import CodexPlusCore
 import SwiftUI
 
@@ -140,9 +139,18 @@ struct PromptTemplateManagerView: View {
     private func templateRow(_ template: PromptTemplate) -> some View {
         Button(action: { performOrConfirm(.select(template.id)) }) {
             VStack(alignment: .leading, spacing: 6) {
-                Text(template.name)
-                    .font(.system(size: 13, weight: .semibold))
-                    .lineLimit(1)
+                HStack(spacing: 6) {
+                    Text(template.name)
+                        .font(.system(size: 13, weight: .semibold))
+                        .lineLimit(1)
+
+                    if store.isDefaultTemplate(template) {
+                        Image(systemName: "checkmark.seal.fill")
+                            .font(.system(size: 11, weight: .semibold))
+                            .foregroundStyle(.blue)
+                            .help("此类型默认模板")
+                    }
+                }
 
                 Text(template.type.displayName)
                     .font(.caption2)
@@ -231,6 +239,19 @@ struct PromptTemplateManagerView: View {
             .buttonStyle(.plain)
             .help("复制当前模板为用户自定义模板")
 
+            if let selectedTemplate = store.selectedTemplate {
+                Button(action: { store.setDefaultTemplate(selectedTemplate.id) }) {
+                    headerActionLabel(
+                        systemImage: store.isDefaultTemplate(selectedTemplate) ? "checkmark.seal.fill" : "checkmark.seal",
+                        title: store.isDefaultTemplate(selectedTemplate) ? "当前默认" : "设为默认",
+                        foregroundColor: .blue
+                    )
+                }
+                .buttonStyle(.plain)
+                .help("设为“\(selectedTemplate.type.shortDisplayName)”类型默认模板")
+                .disabled(store.isDefaultTemplate(selectedTemplate))
+            }
+
             if store.isEditable {
                 Button(role: .destructive) {
                     pendingDeleteTemplate = store.selectedTemplate
@@ -284,9 +305,11 @@ struct PromptTemplateManagerView: View {
                 }
 
                 labeledField("说明") {
-                    TextField("说明", text: draftTextBinding(\.note), axis: .vertical)
-                        .textFieldStyle(.roundedBorder)
-                        .lineLimit(2...4)
+                    AppMultilineTextField(
+                        placeholder: "说明",
+                        text: draftTextBinding(\.note),
+                        lineLimit: MultilineInputDefaults.promptTemplateNoteLineLimit
+                    )
                         .disabled(!store.isEditable)
                 }
 
@@ -406,7 +429,7 @@ struct PromptTemplateManagerView: View {
     }
 
     private func editor(text: Binding<String>, minHeight: CGFloat) -> some View {
-        PromptTemplateMultilineEditor(text: text)
+        AppMultilineTextEditor(text: text)
             .frame(minHeight: minHeight)
             .background(
                 RoundedRectangle(cornerRadius: 12, style: .continuous)
@@ -554,74 +577,4 @@ private enum PendingDirtyAction: Equatable {
     case copy
     case select(UUID)
     case rename(UUID)
-}
-
-private struct PromptTemplateMultilineEditor: NSViewRepresentable {
-    @Binding var text: String
-    @Environment(\.isEnabled) private var isEnabled
-
-    func makeCoordinator() -> Coordinator {
-        Coordinator(text: $text)
-    }
-
-    func makeNSView(context: Context) -> NSScrollView {
-        let scrollView = NSTextView.scrollableTextView()
-        scrollView.drawsBackground = false
-        scrollView.borderType = .noBorder
-        scrollView.hasVerticalScroller = true
-        scrollView.autohidesScrollers = true
-
-        guard let textView = scrollView.documentView as? NSTextView else {
-            return scrollView
-        }
-
-        textView.delegate = context.coordinator
-        textView.string = text
-        textView.isRichText = false
-        textView.allowsUndo = true
-        textView.drawsBackground = false
-        textView.backgroundColor = .clear
-        textView.font = .systemFont(ofSize: 13)
-        textView.textColor = .labelColor
-        textView.insertionPointColor = .labelColor
-        textView.textContainerInset = NSSize(width: 12, height: 12)
-        textView.textContainer?.lineFragmentPadding = 0
-        textView.isHorizontallyResizable = false
-        textView.isVerticallyResizable = true
-        textView.autoresizingMask = [.width]
-        textView.textContainer?.widthTracksTextView = true
-
-        return scrollView
-    }
-
-    func updateNSView(_ scrollView: NSScrollView, context: Context) {
-        context.coordinator.text = $text
-
-        guard let textView = scrollView.documentView as? NSTextView else {
-            return
-        }
-
-        if textView.string != text {
-            textView.string = text
-        }
-
-        textView.isEditable = isEnabled
-        textView.isSelectable = true
-    }
-
-    final class Coordinator: NSObject, NSTextViewDelegate {
-        var text: Binding<String>
-
-        init(text: Binding<String>) {
-            self.text = text
-        }
-
-        func textDidChange(_ notification: Notification) {
-            guard let textView = notification.object as? NSTextView else {
-                return
-            }
-
-            text.wrappedValue = textView.string
-        }
-    }
 }

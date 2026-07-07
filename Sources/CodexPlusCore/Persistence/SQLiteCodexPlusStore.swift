@@ -102,4 +102,12 @@ public final class SQLiteCodexPlusStore: CodexPlusRepository, @unchecked Sendabl
     public func deletePromptTemplate(_ id: UUID) throws {
         try repository.deletePromptTemplate(id)
     }
+
+    public func setDefaultPromptTemplateID(_ id: UUID, for type: PromptTemplateType) throws {
+        try repository.setDefaultPromptTemplateID(id, for: type)
+    }
+
+    public func loadDefaultPromptTemplateIDs() throws -> [PromptTemplateType: UUID] {
+        try repository.loadDefaultPromptTemplateIDs()
+    }
 }

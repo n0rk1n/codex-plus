@@ -11,6 +11,7 @@ final class PromptTemplateSettingsStore: ObservableObject {
     @Published var selectedTypes = Set(PromptTemplateType.allCases)
     @Published private(set) var selectedTemplateID: UUID?
     @Published private(set) var draft: PromptTemplateDraft?
+    @Published private(set) var defaultTemplateIDs: [PromptTemplateType: UUID] = [:]
     @Published private(set) var isEditable = false
     @Published private(set) var isDirty = false
     @Published private(set) var validationError: PromptTemplateValidationError?
@@ -40,6 +41,14 @@ final class PromptTemplateSettingsStore: ObservableObject {
         }
 
         return templates.first { $0.id == selectedTemplateID }
+    }
+
+    func defaultTemplateID(for type: PromptTemplateType) -> UUID? {
+        defaultTemplateIDs[type]
+    }
+
+    func isDefaultTemplate(_ template: PromptTemplate) -> Bool {
+        defaultTemplateIDs[template.type] == template.id
     }
 
     func reload() {
@@ -185,6 +194,20 @@ final class PromptTemplateSettingsStore: ObservableObject {
         }
     }
 
+    func setDefaultTemplate(_ id: UUID) {
+        guard let template = templates.first(where: { $0.id == id }) else {
+            return
+        }
+
+        do {
+            try repository.setDefaultPromptTemplateID(id, for: template.type)
+            defaultTemplateIDs[template.type] = id
+            errorMessage = nil
+        } catch {
+            errorMessage = "无法设置默认提示词模板：\(error)"
+        }
+    }
+
     func renameTemplate(_ id: UUID, to name: String) {
         guard let template = templates.first(where: { $0.id == id }), template.source == .userCustom else {
             return
@@ -213,19 +236,26 @@ final class PromptTemplateSettingsStore: ObservableObject {
     }
 
     private func loadTemplates(preferredSelectionID: UUID?) {
-        let nextTemplates: [PromptTemplate]
-        let loadErrorMessage: String?
+        var nextTemplates: [PromptTemplate]
+        var nextSavedDefaults: [PromptTemplateType: UUID]
+        var loadErrorMessage: String?
         do {
             nextTemplates = PromptTemplateLibrary.sortedTemplates(
                 PromptTemplateLibrary.builtInTemplates() + (try repository.loadPromptTemplates())
             )
+            nextSavedDefaults = try repository.loadDefaultPromptTemplateIDs()
             loadErrorMessage = nil
         } catch {
             nextTemplates = PromptTemplateLibrary.sortedTemplates(PromptTemplateLibrary.builtInTemplates())
+            nextSavedDefaults = [:]
             loadErrorMessage = "无法加载提示词模板：\(error)"
         }
 
         templates = nextTemplates
+        defaultTemplateIDs = PromptTemplateLibrary.resolvedDefaultTemplateIDs(
+            templates: nextTemplates,
+            savedDefaultTemplateIDs: nextSavedDefaults
+        )
         reconcileSelection(preferredSelectionID: preferredSelectionID)
         errorMessage = loadErrorMessage
     }

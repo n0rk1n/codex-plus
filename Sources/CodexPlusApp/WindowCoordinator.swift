@@ -5,6 +5,7 @@ import CodexPlusCore
 final class WindowCoordinator: NSObject, NSWindowDelegate {
     private let workbenchStore: WorkbenchStore
     private let promptTemplateRepository: any PromptTemplateRepository
+    private let promptOptimizationService: PromptOptimizationService
     private let batteryMonitor: BatteryStatusMonitor
     private let codexUsageMonitor: CodexUsageMonitor
     private let dailyTokenUsageMonitor: DailyTokenUsageMonitor
@@ -16,6 +17,7 @@ final class WindowCoordinator: NSObject, NSWindowDelegate {
         screenProvider: screenProvider,
         store: workbenchStore,
         codexUsageMonitor: codexUsageMonitor,
+        promptOptimizationService: promptOptimizationService,
         panelDelegate: self,
         onOpenSettings: { [weak self] in
             self?.showSettings()
@@ -49,10 +51,12 @@ final class WindowCoordinator: NSObject, NSWindowDelegate {
     init(
         batteryProvider: any BatteryStatusProviding,
         workbenchStore: WorkbenchStore,
-        promptTemplateRepository: any PromptTemplateRepository
+        promptTemplateRepository: any PromptTemplateRepository,
+        promptOptimizationService: PromptOptimizationService
     ) {
         self.workbenchStore = workbenchStore
         self.promptTemplateRepository = promptTemplateRepository
+        self.promptOptimizationService = promptOptimizationService
         self.batteryMonitor = BatteryStatusMonitor(provider: batteryProvider)
         self.codexUsageMonitor = CodexUsageMonitor(provider: LocalCodexUsageProvider())
         self.dailyTokenUsageMonitor = DailyTokenUsageMonitor(provider: LocalDailyTokenUsageProvider())

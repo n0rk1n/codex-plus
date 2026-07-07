@@ -1,4 +1,5 @@
 import Foundation
+import CodexPlusCore
 
 struct WorkbenchActions {
     var projectStrip: ProjectStripActions
@@ -23,6 +24,7 @@ struct ConversationActions {
 
 struct ComposerActions {
     let send: (String) -> Void
+    let optimizePrompt: (String, @escaping @Sendable (PromptOptimizationResult) -> Void) -> (any ExecutionHandle)?
     let pickWorkspace: () -> Void
     let clearWorkspace: () -> Void
     let stop: () -> Void

@@ -5,6 +5,7 @@ import SwiftUI
 struct WorkbenchView: View {
     @ObservedObject var store: WorkbenchStore
     @ObservedObject var codexUsageMonitor: CodexUsageMonitor
+    let promptOptimizationService: PromptOptimizationService
     let onOpenSettings: () -> Void
 
     var body: some View {
@@ -99,6 +100,7 @@ struct WorkbenchView: View {
             ),
             composer: ComposerActions(
                 send: { store.submitPrompt($0) },
+                optimizePrompt: optimizePrompt,
                 pickWorkspace: pickWorkspace,
                 clearWorkspace: { store.clearDraftWorkspaceSelection() },
                 stop: { store.stopActiveRun() }
@@ -139,5 +141,32 @@ struct WorkbenchView: View {
             path: url.path,
             displayName: ConversationWorkspacePolicy.displayName(for: url.path)
         )
+    }
+
+    private func optimizePrompt(
+        _ input: String,
+        onFinish: @escaping @Sendable (PromptOptimizationResult) -> Void
+    ) -> (any ExecutionHandle)? {
+        let workspacePath: String
+        if let activeProjectPath {
+            workspacePath = activeProjectPath
+        } else {
+            do {
+                workspacePath = try ConversationWorkspacePolicy.createDefaultWorkspaceDirectory()
+            } catch {
+                onFinish(.failure("无法准备提示词优化工作区：\(error)"))
+                return nil
+            }
+        }
+
+        return promptOptimizationService.startOptimization(
+            input: input,
+            workingDirectoryURL: URL(fileURLWithPath: workspacePath, isDirectory: true),
+            onFinish: onFinish
+        )
+    }
+
+    private var activeProjectPath: String? {
+        store.snapshot.selectedDraftWorkspace?.projectPath ?? store.snapshot.projectCards.first { $0.isActive }?.projectPath
     }
 }

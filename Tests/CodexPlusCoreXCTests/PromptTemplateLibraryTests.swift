@@ -165,4 +165,79 @@ final class PromptTemplateLibraryTests: XCTestCase {
         XCTAssertEqual(draft.note, source.note)
         XCTAssertTrue(draft.name.contains("副本"))
     }
+
+    func testDefaultTemplateIDsUseFirstBuiltInPerTypeWhenNoSelectionExists() {
+        let builtIns = PromptTemplateLibrary.builtInTemplates(now: Date(timeIntervalSince1970: 100))
+        let defaults = PromptTemplateLibrary.resolvedDefaultTemplateIDs(
+            templates: builtIns,
+            savedDefaultTemplateIDs: [:]
+        )
+
+        for type in PromptTemplateType.allCases {
+            XCTAssertEqual(
+                defaults[type],
+                builtIns.first { $0.source == .systemBuiltIn && $0.type == type }?.id
+            )
+        }
+    }
+
+    func testDefaultTemplateIDsKeepSavedSelectionWhenItMatchesTheType() {
+        let now = Date(timeIntervalSince1970: 100)
+        let builtIns = PromptTemplateLibrary.builtInTemplates(now: now)
+        let custom = PromptTemplate(
+            id: UUID(uuidString: "66666666-6666-6666-6666-666666666666")!,
+            source: .userCustom,
+            type: .archiveConversationSummary,
+            name: "自定义归档默认",
+            systemPrompt: "自定义归档",
+            userPrompt: "",
+            note: "",
+            createdAt: now,
+            updatedAt: now
+        )
+
+        let defaults = PromptTemplateLibrary.resolvedDefaultTemplateIDs(
+            templates: builtIns + [custom],
+            savedDefaultTemplateIDs: [.archiveConversationSummary: custom.id]
+        )
+
+        XCTAssertEqual(defaults[.archiveConversationSummary], custom.id)
+        XCTAssertEqual(
+            defaults[.optimizeUserInputPrompt],
+            builtIns.first { $0.type == .optimizeUserInputPrompt }?.id
+        )
+    }
+
+    func testDefaultTemplateIDsIgnoreSavedSelectionWhenTemplateIsMissingOrWrongType() {
+        let now = Date(timeIntervalSince1970: 100)
+        let builtIns = PromptTemplateLibrary.builtInTemplates(now: now)
+        let optimizeCustom = PromptTemplate(
+            id: UUID(uuidString: "77777777-7777-7777-7777-777777777777")!,
+            source: .userCustom,
+            type: .optimizeUserInputPrompt,
+            name: "自定义优化",
+            systemPrompt: "自定义优化",
+            userPrompt: "",
+            note: "",
+            createdAt: now,
+            updatedAt: now
+        )
+
+        let defaults = PromptTemplateLibrary.resolvedDefaultTemplateIDs(
+            templates: builtIns + [optimizeCustom],
+            savedDefaultTemplateIDs: [
+                .archiveConversationSummary: optimizeCustom.id,
+                .optimizeUserInputPrompt: UUID(uuidString: "88888888-8888-8888-8888-888888888888")!
+            ]
+        )
+
+        XCTAssertEqual(
+            defaults[.archiveConversationSummary],
+            builtIns.first { $0.type == .archiveConversationSummary }?.id
+        )
+        XCTAssertEqual(
+            defaults[.optimizeUserInputPrompt],
+            builtIns.first { $0.type == .optimizeUserInputPrompt }?.id
+        )
+    }
 }

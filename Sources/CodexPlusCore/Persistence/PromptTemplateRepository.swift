@@ -4,4 +4,6 @@ public protocol PromptTemplateRepository: Sendable {
     func savePromptTemplate(_ template: PromptTemplate) throws
     func loadPromptTemplates() throws -> [PromptTemplate]
     func deletePromptTemplate(_ id: UUID) throws
+    func setDefaultPromptTemplateID(_ id: UUID, for type: PromptTemplateType) throws
+    func loadDefaultPromptTemplateIDs() throws -> [PromptTemplateType: UUID]
 }

@@ -56,6 +56,32 @@ final class PromptTemplatePersistenceTests: XCTestCase {
         XCTAssertThrowsError(try repository.savePromptTemplate(builtIn))
     }
 
+    func testRepositoryRoundTripsOneDefaultPromptTemplatePerType() throws {
+        let database = try temporaryDatabase()
+        try CodexPlusSchema.migrate(database)
+        let repository = SQLiteCodexPlusRepository(database: database)
+        let first = UUID(uuidString: "bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb")!
+        let second = UUID(uuidString: "cccccccc-cccc-cccc-cccc-cccccccccccc")!
+        let optimize = UUID(uuidString: "dddddddd-dddd-dddd-dddd-dddddddddddd")!
+
+        try repository.setDefaultPromptTemplateID(first, for: .archiveConversationSummary)
+        XCTAssertEqual(
+            try repository.loadDefaultPromptTemplateIDs(),
+            [.archiveConversationSummary: first]
+        )
+
+        try repository.setDefaultPromptTemplateID(second, for: .archiveConversationSummary)
+        try repository.setDefaultPromptTemplateID(optimize, for: .optimizeUserInputPrompt)
+
+        XCTAssertEqual(
+            try repository.loadDefaultPromptTemplateIDs(),
+            [
+                .archiveConversationSummary: second,
+                .optimizeUserInputPrompt: optimize
+            ]
+        )
+    }
+
     private func temporaryDatabase() throws -> SQLiteDatabase {
         let url = FileManager.default.temporaryDirectory
             .appendingPathComponent("codex-plus-\(UUID().uuidString).sqlite")

@@ -125,4 +125,26 @@ public enum PromptTemplateLibrary {
             }
         }
     }
+
+    public static func resolvedDefaultTemplateIDs(
+        templates: [PromptTemplate],
+        savedDefaultTemplateIDs: [PromptTemplateType: UUID]
+    ) -> [PromptTemplateType: UUID] {
+        let sorted = sortedTemplates(templates)
+        var resolved: [PromptTemplateType: UUID] = [:]
+
+        for type in PromptTemplateType.allCases {
+            if let savedID = savedDefaultTemplateIDs[type],
+               sorted.contains(where: { $0.id == savedID && $0.type == type }) {
+                resolved[type] = savedID
+                continue
+            }
+
+            resolved[type] = sorted.first {
+                $0.source == .systemBuiltIn && $0.type == type
+            }?.id
+        }
+
+        return resolved
+    }
 }

@@ -8,6 +8,7 @@ final class WorkbenchPanelController {
     private let screenProvider: ActiveScreenProvider
     private let store: WorkbenchStore
     private let codexUsageMonitor: CodexUsageMonitor
+    private let promptOptimizationService: PromptOptimizationService
     private weak var panelDelegate: NSWindowDelegate?
     private let onOpenSettings: () -> Void
     private let onShow: () -> Void
@@ -21,6 +22,7 @@ final class WorkbenchPanelController {
         screenProvider: ActiveScreenProvider,
         store: WorkbenchStore,
         codexUsageMonitor: CodexUsageMonitor,
+        promptOptimizationService: PromptOptimizationService,
         panelDelegate: NSWindowDelegate?,
         onOpenSettings: @escaping () -> Void,
         onShow: @escaping () -> Void,
@@ -30,6 +32,7 @@ final class WorkbenchPanelController {
         self.screenProvider = screenProvider
         self.store = store
         self.codexUsageMonitor = codexUsageMonitor
+        self.promptOptimizationService = promptOptimizationService
         self.panelDelegate = panelDelegate
         self.onOpenSettings = onOpenSettings
         self.onShow = onShow
@@ -61,6 +64,7 @@ final class WorkbenchPanelController {
             rootView: WorkbenchView(
                 store: store,
                 codexUsageMonitor: codexUsageMonitor,
+                promptOptimizationService: promptOptimizationService,
                 onOpenSettings: onOpenSettings
             )
         )
