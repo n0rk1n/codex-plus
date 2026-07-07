@@ -7,6 +7,7 @@ private func runAllLegacyTests() {
     runLegacyMainProcessRunnerTests()
     runPromptTemplateLibraryTests()
     runPromptTemplatePersistenceLegacyTests()
+    runPromptTemplateManagerAppSourceTests()
     MainActor.assumeIsolated {
         runLegacyMainActorTests()
         runWorkbenchProjectionTests()

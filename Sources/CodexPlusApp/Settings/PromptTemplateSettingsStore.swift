@@ -139,23 +139,27 @@ final class PromptTemplateSettingsStore: ObservableObject {
         }
     }
 
-    func save() {
+    @discardableResult
+    func save() -> Bool {
         guard isEditable, let draft else {
-            return
+            return false
         }
 
         if selectedTemplate?.source == .systemBuiltIn {
-            return
+            return false
         }
 
         do {
             let template = try PromptTemplateLibrary.userTemplate(from: draft)
             try repository.savePromptTemplate(template)
             loadTemplates(preferredSelectionID: template.id)
+            return true
         } catch let validation as PromptTemplateValidationError {
             validationError = validation
+            return false
         } catch {
             errorMessage = "无法保存提示词模板：\(error)"
+            return false
         }
     }
 

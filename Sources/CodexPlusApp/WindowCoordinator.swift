@@ -89,4 +89,16 @@ final class WindowCoordinator: NSObject, NSWindowDelegate {
             return
         }
     }
+
+    func windowShouldClose(_ sender: NSWindow) -> Bool {
+        guard let panel = sender as? GlassPanel else {
+            return true
+        }
+
+        if settingsPanelController.recordMove(of: panel) {
+            return settingsPanelController.shouldClose(panel)
+        }
+
+        return true
+    }
 }

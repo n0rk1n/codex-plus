@@ -2,11 +2,17 @@ import CodexPlusCore
 import SwiftUI
 
 struct PromptTemplateManagerView: View {
-    @StateObject private var store: PromptTemplateSettingsStore
+    @ObservedObject private var store: PromptTemplateSettingsStore
     @State private var isShowingDeleteConfirmation = false
+    @State private var isShowingDirtyConfirmation = false
+    @State private var pendingAction: PendingDirtyAction?
 
     init(repository: any PromptTemplateRepository) {
-        _store = StateObject(wrappedValue: PromptTemplateSettingsStore(repository: repository))
+        _store = ObservedObject(wrappedValue: PromptTemplateSettingsStore(repository: repository))
+    }
+
+    init(store: PromptTemplateSettingsStore) {
+        _store = ObservedObject(wrappedValue: store)
     }
 
     var body: some View {
@@ -30,6 +36,19 @@ struct PromptTemplateManagerView: View {
         } message: {
             Text("这个操作只会删除用户自定义提示词模板，系统内置提示词不会被删除。")
         }
+        .alert("保存未完成的修改？", isPresented: $isShowingDirtyConfirmation) {
+            Button("取消", role: .cancel) {
+                pendingAction = nil
+            }
+            Button("放弃修改", role: .destructive) {
+                performPendingActionAfterDiscard()
+            }
+            Button("保存") {
+                performPendingActionAfterSave()
+            }
+        } message: {
+            Text("当前提示词模板有未保存修改。继续前请选择保存、放弃或取消。")
+        }
     }
 
     private var sidebar: some View {
@@ -41,13 +60,13 @@ struct PromptTemplateManagerView: View {
 
                     Spacer()
 
-                    Button(action: store.reload) {
+                    Button(action: { performOrConfirm(.reload) }) {
                         sidebarIcon("arrow.clockwise")
                     }
                     .buttonStyle(.plain)
                     .help("重新加载提示词模板")
 
-                    Button(action: store.createTemplate) {
+                    Button(action: { performOrConfirm(.create) }) {
                         sidebarIcon("plus")
                     }
                     .buttonStyle(.plain)
@@ -105,7 +124,7 @@ struct PromptTemplateManagerView: View {
     }
 
     private func templateRow(_ template: PromptTemplate) -> some View {
-        Button(action: { store.select(template.id) }) {
+        Button(action: { performOrConfirm(.select(template.id)) }) {
             VStack(alignment: .leading, spacing: 6) {
                 Text(template.name)
                     .font(.system(size: 13, weight: .semibold))
@@ -172,7 +191,7 @@ struct PromptTemplateManagerView: View {
 
             Spacer(minLength: 16)
 
-            Button(action: store.copySelectedTemplate) {
+            Button(action: { performOrConfirm(.copy) }) {
                 headerActionLabel(
                     systemImage: "doc.on.doc",
                     title: store.isEditable ? "复制" : "复制为用户模板"
@@ -270,7 +289,7 @@ struct PromptTemplateManagerView: View {
             .help("放弃当前未保存修改")
             .disabled(!store.isEditable || !store.isDirty)
 
-            Button(action: store.save) {
+            Button(action: { _ = store.save() }) {
                 footerActionLabel(systemImage: "checkmark", title: "保存")
             }
             .buttonStyle(.plain)
@@ -425,4 +444,57 @@ struct PromptTemplateManagerView: View {
             return "系统提示词不能为空。"
         }
     }
+
+    private func performOrConfirm(_ action: PendingDirtyAction) {
+        guard store.isDirty else {
+            perform(action)
+            return
+        }
+
+        pendingAction = action
+        isShowingDirtyConfirmation = true
+    }
+
+    private func performPendingActionAfterSave() {
+        guard let pendingAction else {
+            return
+        }
+
+        if store.save() {
+            self.pendingAction = nil
+            perform(pendingAction)
+        } else {
+            self.pendingAction = nil
+        }
+    }
+
+    private func performPendingActionAfterDiscard() {
+        guard let pendingAction else {
+            return
+        }
+
+        self.pendingAction = nil
+        store.discardChanges()
+        perform(pendingAction)
+    }
+
+    private func perform(_ action: PendingDirtyAction) {
+        switch action {
+        case .reload:
+            store.reload()
+        case .create:
+            store.createTemplate()
+        case .copy:
+            store.copySelectedTemplate()
+        case let .select(id):
+            store.select(id)
+        }
+    }
+}
+
+private enum PendingDirtyAction: Equatable {
+    case reload
+    case create
+    case copy
+    case select(UUID)
 }
