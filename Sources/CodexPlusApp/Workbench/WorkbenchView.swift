@@ -5,6 +5,7 @@ import SwiftUI
 struct WorkbenchView: View {
     @ObservedObject var store: WorkbenchStore
     @ObservedObject var codexUsageMonitor: CodexUsageMonitor
+    let onOpenSettings: () -> Void
 
     var body: some View {
         LiquidGlassScene(padding: 0, minWidth: 980, minHeight: 620) {
@@ -88,6 +89,7 @@ struct WorkbenchView: View {
                 newConversation: { store.beginNewConversationDraft() },
                 returnToConversation: { store.returnToConversationPage() },
                 openArchive: { store.showArchiveSearch() },
+                openSettings: onOpenSettings,
                 togglePin: { store.togglePin() },
                 selectProject: { store.selectProject($0) },
                 selectConversation: { store.selectConversation($0) }

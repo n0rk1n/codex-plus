@@ -3,15 +3,21 @@ import CodexPlusCore
 
 @MainActor
 final class AppDelegate: NSObject, NSApplicationDelegate {
+    private struct AppRuntime {
+        var store: WorkbenchStore
+        var repository: any CodexPlusRepository
+    }
+
     private var windowCoordinator: WindowCoordinator?
     private var hotKeyController: HotKeyController?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         do {
-            let store = try makeWorkbenchStore()
+            let runtime = try makeRuntime()
             self.windowCoordinator = WindowCoordinator(
                 batteryProvider: IOKitBatteryStatusProvider(),
-                workbenchStore: store
+                workbenchStore: runtime.store,
+                promptTemplateRepository: runtime.repository
             )
         } catch {
             presentInitializationFailure(error)
@@ -33,14 +39,17 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         }
     }
 
-    private func makeWorkbenchStore() throws -> WorkbenchStore {
+    private func makeRuntime() throws -> AppRuntime {
         try ApplicationDataMigrator.migrateLegacyLocalDataIfNeeded()
         let databasePath = try makeDatabasePath()
         let database = try SQLiteDatabase(path: databasePath)
         try CodexPlusSchema.migrate(database)
         let repository = SQLiteCodexPlusRepository(database: database)
         let engine = CodexCLIEngine(runner: ProcessCodexRunner())
-        return WorkbenchStore(repository: repository, engine: engine)
+        return AppRuntime(
+            store: WorkbenchStore(repository: repository, engine: engine),
+            repository: repository
+        )
     }
 
     private func makeDatabasePath() throws -> String {

@@ -11,6 +11,7 @@ struct ProjectStripActions {
     let newConversation: () -> Void
     let returnToConversation: () -> Void
     let openArchive: () -> Void
+    let openSettings: () -> Void
     let togglePin: () -> Void
     let selectProject: (UUID) -> Void
     let selectConversation: (UUID) -> Void

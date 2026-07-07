@@ -4,6 +4,7 @@ import CodexPlusCore
 @MainActor
 final class WindowCoordinator: NSObject, NSWindowDelegate {
     private let workbenchStore: WorkbenchStore
+    private let promptTemplateRepository: any PromptTemplateRepository
     private let batteryMonitor: BatteryStatusMonitor
     private let codexUsageMonitor: CodexUsageMonitor
     private let dailyTokenUsageMonitor: DailyTokenUsageMonitor
@@ -16,12 +17,21 @@ final class WindowCoordinator: NSObject, NSWindowDelegate {
         store: workbenchStore,
         codexUsageMonitor: codexUsageMonitor,
         panelDelegate: self,
+        onOpenSettings: { [weak self] in
+            self?.showSettings()
+        },
         onShow: { [weak self] in
             self?.workbenchLauncherPanelController.hide()
         },
         onHide: { [weak self] in
             self?.workbenchLauncherPanelController.show()
         }
+    )
+
+    private lazy var settingsPanelController = SettingsPanelController(
+        panelFactory: panelFactory,
+        panelDelegate: self,
+        repository: promptTemplateRepository
     )
 
     private lazy var workbenchLauncherPanelController = WorkbenchLauncherPanelController(
@@ -34,9 +44,11 @@ final class WindowCoordinator: NSObject, NSWindowDelegate {
 
     init(
         batteryProvider: any BatteryStatusProviding,
-        workbenchStore: WorkbenchStore
+        workbenchStore: WorkbenchStore,
+        promptTemplateRepository: any PromptTemplateRepository
     ) {
         self.workbenchStore = workbenchStore
+        self.promptTemplateRepository = promptTemplateRepository
         self.batteryMonitor = BatteryStatusMonitor(provider: batteryProvider)
         self.codexUsageMonitor = CodexUsageMonitor(provider: LocalCodexUsageProvider())
         self.dailyTokenUsageMonitor = DailyTokenUsageMonitor(provider: LocalDailyTokenUsageProvider())
@@ -56,8 +68,16 @@ final class WindowCoordinator: NSObject, NSWindowDelegate {
         workbenchPanelController.show()
     }
 
+    private func showSettings() {
+        settingsPanelController.show()
+    }
+
     func windowDidMove(_ notification: Notification) {
         guard let panel = notification.object as? GlassPanel else {
+            return
+        }
+
+        if settingsPanelController.recordMove(of: panel) {
             return
         }
 
@@ -68,5 +88,17 @@ final class WindowCoordinator: NSObject, NSWindowDelegate {
         if workbenchLauncherPanelController.recordMove(of: panel) {
             return
         }
+    }
+
+    func windowShouldClose(_ sender: NSWindow) -> Bool {
+        guard let panel = sender as? GlassPanel else {
+            return true
+        }
+
+        if settingsPanelController.recordMove(of: panel) {
+            return settingsPanelController.shouldClose(panel)
+        }
+
+        return true
     }
 }

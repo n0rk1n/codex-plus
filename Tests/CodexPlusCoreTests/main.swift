@@ -5,6 +5,9 @@ private func runAllLegacyTests() {
     assertionCount = 0
 
     runLegacyMainProcessRunnerTests()
+    runPromptTemplateLibraryTests()
+    runPromptTemplatePersistenceLegacyTests()
+    runPromptTemplateManagerAppSourceTests()
     MainActor.assumeIsolated {
         runLegacyMainActorTests()
         runWorkbenchProjectionTests()

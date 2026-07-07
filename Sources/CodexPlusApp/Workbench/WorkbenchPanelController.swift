@@ -9,6 +9,7 @@ final class WorkbenchPanelController {
     private let store: WorkbenchStore
     private let codexUsageMonitor: CodexUsageMonitor
     private weak var panelDelegate: NSWindowDelegate?
+    private let onOpenSettings: () -> Void
     private let onShow: () -> Void
     private let onHide: () -> Void
 
@@ -21,6 +22,7 @@ final class WorkbenchPanelController {
         store: WorkbenchStore,
         codexUsageMonitor: CodexUsageMonitor,
         panelDelegate: NSWindowDelegate?,
+        onOpenSettings: @escaping () -> Void,
         onShow: @escaping () -> Void,
         onHide: @escaping () -> Void
     ) {
@@ -29,6 +31,7 @@ final class WorkbenchPanelController {
         self.store = store
         self.codexUsageMonitor = codexUsageMonitor
         self.panelDelegate = panelDelegate
+        self.onOpenSettings = onOpenSettings
         self.onShow = onShow
         self.onHide = onHide
     }
@@ -54,7 +57,13 @@ final class WorkbenchPanelController {
         let panel = panel ?? panelFactory.makePanel(frame: frame, delegate: panelDelegate)
         panel.hasShadow = false
         panel.setFrame(frame, display: true)
-        panel.contentView = WorkbenchPanelHostingView(rootView: WorkbenchView(store: store, codexUsageMonitor: codexUsageMonitor))
+        panel.contentView = WorkbenchPanelHostingView(
+            rootView: WorkbenchView(
+                store: store,
+                codexUsageMonitor: codexUsageMonitor,
+                onOpenSettings: onOpenSettings
+            )
+        )
         panel.makeKeyAndOrderFront(nil)
         self.panel = panel
         installDismissMonitorsIfNeeded()

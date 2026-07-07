@@ -1,7 +1,7 @@
 import Foundation
 
 public enum CodexPlusSchema {
-    public static let version = 1
+    public static let version = 2
 
     public static func migrate(_ database: SQLiteDatabase) throws {
         let currentVersion = try userVersion(database)
@@ -102,6 +102,18 @@ public enum CodexPlusSchema {
             checksum TEXT NOT NULL,
             is_snapshot INTEGER NOT NULL,
             created_at REAL NOT NULL
+        );
+        """)
+        try database.execute("""
+        CREATE TABLE IF NOT EXISTS prompt_templates (
+            id TEXT PRIMARY KEY,
+            type TEXT NOT NULL,
+            name TEXT NOT NULL,
+            system_prompt TEXT NOT NULL,
+            user_prompt TEXT NOT NULL,
+            note TEXT NOT NULL,
+            created_at REAL NOT NULL,
+            updated_at REAL NOT NULL
         );
         """)
         try database.execute("PRAGMA user_version = \(version);")
