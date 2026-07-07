@@ -82,4 +82,16 @@ public final class SQLiteCodexPlusStore: CodexPlusRepository, @unchecked Sendabl
     public func deleteAttachment(_ id: UUID) throws {
         try repository.deleteAttachment(id)
     }
+
+    public func savePromptTemplate(_ template: PromptTemplate) throws {
+        try repository.savePromptTemplate(template)
+    }
+
+    public func loadPromptTemplates() throws -> [PromptTemplate] {
+        try repository.loadPromptTemplates()
+    }
+
+    public func deletePromptTemplate(_ id: UUID) throws {
+        try repository.deletePromptTemplate(id)
+    }
 }

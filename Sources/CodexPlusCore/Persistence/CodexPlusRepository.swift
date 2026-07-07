@@ -1,6 +1,6 @@
 import Foundation
 
-public protocol CodexPlusRepository: ProjectRepository, ConversationRepository, ArchiveRepository, MemoryRepository, AttachmentRepository, Sendable {}
+public protocol CodexPlusRepository: ProjectRepository, ConversationRepository, ArchiveRepository, MemoryRepository, AttachmentRepository, PromptTemplateRepository, Sendable {}
 
 public extension CodexPlusRepository {
     func saveMemoryCard(_ card: MemoryCard) throws {
@@ -38,9 +38,26 @@ public extension CodexPlusRepository {
     func deleteAttachment(_ id: UUID) throws {
         throw UnsupportedRepositoryOperation()
     }
+
+    func savePromptTemplate(_ template: PromptTemplate) throws {
+        throw UnsupportedRepositoryOperation()
+    }
+
+    func loadPromptTemplates() throws -> [PromptTemplate] {
+        throw UnsupportedRepositoryOperation()
+    }
+
+    func deletePromptTemplate(_ id: UUID) throws {
+        throw UnsupportedRepositoryOperation()
+    }
 }
 
 private struct UnsupportedRepositoryOperation: Error {}
+
+private enum PromptTemplatePersistenceError: Error {
+    case builtInTemplatesAreReadOnly
+    case invalidPromptTemplateType(String)
+}
 
 public final class SQLiteCodexPlusRepository: CodexPlusRepository, @unchecked Sendable {
     private let database: SQLiteDatabase
@@ -640,6 +657,64 @@ public final class SQLiteCodexPlusRepository: CodexPlusRepository, @unchecked Se
     public func deleteAttachment(_ id: UUID) throws {
         try database.execute("DELETE FROM attachments WHERE id = ?;", [.text(id.uuidString.lowercased())])
     }
+
+    public func savePromptTemplate(_ template: PromptTemplate) throws {
+        guard template.source == .userCustom else {
+            throw PromptTemplatePersistenceError.builtInTemplatesAreReadOnly
+        }
+
+        try database.execute(
+            """
+            INSERT INTO prompt_templates (
+                id,
+                type,
+                name,
+                system_prompt,
+                user_prompt,
+                note,
+                created_at,
+                updated_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            ON CONFLICT(id) DO UPDATE SET
+                type = excluded.type,
+                name = excluded.name,
+                system_prompt = excluded.system_prompt,
+                user_prompt = excluded.user_prompt,
+                note = excluded.note,
+                created_at = excluded.created_at,
+                updated_at = excluded.updated_at;
+            """,
+            [
+                .text(template.id.uuidString.lowercased()),
+                .text(template.type.rawValue),
+                .text(template.name),
+                .text(template.systemPrompt),
+                .text(template.userPrompt),
+                .text(template.note),
+                .real(template.createdAt.timeIntervalSince1970),
+                .real(template.updatedAt.timeIntervalSince1970)
+            ]
+        )
+    }
+
+    public func loadPromptTemplates() throws -> [PromptTemplate] {
+        let rows = try database.query(
+            """
+            SELECT id, type, name, system_prompt, user_prompt, note, created_at, updated_at
+            FROM prompt_templates
+            ORDER BY updated_at DESC, id ASC;
+            """
+        )
+
+        return try rows.map(decodePromptTemplate)
+    }
+
+    public func deletePromptTemplate(_ id: UUID) throws {
+        try database.execute(
+            "DELETE FROM prompt_templates WHERE id = ?;",
+            [.text(id.uuidString.lowercased())]
+        )
+    }
 }
 
 private enum RepositoryError: Error, CustomStringConvertible {
@@ -810,6 +885,25 @@ private func decodeAttachment(_ row: [String: SQLiteValue]) throws -> CodexPlusA
         checksum: try text(for: "checksum", in: row),
         isSnapshot: try bool(for: "is_snapshot", in: row),
         createdAt: Date(timeIntervalSince1970: try double(for: "created_at", in: row))
+    )
+}
+
+private func decodePromptTemplate(_ row: [String: SQLiteValue]) throws -> PromptTemplate {
+    let rawType = try text(for: "type", in: row)
+    guard let type = PromptTemplateType(rawValue: rawType) else {
+        throw PromptTemplatePersistenceError.invalidPromptTemplateType(rawType)
+    }
+
+    return PromptTemplate(
+        id: try uuid(for: "id", in: row),
+        source: .userCustom,
+        type: type,
+        name: try text(for: "name", in: row),
+        systemPrompt: try text(for: "system_prompt", in: row),
+        userPrompt: try text(for: "user_prompt", in: row),
+        note: try text(for: "note", in: row),
+        createdAt: Date(timeIntervalSince1970: try double(for: "created_at", in: row)),
+        updatedAt: Date(timeIntervalSince1970: try double(for: "updated_at", in: row))
     )
 }
 
