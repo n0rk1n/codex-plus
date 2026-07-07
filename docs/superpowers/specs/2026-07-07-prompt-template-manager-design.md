@@ -11,6 +11,7 @@ The manager gives users a searchable list of prompt templates and a detail edito
 ## Goals
 
 - Provide a standalone Settings component for managing reusable prompt templates.
+- Add a visible entry point from the main workbench into Settings.
 - Support exactly two prompt template types in the first version:
   - 对归档对话进行总结
   - 优化用户对话输入框提示词
@@ -101,6 +102,20 @@ Copying any template creates a user custom draft with the same type, system prom
 ## UI Layout
 
 The component uses a two-pane Settings layout.
+
+## Entry Point
+
+The first implementation must add a visible prompt manager entry instead of only creating an unreachable settings view.
+
+Entry behavior:
+
+- Add a gear-shaped Settings button to the main workbench top strip, near the existing pin control.
+- The button opens a Settings window or panel.
+- The Settings surface defaults to the prompt template manager page in the first version.
+- The button uses the label `设置` and accessibility text such as `打开设置`.
+- The entry does not apply any template, start a Codex run, or change the active conversation.
+
+If a broader Settings navigation exists later, prompt templates should appear as a `提示词模板` Settings section. In the first version, it is acceptable for the Settings surface to contain only the prompt template manager.
 
 Left pane:
 
@@ -294,6 +309,8 @@ Core tests:
 
 App-level smoke checks:
 
+- The main workbench exposes a Settings entry button.
+- Opening Settings from the entry shows the prompt template manager.
 - The Settings pane renders a two-pane layout.
 - Left type filter is multi-select.
 - Right type field is a required dropdown single-select.
@@ -310,4 +327,5 @@ App-level smoke checks:
 - The user prompt is optional.
 - Type filtering in the list supports multi-select.
 - The template type field in the detail pane is a required dropdown single-select.
+- The user can reach the manager from the main workbench Settings entry.
 - The manager remains independent from all runtime Codex flows.
