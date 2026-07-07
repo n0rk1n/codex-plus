@@ -26,8 +26,8 @@
 - `git diff --check`
   - Passed
 
-### Commit hash
-- `8d6c12c`
+### Implementation commit hash
+- `1701424`
 
 ### Concerns
 - XCTest verification remains blocked by the current environment's inability to import `XCTest`, so executable legacy coverage is the reliable signal for this task right now.
