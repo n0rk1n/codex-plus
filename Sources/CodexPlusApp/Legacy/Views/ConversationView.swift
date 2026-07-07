@@ -144,12 +144,14 @@ struct ConversationView: View {
     private func footer(for _: ConversationSession) -> some View {
         LiquidGlassContainer(cornerRadius: 22) {
             HStack(alignment: .bottom, spacing: 10) {
-                TextField("Follow up...", text: $followUp, axis: .vertical)
-                    .textFieldStyle(.plain)
-                    .font(.system(size: 14))
-                    .lineLimit(1...4)
+                AppMultilineTextField(
+                    placeholder: "Follow up...",
+                    text: $followUp,
+                    fontSize: 14,
+                    lineLimit: MultilineInputDefaults.conversationPromptLineLimit,
+                    onSubmit: submitFollowUp
+                )
                     .focused($isFollowUpFocused)
-                    .onSubmit(submitFollowUp)
 
                 Button(action: submitFollowUp) {
                     Image(systemName: "arrow.up.circle.fill")

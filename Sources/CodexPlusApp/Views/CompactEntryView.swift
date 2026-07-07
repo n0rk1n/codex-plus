@@ -72,16 +72,16 @@ struct CompactEntryView: View {
                         .help("Choose Workspace")
                         .accessibilityLabel("Choose Workspace")
 
-                        TextField(text: $prompt, axis: .vertical) {
-                            Text("Ask Codex...")
-                                .foregroundStyle(promptPlaceholderColor)
-                        }
-                        .textFieldStyle(.plain)
-                        .font(.system(size: 15))
-                        .foregroundStyle(promptForegroundColor)
-                        .lineLimit(1...3)
+                        AppMultilineTextField(
+                            placeholder: "Ask Codex...",
+                            text: $prompt,
+                            fontSize: 15,
+                            foregroundColor: promptForegroundColor,
+                            placeholderColor: promptPlaceholderColor,
+                            lineLimit: MultilineInputDefaults.compactPromptLineLimit,
+                            onSubmit: submitPrompt
+                        )
                         .focused($isPromptFocused)
-                        .onSubmit(submitPrompt)
                     }
                     .padding(.horizontal, 18)
                     .padding(.vertical, 14)

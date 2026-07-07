@@ -17,6 +17,9 @@ func runPromptTemplateManagerAppSourceTests() {
     let topProjectStripView = readSource(
         root.appendingPathComponent("Sources/CodexPlusApp/Workbench/TopProjectStripView.swift")
     )
+    let multilineTextEditor = readSource(
+        root.appendingPathComponent("Sources/CodexPlusApp/Views/AppMultilineTextEditor.swift")
+    )
 
     expect(
         managerView.contains("performOrConfirm(.select"),
@@ -42,10 +45,10 @@ func runPromptTemplateManagerAppSourceTests() {
         "prompt manager sidebar omits the redundant reload action"
     )
     expect(
-        managerView.contains("PromptTemplateMultilineEditor(") &&
-            managerView.contains("textContainerInset") &&
-            !managerView.contains("TextEditor(text:"),
-        "prompt manager multiline prompt fields use an AppKit text view with explicit text container inset"
+        managerView.contains("AppMultilineTextEditor(text:") &&
+            multilineTextEditor.contains("textContainerInset") &&
+            !managerView.contains("\n        TextEditor(text:"),
+        "prompt manager multiline prompt fields use the shared AppKit text view with explicit text container inset"
     )
     expect(
         managerView.contains("Picker(\"\", selection: sourceFilterBinding)") &&

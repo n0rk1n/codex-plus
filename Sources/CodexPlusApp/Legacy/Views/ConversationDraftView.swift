@@ -42,12 +42,14 @@ struct ConversationDraftView: View {
 
             LiquidGlassContainer(cornerRadius: 22) {
                 HStack(alignment: .bottom, spacing: 10) {
-                    TextField("Ask Codex...", text: $prompt, axis: .vertical)
-                        .textFieldStyle(.plain)
-                        .font(.system(size: 15))
-                        .lineLimit(1...4)
+                    AppMultilineTextField(
+                        placeholder: "Ask Codex...",
+                        text: $prompt,
+                        fontSize: 15,
+                        lineLimit: MultilineInputDefaults.conversationPromptLineLimit,
+                        onSubmit: submitPrompt
+                    )
                         .focused($isPromptFocused)
-                        .onSubmit(submitPrompt)
 
                     Button(action: submitPrompt) {
                         Image(systemName: "arrow.up.circle.fill")
