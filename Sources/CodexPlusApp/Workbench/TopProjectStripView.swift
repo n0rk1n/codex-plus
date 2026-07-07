@@ -16,6 +16,12 @@ struct TopProjectStripView: View {
                     .opacity(!isShowingArchiveSearch && isNewConversationDisabled ? 0.45 : 1)
                 stripActionButton(title: WorkbenchStrings.archived, systemName: "archivebox", action: actions.openArchive)
                 Spacer(minLength: 0)
+                iconActionButton(
+                    help: WorkbenchStrings.openSettingsHelp,
+                    systemName: "gearshape",
+                    accessibilityLabel: WorkbenchStrings.openSettings,
+                    action: actions.openSettings
+                )
                 pinButton
             }
 
@@ -45,16 +51,12 @@ struct TopProjectStripView: View {
     }
 
     private var pinButton: some View {
-        Button(action: actions.togglePin) {
-            Image(systemName: isPinned ? "pin.fill" : "pin")
-                .font(.system(size: 13, weight: .semibold))
-                .frame(width: 32, height: 32)
-        }
-        .buttonStyle(.plain)
-        .glassEffect(.regular, in: Circle())
-        .compositingGroup()
-        .mask(Circle())
-        .help(isPinned ? "取消固定" : "固定")
+        iconActionButton(
+            help: isPinned ? WorkbenchStrings.unpinWindow : WorkbenchStrings.pinWindow,
+            systemName: isPinned ? "pin.fill" : "pin",
+            accessibilityLabel: isPinned ? WorkbenchStrings.unpinWindow : WorkbenchStrings.pinWindow,
+            action: actions.togglePin
+        )
     }
 
     private func stripActionButton(title: String, systemName: String, action: @escaping () -> Void) -> some View {
@@ -68,6 +70,25 @@ struct TopProjectStripView: View {
         .glassEffect(.regular, in: Capsule(style: .continuous))
         .compositingGroup()
         .mask(Capsule(style: .continuous))
+    }
+
+    private func iconActionButton(
+        help: String,
+        systemName: String,
+        accessibilityLabel: String,
+        action: @escaping () -> Void
+    ) -> some View {
+        Button(action: action) {
+            Image(systemName: systemName)
+                .font(.system(size: 13, weight: .semibold))
+                .frame(width: 32, height: 32)
+        }
+        .buttonStyle(.plain)
+        .glassEffect(.regular, in: Circle())
+        .compositingGroup()
+        .mask(Circle())
+        .help(help)
+        .accessibilityLabel(accessibilityLabel)
     }
 
     private func projectCard(_ card: WorkbenchProjectCard) -> some View {
