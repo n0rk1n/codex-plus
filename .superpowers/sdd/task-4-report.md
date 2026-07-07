@@ -19,7 +19,7 @@
   - Result: pass.
 
 ## commit hash
-- `8c0304e`
+- Implementation commit: `b08df02`
 
 ## concerns
 - Required `swift build` verification could not complete in the managed sandbox. The environment rejected an unsandboxed retry, so compile success is not confirmed in this run.
