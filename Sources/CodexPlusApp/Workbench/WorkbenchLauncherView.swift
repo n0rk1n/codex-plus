@@ -15,7 +15,7 @@ struct WorkbenchLauncherView: View {
         .glassEffect(.regular, in: Circle())
         .compositingGroup()
         .mask(Circle())
-        .contentShape(Circle())
+        .codexCircularButtonHitArea()
         .help("打开 Codex Plus")
         .accessibilityLabel("打开 Codex Plus")
         .accessibilityAddTraits(.isButton)

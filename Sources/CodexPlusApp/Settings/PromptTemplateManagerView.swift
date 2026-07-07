@@ -82,6 +82,7 @@ struct PromptTemplateManagerView: View {
                         sidebarIcon("plus")
                     }
                     .buttonStyle(.plain)
+                    .codexCircularButtonHitArea()
                     .help("新增用户自定义提示词")
                 }
 
@@ -167,6 +168,7 @@ struct PromptTemplateManagerView: View {
             .background(rowBackground(isSelected: store.selectedTemplateID == template.id))
         }
         .buttonStyle(.plain)
+        .codexRoundedButtonHitArea(cornerRadius: 8)
         .help(template.name)
         .swipeActions(edge: .trailing) {
             if template.source == .userCustom {
@@ -237,6 +239,7 @@ struct PromptTemplateManagerView: View {
                 )
             }
             .buttonStyle(.plain)
+            .codexCapsuleButtonHitArea()
             .help("复制当前模板为用户自定义模板")
 
             if let selectedTemplate = store.selectedTemplate {
@@ -259,6 +262,7 @@ struct PromptTemplateManagerView: View {
                     headerActionLabel(systemImage: "trash", title: "删除", foregroundColor: .red)
                 }
                 .buttonStyle(.plain)
+                .codexCapsuleButtonHitArea()
                 .help("删除当前用户自定义模板")
             }
         }
@@ -341,6 +345,7 @@ struct PromptTemplateManagerView: View {
                 footerActionLabel(systemImage: "arrow.uturn.backward", title: "放弃修改")
             }
             .buttonStyle(.plain)
+            .codexCapsuleButtonHitArea()
             .help("放弃当前未保存修改")
             .disabled(!store.isEditable || !store.isDirty)
 
@@ -348,6 +353,7 @@ struct PromptTemplateManagerView: View {
                 footerActionLabel(systemImage: "checkmark", title: "保存")
             }
             .buttonStyle(.plain)
+            .codexCapsuleButtonHitArea()
             .help("保存当前用户自定义模板")
             .disabled(!store.isEditable || !store.isDirty)
         }
@@ -418,6 +424,7 @@ struct PromptTemplateManagerView: View {
             .padding(.horizontal, 12)
             .padding(.vertical, 7)
             .glassEffect(.regular, in: Capsule(style: .continuous))
+            .codexCapsuleButtonHitArea()
     }
 
     private func footerActionLabel(systemImage: String, title: String) -> some View {
@@ -426,6 +433,7 @@ struct PromptTemplateManagerView: View {
             .padding(.horizontal, 12)
             .padding(.vertical, 7)
             .glassEffect(.regular, in: Capsule(style: .continuous))
+            .codexCapsuleButtonHitArea()
     }
 
     private func editor(text: Binding<String>, minHeight: CGFloat) -> some View {

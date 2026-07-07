@@ -109,6 +109,7 @@ struct WorkbenchComposerView: View {
                     .frame(width: WorkbenchMetrics.composerControlHeight, height: WorkbenchMetrics.composerControlHeight)
             }
             .buttonStyle(.plain)
+            .codexCircularButtonHitArea()
             .disabled(snapshot.activeConversation == nil)
         case .send:
             Button(action: submitPrompt) {
@@ -117,6 +118,7 @@ struct WorkbenchComposerView: View {
                     .frame(width: WorkbenchMetrics.composerControlHeight, height: WorkbenchMetrics.composerControlHeight)
             }
             .buttonStyle(.plain)
+            .codexCircularButtonHitArea()
             .disabled(
                 !snapshot.canSubmitPrompt
                     || prompt.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
@@ -163,9 +165,9 @@ struct WorkbenchComposerView: View {
                 .padding(.trailing, activeProjectName == nil ? 10 : 6)
                 .frame(height: WorkbenchMetrics.composerControlHeight)
                 .fixedSize(horizontal: true, vertical: false)
-                .contentShape(Capsule(style: .continuous))
             }
             .buttonStyle(.plain)
+            .codexCapsuleButtonHitArea()
 
             if activeProjectName != nil {
                 workspaceClearButton
@@ -186,6 +188,7 @@ struct WorkbenchComposerView: View {
                 .frame(width: 24, height: WorkbenchMetrics.composerControlHeight)
         }
         .buttonStyle(.plain)
+        .codexRectangleButtonHitArea()
         .padding(.trailing, 6)
         .help(WorkbenchStrings.clearWorkspace)
         .accessibilityLabel(WorkbenchStrings.clearWorkspace)
