@@ -265,6 +265,75 @@ public final class WorkbenchStore: ObservableObject {
         refreshSnapshot()
     }
 
+    public func deleteArchive(_ archiveID: UUID) {
+        guard conversations.contains(where: { $0.id == archiveID && $0.isArchived }) else {
+            snapshot.archiveSearchResults.removeAll { $0.id == archiveID || $0.conversationID == archiveID }
+            if snapshot.openedArchiveConversation?.id == archiveID {
+                snapshot.openedArchiveConversation = nil
+            }
+            snapshot.isShowingArchiveSearch = true
+            refreshSnapshot()
+            return
+        }
+
+        do {
+            try archiveService.deleteArchive(archiveID)
+        } catch {
+            setError(title: "无法删除归档", error: error)
+            return
+        }
+
+        conversations.removeAll { $0.id == archiveID && $0.isArchived }
+        for index in workspaces.indices {
+            workspaces[index].conversationIDs.removeAll { $0 == archiveID }
+        }
+        snapshot.archiveSearchResults.removeAll { $0.id == archiveID || $0.conversationID == archiveID }
+        if snapshot.openedArchiveConversation?.id == archiveID {
+            snapshot.openedArchiveConversation = nil
+        }
+        snapshot.isShowingArchiveSearch = true
+        refreshSnapshot()
+    }
+
+    @discardableResult
+    public func restoreArchive(_ archiveID: UUID) -> Bool {
+        guard let conversationIndex = conversations.firstIndex(where: { $0.id == archiveID && $0.isArchived }) else {
+            snapshot.archiveSearchResults.removeAll { $0.id == archiveID || $0.conversationID == archiveID }
+            if snapshot.openedArchiveConversation?.id == archiveID {
+                snapshot.openedArchiveConversation = nil
+            }
+            snapshot.isShowingArchiveSearch = true
+            refreshSnapshot()
+            return false
+        }
+
+        do {
+            try archiveService.restoreArchive(archiveID)
+        } catch {
+            setError(title: "无法恢复归档", error: error)
+            return false
+        }
+
+        conversations[conversationIndex].isArchived = false
+        let restoredConversation = conversations[conversationIndex]
+        if let workspaceIndex = workspaces.firstIndex(where: { $0.path == restoredConversation.workspacePath }),
+           !workspaces[workspaceIndex].conversationIDs.contains(archiveID) {
+            workspaces[workspaceIndex].conversationIDs.append(archiveID)
+            workspaces[workspaceIndex].lastActivityAt = max(
+                workspaces[workspaceIndex].lastActivityAt,
+                restoredConversation.lastActivityAt
+            )
+        }
+
+        snapshot.archiveSearchResults.removeAll { $0.id == archiveID || $0.conversationID == archiveID }
+        if snapshot.openedArchiveConversation?.id == archiveID {
+            snapshot.openedArchiveConversation = nil
+        }
+        snapshot.isShowingArchiveSearch = true
+        refreshSnapshot()
+        return true
+    }
+
     public func showArchiveSearch() {
         searchArchives("")
     }

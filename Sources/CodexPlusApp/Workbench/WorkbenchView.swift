@@ -105,7 +105,10 @@ struct WorkbenchView: View {
             ),
             archive: ArchiveActions(
                 search: { store.searchArchives($0) },
-                open: { store.openArchive($0) }
+                open: { store.openArchive($0) },
+                delete: { store.deleteArchive($0) },
+                restore: { store.restoreArchive($0) },
+                jumpToRestored: { store.selectConversation($0) }
             )
         )
     }

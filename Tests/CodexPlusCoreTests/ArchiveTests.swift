@@ -118,11 +118,39 @@ func runArchiveTests() {
 
         try repository.archiveConversation(
             record: record,
-            archiveMarkdownPath: "/tmp/codex-plus-global-archives/\(conversation.id.uuidString.lowercased()).md",
+            archiveMarkdownPath: archiveMarkdownPath,
             archivedAt: Date(timeIntervalSince1970: 131)
         )
         let secondSearchResults = try repository.searchArchiveRecords(query: "git status")
         expect(secondSearchResults.count == 1, "atomic archive repository method upserts archive record")
+
+        try archiveService.restoreArchive(conversation.id)
+        expect(
+            !FileManager.default.fileExists(atPath: archiveMarkdownPath),
+            "archive restore removes markdown export"
+        )
+        let restoredSearchResults = try repository.searchArchiveRecords(query: "git status")
+        expect(restoredSearchResults.isEmpty, "archive restore removes archive index entry")
+        let restoredConversation = try repository.loadConversations().first { $0.id == conversation.id }
+        expect(restoredConversation?.isArchived == false, "archive restore marks conversation visible again")
+
+        _ = try archiveService.archive(conversation: conversation, project: project)
+
+        try archiveService.deleteArchive(conversation.id)
+        expect(
+            !FileManager.default.fileExists(atPath: archiveMarkdownPath),
+            "archive delete removes markdown export"
+        )
+        let searchResultsAfterDelete = try repository.searchArchiveRecords(query: "git status")
+        expect(
+            searchResultsAfterDelete.isEmpty,
+            "archive delete removes archive index entry"
+        )
+        let conversationsAfterDelete = try repository.loadConversations()
+        expect(
+            conversationsAfterDelete.allSatisfy { $0.id != conversation.id },
+            "archive delete removes archived conversation"
+        )
     } catch {
         expect(false, "archive repository test should not throw: \(error)")
     }

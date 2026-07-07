@@ -6,8 +6,12 @@ struct ArchivedConversationView: View {
     let openedConversation: ConversationSession?
     let actions: ArchiveActions
 
+    private let archiveSwipeActionSpacingAdjustment: CGFloat = -8
+
     @State private var query = ""
     @State private var expandedTechnicalGroupIDs = Set<UUID>()
+    @State private var pendingDeleteRecord: ConversationArchiveRecord?
+    @State private var restoreNotice: RestoreNotice?
 
     var body: some View {
         LiquidGlassContainer(cornerRadius: WorkbenchMetrics.conversationCornerRadius) {
@@ -20,6 +24,22 @@ struct ArchivedConversationView: View {
                 detailPane
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
+        }
+        .overlay {
+            if let restoreNotice {
+                restoreNoticeView(restoreNotice)
+            }
+        }
+        .alert("删除归档对话？", isPresented: deleteConfirmationBinding, presenting: pendingDeleteRecord) { record in
+            Button("取消", role: .cancel) {
+                pendingDeleteRecord = nil
+            }
+            Button("删除", role: .destructive) {
+                actions.delete(record.id)
+                pendingDeleteRecord = nil
+            }
+        } message: { record in
+            Text("删除后将从归档列表移除“\(record.title)”。此操作无法撤销。")
         }
     }
 
@@ -52,8 +72,27 @@ struct ArchivedConversationView: View {
                         }
                         .frame(maxWidth: .infinity, alignment: .leading)
                         .padding(.vertical, 4)
+                        .contentShape(Rectangle())
                     }
                     .buttonStyle(.plain)
+                    .swipeActions(edge: .trailing) {
+                        Button(role: .destructive) {
+                            pendingDeleteRecord = record
+                        } label: {
+                            Text("删除")
+                        }
+                        .padding(.leading, archiveSwipeActionSpacingAdjustment)
+
+                        Button {
+                            if actions.restore(record.id) {
+                                showRestoreNotice(for: record)
+                            }
+                        } label: {
+                            Text("恢复")
+                        }
+                        .tint(.blue)
+                        .padding(.trailing, archiveSwipeActionSpacingAdjustment)
+                    }
                 }
             }
             .listStyle(.sidebar)
@@ -132,6 +171,52 @@ struct ArchivedConversationView: View {
         .frame(maxWidth: .infinity, minHeight: 320)
     }
 
+    private func restoreNoticeView(_ notice: RestoreNotice) -> some View {
+        HStack(spacing: 4) {
+            Text("已经恢复，是否")
+                .foregroundStyle(.primary)
+
+            Button {
+                actions.jumpToRestored(notice.conversationID)
+                restoreNotice = nil
+            } label: {
+                Text("跳转对话")
+                    .foregroundStyle(Color.blue.opacity(0.72))
+            }
+            .buttonStyle(.plain)
+        }
+        .font(.system(size: 13, weight: .medium))
+        .padding(.horizontal, 14)
+        .padding(.vertical, 10)
+        .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+        .overlay(
+            RoundedRectangle(cornerRadius: 10, style: .continuous)
+                .stroke(.white.opacity(0.12), lineWidth: 1)
+        )
+        .shadow(color: .black.opacity(0.25), radius: 18, y: 8)
+    }
+
+    private var deleteConfirmationBinding: Binding<Bool> {
+        Binding(
+            get: { pendingDeleteRecord != nil },
+            set: { isPresented in
+                if !isPresented {
+                    pendingDeleteRecord = nil
+                }
+            }
+        )
+    }
+
+    private func showRestoreNotice(for record: ConversationArchiveRecord) {
+        let notice = RestoreNotice(conversationID: record.id)
+        restoreNotice = notice
+        DispatchQueue.main.asyncAfter(deadline: .now() + 5) {
+            if restoreNotice?.id == notice.id {
+                restoreNotice = nil
+            }
+        }
+    }
+
     @ViewBuilder
     private func timelineRow(for item: ConversationTimelineItem) -> some View {
         switch item {
@@ -162,5 +247,10 @@ struct ArchivedConversationView: View {
         } else {
             expandedTechnicalGroupIDs.insert(id)
         }
+    }
+
+    private struct RestoreNotice: Equatable, Identifiable {
+        let id = UUID()
+        let conversationID: UUID
     }
 }

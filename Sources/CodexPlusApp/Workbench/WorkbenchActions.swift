@@ -31,4 +31,7 @@ struct ComposerActions {
 struct ArchiveActions {
     let search: (String) -> Void
     let open: (UUID) -> Void
+    let delete: (UUID) -> Void
+    let restore: (UUID) -> Bool
+    let jumpToRestored: (UUID) -> Void
 }

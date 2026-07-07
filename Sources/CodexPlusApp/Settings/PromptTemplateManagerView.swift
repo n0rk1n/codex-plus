@@ -1,11 +1,15 @@
+import AppKit
 import CodexPlusCore
 import SwiftUI
 
 struct PromptTemplateManagerView: View {
     @ObservedObject private var store: PromptTemplateSettingsStore
-    @State private var isShowingDeleteConfirmation = false
     @State private var isShowingDirtyConfirmation = false
+    @State private var isShowingRenamePrompt = false
     @State private var pendingAction: PendingDirtyAction?
+    @State private var pendingDeleteTemplate: PromptTemplate?
+    @State private var pendingRenameTemplate: PromptTemplate?
+    @State private var renameText = ""
 
     init(repository: any PromptTemplateRepository) {
         _store = ObservedObject(wrappedValue: PromptTemplateSettingsStore(repository: repository))
@@ -28,13 +32,28 @@ struct PromptTemplateManagerView: View {
                 detailPane
             }
         }
-        .alert("删除提示词模板？", isPresented: $isShowingDeleteConfirmation) {
+        .alert("删除提示词模板？", isPresented: deleteConfirmationBinding, presenting: pendingDeleteTemplate) { template in
             Button("取消", role: .cancel) {}
             Button("删除", role: .destructive) {
-                store.deleteSelectedTemplate()
+                store.deleteTemplate(template.id)
+                pendingDeleteTemplate = nil
+            }
+        } message: { template in
+            Text("删除后将从提示词模板列表移除“\(template.name)”。系统内置提示词不会被删除。")
+        }
+        .alert("重命名提示词模板", isPresented: $isShowingRenamePrompt) {
+            TextField("名称", text: $renameText)
+            Button("取消", role: .cancel) {
+                clearRenamePrompt()
+            }
+            Button("保存") {
+                if let template = pendingRenameTemplate {
+                    store.renameTemplate(template.id, to: renameText)
+                }
+                clearRenamePrompt()
             }
         } message: {
-            Text("这个操作只会删除用户自定义提示词模板，系统内置提示词不会被删除。")
+            Text("输入新的模板名称。")
         }
         .alert("保存未完成的修改？", isPresented: $isShowingDirtyConfirmation) {
             Button("取消", role: .cancel) {
@@ -59,12 +78,6 @@ struct PromptTemplateManagerView: View {
                         .font(.system(size: 15, weight: .semibold))
 
                     Spacer()
-
-                    Button(action: { performOrConfirm(.reload) }) {
-                        sidebarIcon("arrow.clockwise")
-                    }
-                    .buttonStyle(.plain)
-                    .help("重新加载提示词模板")
 
                     Button(action: { performOrConfirm(.create) }) {
                         sidebarIcon("plus")
@@ -96,12 +109,13 @@ struct PromptTemplateManagerView: View {
     }
 
     private var sourceFilter: some View {
-        Picker("来源", selection: sourceFilterBinding) {
+        Picker("", selection: sourceFilterBinding) {
             Text("全部").tag(PromptTemplateSourceFilter.all)
             Text("系统内置").tag(PromptTemplateSourceFilter.source(.systemBuiltIn))
             Text("用户自定义").tag(PromptTemplateSourceFilter.source(.userCustom))
         }
         .pickerStyle(.segmented)
+        .labelsHidden()
     }
 
     private var typeFilter: some View {
@@ -130,12 +144,12 @@ struct PromptTemplateManagerView: View {
                     .font(.system(size: 13, weight: .semibold))
                     .lineLimit(1)
 
-                Text("类型  \(template.type.displayName)")
+                Text(template.type.displayName)
                     .font(.caption2)
                     .foregroundStyle(.secondary)
                     .lineLimit(1)
 
-                Text("来源  \(template.source.displayName)")
+                Text(template.source.displayName)
                     .font(.caption2)
                     .foregroundStyle(template.source == .systemBuiltIn ? .green : .secondary)
                     .lineLimit(1)
@@ -146,6 +160,22 @@ struct PromptTemplateManagerView: View {
         }
         .buttonStyle(.plain)
         .help(template.name)
+        .swipeActions(edge: .trailing) {
+            if template.source == .userCustom {
+                Button(role: .destructive) {
+                    pendingDeleteTemplate = template
+                } label: {
+                    Text("删除")
+                }
+
+                Button {
+                    performOrConfirm(.rename(template.id))
+                } label: {
+                    Text("重命名")
+                }
+                .tint(.blue)
+            }
+        }
     }
 
     private func rowBackground(isSelected: Bool) -> some View {
@@ -194,7 +224,8 @@ struct PromptTemplateManagerView: View {
             Button(action: { performOrConfirm(.copy) }) {
                 headerActionLabel(
                     systemImage: "doc.on.doc",
-                    title: store.isEditable ? "复制" : "复制为用户模板"
+                    title: store.isEditable ? "复制" : "复制为用户模板",
+                    foregroundColor: .blue
                 )
             }
             .buttonStyle(.plain)
@@ -202,9 +233,9 @@ struct PromptTemplateManagerView: View {
 
             if store.isEditable {
                 Button(role: .destructive) {
-                    isShowingDeleteConfirmation = true
+                    pendingDeleteTemplate = store.selectedTemplate
                 } label: {
-                    headerActionLabel(systemImage: "trash", title: "删除")
+                    headerActionLabel(systemImage: "trash", title: "删除", foregroundColor: .red)
                 }
                 .buttonStyle(.plain)
                 .help("删除当前用户自定义模板")
@@ -227,7 +258,7 @@ struct PromptTemplateManagerView: View {
                 }
 
                 labeledField("类型 *") {
-                    Picker("类型", selection: draftTypeBinding) {
+                    Picker("", selection: draftTypeBinding) {
                         Text("请选择类型")
                             .tag(Optional<PromptTemplateType>.none)
 
@@ -237,6 +268,7 @@ struct PromptTemplateManagerView: View {
                         }
                     }
                     .pickerStyle(.menu)
+                    .labelsHidden()
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .disabled(!store.isEditable)
                 }
@@ -356,9 +388,10 @@ struct PromptTemplateManagerView: View {
             .glassEffect(.regular, in: Circle())
     }
 
-    private func headerActionLabel(systemImage: String, title: String) -> some View {
+    private func headerActionLabel(systemImage: String, title: String, foregroundColor: Color = .primary) -> some View {
         Label(title, systemImage: systemImage)
             .font(.system(size: 12, weight: .semibold))
+            .foregroundStyle(foregroundColor)
             .padding(.horizontal, 12)
             .padding(.vertical, 7)
             .glassEffect(.regular, in: Capsule(style: .continuous))
@@ -373,10 +406,8 @@ struct PromptTemplateManagerView: View {
     }
 
     private func editor(text: Binding<String>, minHeight: CGFloat) -> some View {
-        TextEditor(text: text)
-            .scrollContentBackground(.hidden)
+        PromptTemplateMultilineEditor(text: text)
             .frame(minHeight: minHeight)
-            .padding(8)
             .background(
                 RoundedRectangle(cornerRadius: 12, style: .continuous)
                     .fill(Color.white.opacity(0.05))
@@ -410,6 +441,17 @@ struct PromptTemplateManagerView: View {
         Binding(
             get: { store.sourceFilter },
             set: { store.sourceFilter = $0 }
+        )
+    }
+
+    private var deleteConfirmationBinding: Binding<Bool> {
+        Binding(
+            get: { pendingDeleteTemplate != nil },
+            set: { isPresented in
+                if !isPresented {
+                    pendingDeleteTemplate = nil
+                }
+            }
         )
     }
 
@@ -480,21 +522,106 @@ struct PromptTemplateManagerView: View {
 
     private func perform(_ action: PendingDirtyAction) {
         switch action {
-        case .reload:
-            store.reload()
         case .create:
             store.createTemplate()
         case .copy:
             store.copySelectedTemplate()
         case let .select(id):
             store.select(id)
+        case let .rename(id):
+            beginRename(id)
         }
+    }
+
+    private func beginRename(_ id: UUID) {
+        guard let template = store.templates.first(where: { $0.id == id }), template.source == .userCustom else {
+            return
+        }
+
+        pendingRenameTemplate = template
+        renameText = template.name
+        isShowingRenamePrompt = true
+    }
+
+    private func clearRenamePrompt() {
+        pendingRenameTemplate = nil
+        renameText = ""
     }
 }
 
 private enum PendingDirtyAction: Equatable {
-    case reload
     case create
     case copy
     case select(UUID)
+    case rename(UUID)
+}
+
+private struct PromptTemplateMultilineEditor: NSViewRepresentable {
+    @Binding var text: String
+    @Environment(\.isEnabled) private var isEnabled
+
+    func makeCoordinator() -> Coordinator {
+        Coordinator(text: $text)
+    }
+
+    func makeNSView(context: Context) -> NSScrollView {
+        let scrollView = NSTextView.scrollableTextView()
+        scrollView.drawsBackground = false
+        scrollView.borderType = .noBorder
+        scrollView.hasVerticalScroller = true
+        scrollView.autohidesScrollers = true
+
+        guard let textView = scrollView.documentView as? NSTextView else {
+            return scrollView
+        }
+
+        textView.delegate = context.coordinator
+        textView.string = text
+        textView.isRichText = false
+        textView.allowsUndo = true
+        textView.drawsBackground = false
+        textView.backgroundColor = .clear
+        textView.font = .systemFont(ofSize: 13)
+        textView.textColor = .labelColor
+        textView.insertionPointColor = .labelColor
+        textView.textContainerInset = NSSize(width: 12, height: 12)
+        textView.textContainer?.lineFragmentPadding = 0
+        textView.isHorizontallyResizable = false
+        textView.isVerticallyResizable = true
+        textView.autoresizingMask = [.width]
+        textView.textContainer?.widthTracksTextView = true
+
+        return scrollView
+    }
+
+    func updateNSView(_ scrollView: NSScrollView, context: Context) {
+        context.coordinator.text = $text
+
+        guard let textView = scrollView.documentView as? NSTextView else {
+            return
+        }
+
+        if textView.string != text {
+            textView.string = text
+        }
+
+        textView.isEditable = isEnabled
+        textView.isSelectable = true
+    }
+
+    final class Coordinator: NSObject, NSTextViewDelegate {
+        var text: Binding<String>
+
+        init(text: Binding<String>) {
+            self.text = text
+        }
+
+        func textDidChange(_ notification: Notification) {
+            guard let textView = notification.object as? NSTextView else {
+                return
+            }
+
+            text.wrappedValue = textView.string
+        }
+    }
 }

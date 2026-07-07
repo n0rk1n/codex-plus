@@ -3,6 +3,14 @@ import Foundation
 public protocol CodexPlusRepository: ProjectRepository, ConversationRepository, ArchiveRepository, MemoryRepository, AttachmentRepository, PromptTemplateRepository, Sendable {}
 
 public extension CodexPlusRepository {
+    func deleteArchivedConversation(_ id: UUID) throws -> String? {
+        throw UnsupportedRepositoryOperation()
+    }
+
+    func restoreArchivedConversation(_ id: UUID) throws -> String? {
+        throw UnsupportedRepositoryOperation()
+    }
+
     func saveMemoryCard(_ card: MemoryCard) throws {
         throw UnsupportedRepositoryOperation()
     }
@@ -462,6 +470,122 @@ public final class SQLiteCodexPlusRepository: CodexPlusRepository, @unchecked Se
             try? database.execute("ROLLBACK TRANSACTION;")
             throw error
         }
+    }
+
+    public func deleteArchivedConversation(_ id: UUID) throws -> String? {
+        let conversationID = id.uuidString.lowercased()
+        var archiveMarkdownPath: String?
+
+        try database.execute("BEGIN IMMEDIATE TRANSACTION;")
+
+        do {
+            let rows = try database.query(
+                """
+                SELECT archive_markdown_path
+                FROM conversations
+                WHERE id = ?
+                  AND is_archived = 1
+                LIMIT 1;
+                """,
+                [.text(conversationID)]
+            )
+
+            guard let row = rows.first else {
+                try database.execute("COMMIT TRANSACTION;")
+                return nil
+            }
+
+            if case let .text(path)? = row["archive_markdown_path"], !path.isEmpty {
+                archiveMarkdownPath = path
+            }
+
+            try database.execute(
+                """
+                DELETE FROM archive_index
+                WHERE id = ?
+                   OR conversation_id = ?;
+                """,
+                [.text(conversationID), .text(conversationID)]
+            )
+            try database.execute(
+                """
+                DELETE FROM conversation_events
+                WHERE conversation_id = ?;
+                """,
+                [.text(conversationID)]
+            )
+            try database.execute(
+                """
+                DELETE FROM conversations
+                WHERE id = ?
+                  AND is_archived = 1;
+                """,
+                [.text(conversationID)]
+            )
+
+            try database.execute("COMMIT TRANSACTION;")
+        } catch {
+            try? database.execute("ROLLBACK TRANSACTION;")
+            throw error
+        }
+
+        return archiveMarkdownPath
+    }
+
+    public func restoreArchivedConversation(_ id: UUID) throws -> String? {
+        let conversationID = id.uuidString.lowercased()
+        var archiveMarkdownPath: String?
+
+        try database.execute("BEGIN IMMEDIATE TRANSACTION;")
+
+        do {
+            let rows = try database.query(
+                """
+                SELECT archive_markdown_path
+                FROM conversations
+                WHERE id = ?
+                  AND is_archived = 1
+                LIMIT 1;
+                """,
+                [.text(conversationID)]
+            )
+
+            guard let row = rows.first else {
+                try database.execute("COMMIT TRANSACTION;")
+                return nil
+            }
+
+            if case let .text(path)? = row["archive_markdown_path"], !path.isEmpty {
+                archiveMarkdownPath = path
+            }
+
+            try database.execute(
+                """
+                DELETE FROM archive_index
+                WHERE id = ?
+                   OR conversation_id = ?;
+                """,
+                [.text(conversationID), .text(conversationID)]
+            )
+            try database.execute(
+                """
+                UPDATE conversations
+                SET is_archived = 0,
+                    archived_at = NULL,
+                    archive_markdown_path = NULL
+                WHERE id = ?
+                  AND is_archived = 1;
+                """,
+                [.text(conversationID)]
+            )
+
+            try database.execute("COMMIT TRANSACTION;")
+        } catch {
+            try? database.execute("ROLLBACK TRANSACTION;")
+            throw error
+        }
+
+        return archiveMarkdownPath
     }
 
     public func saveMemoryCard(_ card: MemoryCard) throws {

@@ -87,6 +87,20 @@ public struct ArchiveSearchService: Sendable {
         try repository.searchArchiveRecords(query: query)
     }
 
+    public func deleteArchive(_ conversationID: UUID) throws {
+        let archiveMarkdownPath = try repository.deleteArchivedConversation(conversationID)
+        if let archiveMarkdownPath {
+            try? FileManager.default.removeItem(atPath: archiveMarkdownPath)
+        }
+    }
+
+    public func restoreArchive(_ conversationID: UUID) throws {
+        let archiveMarkdownPath = try repository.restoreArchivedConversation(conversationID)
+        if let archiveMarkdownPath {
+            try? FileManager.default.removeItem(atPath: archiveMarkdownPath)
+        }
+    }
+
     public static func indexRecord(
         conversation: ConversationSession,
         projectID: UUID,

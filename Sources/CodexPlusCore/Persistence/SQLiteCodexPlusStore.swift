@@ -47,6 +47,14 @@ public final class SQLiteCodexPlusStore: CodexPlusRepository, @unchecked Sendabl
         )
     }
 
+    public func deleteArchivedConversation(_ id: UUID) throws -> String? {
+        try repository.deleteArchivedConversation(id)
+    }
+
+    public func restoreArchivedConversation(_ id: UUID) throws -> String? {
+        try repository.restoreArchivedConversation(id)
+    }
+
     public func saveMemoryCard(_ card: MemoryCard) throws {
         try repository.saveMemoryCard(card)
     }

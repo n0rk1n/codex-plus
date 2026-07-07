@@ -30,8 +30,12 @@ final class WindowCoordinator: NSObject, NSWindowDelegate {
 
     private lazy var settingsPanelController = SettingsPanelController(
         panelFactory: panelFactory,
+        screenProvider: screenProvider,
         panelDelegate: self,
-        repository: promptTemplateRepository
+        repository: promptTemplateRepository,
+        onDismiss: { [weak self] in
+            self?.showWorkbenchAfterSettingsDismissal()
+        }
     )
 
     private lazy var workbenchLauncherPanelController = WorkbenchLauncherPanelController(
@@ -69,7 +73,13 @@ final class WindowCoordinator: NSObject, NSWindowDelegate {
     }
 
     private func showSettings() {
+        workbenchPanelController.hide(showLauncher: false)
+        workbenchLauncherPanelController.hide()
         settingsPanelController.show()
+    }
+
+    private func showWorkbenchAfterSettingsDismissal() {
+        workbenchPanelController.show()
     }
 
     func windowDidMove(_ notification: Notification) {

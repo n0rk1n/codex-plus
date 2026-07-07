@@ -1938,4 +1938,92 @@ func runLegacyMainActorTests() {
         expect(false, "timeline builder creates second technical group")
     }
 
+    let archiveViewPath = FileManager.default.currentDirectoryPath
+        + "/Sources/CodexPlusApp/Workbench/ArchivedConversationView.swift"
+    let archiveViewSource = (try? String(contentsOfFile: archiveViewPath, encoding: .utf8)) ?? ""
+    if let actionRange = archiveViewSource.range(of: "actions.open(record.id)"),
+       let buttonEndRange = archiveViewSource[actionRange.upperBound...].range(of: ".buttonStyle(.plain)") {
+        let rowButtonSource = archiveViewSource[actionRange.lowerBound..<buttonEndRange.upperBound]
+        expect(
+            rowButtonSource.contains(".contentShape(Rectangle())"),
+            "archived conversation result rows declare full-row hit shape"
+        )
+        expect(
+            archiveViewSource.contains(".swipeActions(edge: .trailing)"),
+            "archived conversation result rows expose trailing swipe actions"
+        )
+        expect(
+            archiveViewSource.contains(".alert(\"删除归档对话？\""),
+            "archived conversation delete action asks for confirmation"
+        )
+        expect(
+            archiveViewSource.contains("actions.delete(record.id)"),
+            "archived conversation delete confirmation calls archive delete action"
+        )
+        expect(
+            archiveViewSource.contains("actions.restore(record.id)"),
+            "archived conversation rows expose restore action"
+        )
+        if let swipeRange = archiveViewSource.range(of: ".swipeActions(edge: .trailing)"),
+           let deleteActionRange = archiveViewSource[swipeRange.upperBound...].range(of: "pendingDeleteRecord = record"),
+           let restoreActionRange = archiveViewSource[swipeRange.upperBound...].range(of: "actions.restore(record.id)") {
+            expect(
+                deleteActionRange.lowerBound < restoreActionRange.lowerBound,
+                "archived conversation swipe actions declare delete before restore so the visible pills swap positions"
+            )
+        } else {
+            expect(false, "archived conversation swipe action source is discoverable")
+        }
+        expect(
+            archiveViewSource.contains("Text(\"恢复\")"),
+            "archived conversation restore swipe action uses a compact text-only pill"
+        )
+        expect(
+            archiveViewSource.contains("Text(\"删除\")"),
+            "archived conversation delete swipe action uses a compact text-only pill"
+        )
+        expect(
+            archiveViewSource.contains("archiveSwipeActionSpacingAdjustment"),
+            "archived conversation swipe action pills tighten their inter-button spacing"
+        )
+        expect(
+            archiveViewSource.contains("已经恢复，是否"),
+            "archived conversation restore shows recovered prompt"
+        )
+        expect(
+            archiveViewSource.contains("跳转对话"),
+            "archived conversation restore prompt includes jump link text"
+        )
+        expect(
+            archiveViewSource.contains("Color.blue.opacity"),
+            "archived conversation restore jump text is light blue"
+        )
+        expect(
+            archiveViewSource.contains(".now() + 5"),
+            "archived conversation restore prompt auto-dismisses after five seconds"
+        )
+    } else {
+        expect(false, "archived conversation result row source is discoverable")
+    }
+
+    let topProjectStripPath = FileManager.default.currentDirectoryPath
+        + "/Sources/CodexPlusApp/Workbench/TopProjectStripView.swift"
+    let topProjectStripSource = (try? String(contentsOfFile: topProjectStripPath, encoding: .utf8)) ?? ""
+    if let actionRange = topProjectStripSource.range(of: "actions.selectConversation(conversationID)"),
+       let buttonEndRange = topProjectStripSource[actionRange.upperBound...].range(of: ".buttonStyle(.plain)") {
+        let projectCardButtonSource = topProjectStripSource[actionRange.lowerBound..<buttonEndRange.upperBound]
+        expect(
+            projectCardButtonSource.contains(
+                ".contentShape(RoundedRectangle(cornerRadius: WorkbenchMetrics.projectCardCornerRadius, style: .continuous))"
+            ),
+            "top project cards declare a rounded full-card hit shape"
+        )
+        expect(
+            !projectCardButtonSource.contains(".opacity(card.isActive ? 1 : 0.82)"),
+            "top project cards keep text at full opacity when a new conversation draft is open"
+        )
+    } else {
+        expect(false, "top project card button source is discoverable")
+    }
+
 }

@@ -164,15 +164,43 @@ final class PromptTemplateSettingsStore: ObservableObject {
     }
 
     func deleteSelectedTemplate() {
-        guard let template = selectedTemplate, template.source == .userCustom else {
+        guard let template = selectedTemplate else {
             return
         }
 
+        deleteTemplate(template.id)
+    }
+
+    func deleteTemplate(_ id: UUID) {
+        guard let template = templates.first(where: { $0.id == id }), template.source == .userCustom else {
+            return
+        }
+
+        let preferredSelectionID = selectedTemplateID == id ? nil : selectedTemplateID
         do {
-            try repository.deletePromptTemplate(template.id)
-            loadTemplates(preferredSelectionID: nil)
+            try repository.deletePromptTemplate(id)
+            loadTemplates(preferredSelectionID: preferredSelectionID)
         } catch {
             errorMessage = "无法删除提示词模板：\(error)"
+        }
+    }
+
+    func renameTemplate(_ id: UUID, to name: String) {
+        guard let template = templates.first(where: { $0.id == id }), template.source == .userCustom else {
+            return
+        }
+
+        var draft = PromptTemplateDraft(template: template)
+        draft.name = name
+
+        do {
+            let renamedTemplate = try PromptTemplateLibrary.userTemplate(from: draft)
+            try repository.savePromptTemplate(renamedTemplate)
+            loadTemplates(preferredSelectionID: selectedTemplateID)
+        } catch let validation as PromptTemplateValidationError {
+            validationError = validation
+        } catch {
+            errorMessage = "无法重命名提示词模板：\(error)"
         }
     }
 

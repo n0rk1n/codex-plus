@@ -70,11 +70,11 @@ final class WorkbenchPanelController {
         onShow()
     }
 
-    func hide() {
+    func hide(showLauncher: Bool = true) {
         let wasVisible = panel?.isVisible == true
         panel?.orderOut(nil)
         dismissMonitors.removeAll()
-        if wasVisible {
+        if wasVisible && showLauncher {
             onHide()
         }
     }

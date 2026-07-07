@@ -7,6 +7,7 @@ func runWorkbenchStoreTests() {
     runWorkbenchDraftWorkspaceSelectionTests()
     runWorkbenchSmokeTests()
     runArchiveLifecycleTests()
+    runArchiveRestoreTests()
     runArchiveRestartConsistencyTests()
     runRunningArchiveConfirmationTests()
     runRunningStopPersistenceFailureTests()
@@ -216,8 +217,73 @@ private func runWorkbenchSmokeTests() {
 }
 
 @MainActor
+private func runArchiveRestoreTests() {
+    withSQLiteRepositoryTest("archive restore test") { dbURL, repository in
+        let engine = ManualExecutionEngine()
+        let store = WorkbenchStore(repository: repository, engine: engine)
+
+        store.createProject(path: "/tmp/codex-plus-restore", displayName: "codex-plus-restore")
+        store.startConversation(prompt: "start restore", workspacePath: "/tmp/codex-plus-restore")
+        guard let conversationID = store.snapshot.activeConversation?.id else {
+            expect(false, "archive restore test creates an active conversation")
+            return
+        }
+
+        engine.finish(
+            conversationID: conversationID,
+            result: CodexRunResult(exitCode: 0, stderr: "")
+        )
+        drainMainRunLoop()
+        _ = store.archiveConversation(conversationID)
+
+        store.showArchiveSearch()
+        store.openArchive(conversationID)
+        let restored = store.restoreArchive(conversationID)
+        expect(restored, "archived conversation restores successfully")
+        expect(store.snapshot.isShowingArchiveSearch, "restoring archive keeps archive page visible")
+        expect(store.snapshot.openedArchiveConversation == nil, "restoring opened archive clears archive detail")
+        expect(
+            store.snapshot.projectCards.contains(where: { $0.conversationID == conversationID }),
+            "restored archive returns to visible project cards"
+        )
+        expect(
+            !store.snapshot.archiveSearchResults.contains(where: { $0.conversationID == conversationID }),
+            "restored archive is removed from current archive results"
+        )
+
+        store.searchArchives("start restore")
+        expect(
+            !store.snapshot.archiveSearchResults.contains(where: { $0.conversationID == conversationID }),
+            "restored archive is not searchable as archived"
+        )
+        expect(store.snapshot.isShowingArchiveSearch, "searching archives after restore still leaves the archive page visible")
+
+        store.selectConversation(conversationID)
+        expect(!store.snapshot.isShowingArchiveSearch, "jumping to restored conversation exits archive page")
+        expect(store.snapshot.activeConversation?.id == conversationID, "jumping selects the restored conversation")
+
+        do {
+            let database = try SQLiteDatabase(path: dbURL.path)
+            let restartedRepository = SQLiteCodexPlusRepository(database: database)
+            let restartedStore = WorkbenchStore(repository: restartedRepository, engine: ManualExecutionEngine())
+            expect(
+                restartedStore.snapshot.projectCards.contains(where: { $0.conversationID == conversationID }),
+                "restored archive stays visible after restart"
+            )
+            restartedStore.searchArchives("start restore")
+            expect(
+                !restartedStore.snapshot.archiveSearchResults.contains(where: { $0.conversationID == conversationID }),
+                "restored archive stays out of archive search after restart"
+            )
+        } catch {
+            expect(false, "archive restore restart check should not throw: \(error)")
+        }
+    }
+}
+
+@MainActor
 private func runArchiveLifecycleTests() {
-    withSQLiteRepositoryTest("archive lifecycle test") { _, repository in
+    withSQLiteRepositoryTest("archive lifecycle test") { dbURL, repository in
         let engine = ManualExecutionEngine()
         let store = WorkbenchStore(repository: repository, engine: engine)
 
@@ -269,6 +335,33 @@ private func runArchiveLifecycleTests() {
             store.snapshot.activeConversation == nil,
             "opening an archived conversation does not restore it to active conversations"
         )
+
+        store.deleteArchive(conversationID)
+        expect(store.snapshot.isShowingArchiveSearch, "deleting an archive keeps the archive page visible")
+        expect(store.snapshot.openedArchiveConversation == nil, "deleting the opened archive clears the detail pane")
+        expect(
+            !store.snapshot.archiveSearchResults.contains(where: { $0.conversationID == conversationID }),
+            "deleted archive is removed from current archive results"
+        )
+
+        store.searchArchives("start")
+        expect(
+            !store.snapshot.archiveSearchResults.contains(where: { $0.conversationID == conversationID }),
+            "deleted archive is not searchable"
+        )
+
+        do {
+            let database = try SQLiteDatabase(path: dbURL.path)
+            let restartedRepository = SQLiteCodexPlusRepository(database: database)
+            let restartedStore = WorkbenchStore(repository: restartedRepository, engine: ManualExecutionEngine())
+            restartedStore.searchArchives("start")
+            expect(
+                !restartedStore.snapshot.archiveSearchResults.contains(where: { $0.conversationID == conversationID }),
+                "deleted archive does not reappear after restart"
+            )
+        } catch {
+            expect(false, "archive deletion restart check should not throw: \(error)")
+        }
 
         store.returnToConversationPage()
         expect(!store.snapshot.isShowingArchiveSearch, "return to conversation exits the archive page")

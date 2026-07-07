@@ -82,11 +82,13 @@ struct TopProjectStripView: View {
             Image(systemName: systemName)
                 .font(.system(size: 13, weight: .semibold))
                 .frame(width: 32, height: 32)
+                .contentShape(Circle())
         }
         .buttonStyle(.plain)
         .glassEffect(.regular, in: Circle())
         .compositingGroup()
         .mask(Circle())
+        .contentShape(Circle())
         .help(help)
         .accessibilityLabel(accessibilityLabel)
     }
@@ -167,7 +169,7 @@ struct TopProjectStripView: View {
                 .padding(.horizontal, 14)
                 .padding(.vertical, 12)
                 .frame(width: 280, alignment: .leading)
-                .opacity(card.isActive ? 1 : 0.82)
+                .contentShape(RoundedRectangle(cornerRadius: WorkbenchMetrics.projectCardCornerRadius, style: .continuous))
             }
         }
         .buttonStyle(.plain)
