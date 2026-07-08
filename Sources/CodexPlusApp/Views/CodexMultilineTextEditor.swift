@@ -2,7 +2,25 @@ import AppKit
 import CodexPlusCore
 import SwiftUI
 
-struct CodexMultilineTextEditor: NSViewRepresentable {
+struct CodexMultilineTextEditor: View {
+    let rule: CodexMultilineTextRule
+    @Binding var text: String
+    var isDisabled: Bool = false
+    var help: String? = nil
+    var accessibilityLabel: String? = nil
+
+    var body: some View {
+        CodexMultilineTextEditorRepresentable(
+            rule: rule,
+            text: $text
+        )
+        .codexOptionalHelp(help)
+        .codexOptionalAccessibilityLabel(accessibilityLabel)
+        .disabled(isDisabled)
+    }
+}
+
+private struct CodexMultilineTextEditorRepresentable: NSViewRepresentable {
     let rule: CodexMultilineTextRule
     @Binding var text: String
     @Environment(\.isEnabled) private var isEnabled

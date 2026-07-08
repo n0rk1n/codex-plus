@@ -4,6 +4,9 @@ struct CodexPicker<SelectionValue: Hashable, Content: View>: View {
     let rule: CodexPickerRule
     let title: String
     @Binding var selection: SelectionValue
+    var isDisabled: Bool = false
+    var help: String? = nil
+    var accessibilityLabel: String? = nil
     var readOnlyNotice: CodexReadOnlyNoticeHandle?
     @ViewBuilder let content: () -> Content
 
@@ -13,6 +16,9 @@ struct CodexPicker<SelectionValue: Hashable, Content: View>: View {
         }
         .modifier(CodexPickerRuleModifier(rule: rule))
         .codexReadOnlyControlOverlay(readOnlyNotice)
+        .codexOptionalHelp(help)
+        .codexOptionalAccessibilityLabel(accessibilityLabel)
+        .disabled(isDisabled)
     }
 }
 

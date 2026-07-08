@@ -5,8 +5,11 @@ struct CodexMultilineTextField: View {
     let rule: CodexMultilineTextRule
     let placeholder: String
     @Binding var text: String
+    var isDisabled: Bool = false
     var foregroundColor: Color = .primary
     var placeholderColor: Color = .secondary
+    var help: String? = nil
+    var accessibilityLabel: String? = nil
     var readOnlyNotice: CodexReadOnlyNoticeHandle?
     var onSubmit: () -> Void = {}
 
@@ -21,6 +24,9 @@ struct CodexMultilineTextField: View {
         .lineLimit(lineLimit)
         .onSubmit(onSubmit)
         .codexReadOnlyControlOverlay(readOnlyNotice)
+        .codexOptionalHelp(help)
+        .codexOptionalAccessibilityLabel(accessibilityLabel)
+        .disabled(isDisabled)
     }
 
     private var fontSize: CGFloat {

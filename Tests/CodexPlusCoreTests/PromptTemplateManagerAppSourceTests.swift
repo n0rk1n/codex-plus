@@ -4,6 +4,7 @@ func runPromptTemplateManagerAppSourceTests() {
     let root = URL(fileURLWithPath: FileManager.default.currentDirectoryPath, isDirectory: true)
     assertControlRuleFilesExist(root: root)
     assertInitialRuleNamesExist(root: root)
+    assertControlWrapperMetadataRules(root: root)
     assertAppControlsUseRules(root: root)
     let managerView = readSource(
         root.appendingPathComponent("Sources/CodexPlusApp/Settings/PromptTemplateManagerView.swift")
@@ -238,6 +239,76 @@ private func assertInitialRuleNamesExist(root: URL) {
     for ruleName in requiredRuleNames {
         expect(rules.contains(ruleName), "control rules define \(ruleName)")
     }
+
+    expect(
+        rules.contains("系统内置提示词为只读内容。如需修改，请先创建用户自定义提示词。"),
+        "control rules keep the exact read-only notice copy"
+    )
+}
+
+private func assertControlWrapperMetadataRules(root: URL) {
+    let button = readSource(root.appendingPathComponent("Sources/CodexPlusApp/Views/CodexButton.swift"))
+    let textField = readSource(root.appendingPathComponent("Sources/CodexPlusApp/Views/CodexTextField.swift"))
+    let multilineTextField = readSource(
+        root.appendingPathComponent("Sources/CodexPlusApp/Views/CodexMultilineTextField.swift")
+    )
+    let multilineTextEditor = readSource(
+        root.appendingPathComponent("Sources/CodexPlusApp/Views/CodexMultilineTextEditor.swift")
+    )
+    let picker = readSource(root.appendingPathComponent("Sources/CodexPlusApp/Views/CodexPicker.swift"))
+    let toggleSelector = readSource(root.appendingPathComponent("Sources/CodexPlusApp/Views/CodexToggleSelector.swift"))
+
+    expect(
+        button.contains("var isDisabled: Bool = false") &&
+            button.contains(".disabled(isDisabled)"),
+        "codex button owns disabled state"
+    )
+    expect(
+        textField.contains("var isDisabled: Bool = false") &&
+            textField.contains("var help: String?") &&
+            textField.contains("var accessibilityLabel: String?") &&
+            textField.contains(".disabled(isDisabled)") &&
+            textField.contains(".codexOptionalHelp(help)") &&
+            textField.contains(".codexOptionalAccessibilityLabel(accessibilityLabel)"),
+        "codex text field owns disabled, help, and accessibility metadata"
+    )
+    expect(
+        multilineTextField.contains("var isDisabled: Bool = false") &&
+            multilineTextField.contains("var help: String?") &&
+            multilineTextField.contains("var accessibilityLabel: String?") &&
+            multilineTextField.contains(".disabled(isDisabled)") &&
+            multilineTextField.contains(".codexOptionalHelp(help)") &&
+            multilineTextField.contains(".codexOptionalAccessibilityLabel(accessibilityLabel)"),
+        "codex multiline text field owns disabled, help, and accessibility metadata"
+    )
+    expect(
+        multilineTextEditor.contains("struct CodexMultilineTextEditor: View") &&
+            multilineTextEditor.contains("var isDisabled: Bool = false") &&
+            multilineTextEditor.contains("var help: String?") &&
+            multilineTextEditor.contains("var accessibilityLabel: String?") &&
+            multilineTextEditor.contains(".disabled(isDisabled)") &&
+            multilineTextEditor.contains(".codexOptionalHelp(help)") &&
+            multilineTextEditor.contains(".codexOptionalAccessibilityLabel(accessibilityLabel)") &&
+            multilineTextEditor.contains("private struct CodexMultilineTextEditorRepresentable: NSViewRepresentable"),
+        "codex multiline text editor wraps the representable and owns metadata"
+    )
+    expect(
+        picker.contains("var isDisabled: Bool = false") &&
+            picker.contains("var help: String?") &&
+            picker.contains("var accessibilityLabel: String?") &&
+            picker.contains(".disabled(isDisabled)") &&
+            picker.contains(".codexOptionalHelp(help)") &&
+            picker.contains(".codexOptionalAccessibilityLabel(accessibilityLabel)"),
+        "codex picker owns disabled, help, and accessibility metadata"
+    )
+    expect(
+        toggleSelector.contains("var isDisabled: Bool = false") &&
+            toggleSelector.contains("var accessibilityLabel: String?") &&
+            toggleSelector.contains(".disabled(isDisabled)") &&
+            toggleSelector.contains(".codexOptionalAccessibilityLabel(accessibilityLabel)") &&
+            toggleSelector.contains(".codexOptionalHelp(help)"),
+        "codex toggle selector owns disabled and accessibility metadata"
+    )
 }
 
 private func swiftSourceFiles(under root: URL) -> [URL] {

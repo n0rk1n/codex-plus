@@ -11,6 +11,7 @@ struct CodexReadOnlyNoticeHost<Content: View>: View {
     @ViewBuilder let content: (CodexReadOnlyNoticeHandle) -> Content
 
     @State private var isShowingNotice = false
+    @State private var noticeID = UUID()
 
     var body: some View {
         ZStack {
@@ -40,11 +41,16 @@ struct CodexReadOnlyNoticeHost<Content: View>: View {
             return
         }
 
+        let currentID = UUID()
+        noticeID = currentID
         withAnimation(.easeOut(duration: 0.16)) {
             isShowingNotice = true
         }
 
         DispatchQueue.main.asyncAfter(deadline: .now() + 3) {
+            guard noticeID == currentID else {
+                return
+            }
             withAnimation(.easeIn(duration: 0.2)) {
                 isShowingNotice = false
             }

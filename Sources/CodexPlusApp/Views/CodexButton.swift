@@ -3,8 +3,9 @@ import SwiftUI
 struct CodexButton<Label: View>: View {
     let rule: CodexButtonRule
     var role: ButtonRole?
-    var help: String?
-    var accessibilityLabel: String?
+    var isDisabled: Bool = false
+    var help: String? = nil
+    var accessibilityLabel: String? = nil
     let action: () -> Void
     @ViewBuilder let label: () -> Label
 
@@ -15,6 +16,7 @@ struct CodexButton<Label: View>: View {
         .modifier(CodexButtonRuleModifier(rule: rule))
         .codexOptionalHelp(help)
         .codexOptionalAccessibilityLabel(accessibilityLabel)
+        .disabled(isDisabled)
     }
 }
 

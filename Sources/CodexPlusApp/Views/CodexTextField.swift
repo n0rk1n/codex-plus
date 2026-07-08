@@ -4,6 +4,9 @@ struct CodexTextField: View {
     let rule: CodexTextFieldRule
     let placeholder: String
     @Binding var text: String
+    var isDisabled: Bool = false
+    var help: String? = nil
+    var accessibilityLabel: String? = nil
     var readOnlyNotice: CodexReadOnlyNoticeHandle?
     var onSubmit: () -> Void = {}
 
@@ -12,6 +15,9 @@ struct CodexTextField: View {
             .modifier(CodexTextFieldRuleModifier(rule: rule))
             .onSubmit(onSubmit)
             .codexReadOnlyControlOverlay(readOnlyNotice)
+            .codexOptionalHelp(help)
+            .codexOptionalAccessibilityLabel(accessibilityLabel)
+            .disabled(isDisabled)
     }
 }
 
