@@ -171,26 +171,27 @@ struct ArchivedConversationView: View {
     }
 
     private func restoreNoticeView(_ notice: RestoreNotice) -> some View {
-        HStack(spacing: 4) {
-            Text("已经恢复，是否")
-                .foregroundStyle(.primary)
+        LiquidGlassContainer(cornerRadius: CodexRadius.badge) {
+            HStack(spacing: 4) {
+                Text("已经恢复，是否")
+                    .foregroundStyle(.primary)
 
-            CodexButton(rule: .inlineTextLink, action: {
-                actions.jumpToRestored(notice.conversationID)
-                restoreNotice = nil
-            }) {
-                Text("跳转对话")
-                    .foregroundStyle(CodexColors.stateRunning.opacity(0.72))
+                CodexButton(rule: .inlineTextLink, action: {
+                    actions.jumpToRestored(notice.conversationID)
+                    restoreNotice = nil
+                }) {
+                    Text("跳转对话")
+                        .foregroundStyle(CodexColors.stateRunning.opacity(0.72))
+                }
             }
+            .font(CodexTypography.restoreNoticeAction)
+            .padding(.horizontal, CodexSpacing.compactInline)
+            .padding(.vertical, CodexSpacing.tightInline)
         }
-        .font(CodexTypography.restoreNoticeAction)
-        .padding(.horizontal, CodexSpacing.compactInline)
-        .padding(.vertical, CodexSpacing.tightInline)
-        .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: CodexRadius.badge, style: .continuous))
-            .overlay(
-                RoundedRectangle(cornerRadius: CodexRadius.badge, style: .continuous)
-                    .stroke(CodexColors.surfaceStroke, lineWidth: 1)
-            )
+        .overlay(
+            RoundedRectangle(cornerRadius: CodexRadius.badge, style: .continuous)
+                .stroke(CodexColors.surfaceStroke, lineWidth: 1)
+        )
         .shadow(color: .black.opacity(0.25), radius: 18, y: 8)
     }
 

@@ -3,6 +3,8 @@ import CoreGraphics
 import CodexPlusCore
 
 func runLegacyMainProcessRunnerTests() {
+    assertConversationDisplayEventPublicExtensionHasNoRedundantMemberAccess()
+
     expect(PermissionMode.semiAutomatic.displayName == "Semi-Automatic", "semiAutomatic display name")
     expect(PermissionMode.fullAccess.displayName == "Full Access", "fullAccess display name")
 
@@ -246,6 +248,28 @@ func runLegacyMainProcessRunnerTests() {
         expect(false, "process codex runner start failure emits error")
     }
     _ = startFailureHandle
+}
+
+private func assertConversationDisplayEventPublicExtensionHasNoRedundantMemberAccess() {
+    let root = URL(fileURLWithPath: FileManager.default.currentDirectoryPath, isDirectory: true)
+    let sourceURL = root.appendingPathComponent("Sources/CodexPlusCore/ConversationModels.swift")
+
+    guard let source = try? String(contentsOf: sourceURL, encoding: .utf8),
+          let extensionRange = source.range(of: "public extension ConversationDisplayEvent {") else {
+        expect(false, "ConversationModels source is readable")
+        return
+    }
+
+    let extensionBody = source[extensionRange.upperBound...]
+    let nextTopLevelDeclaration = extensionBody.range(of: "\npublic struct ")
+    let publicExtensionBody = nextTopLevelDeclaration.map {
+        String(extensionBody[..<$0.lowerBound])
+    } ?? String(extensionBody)
+
+    expect(
+        !publicExtensionBody.contains("public var "),
+        "ConversationDisplayEvent public extension avoids redundant public member modifiers"
+    )
 }
 
 @MainActor

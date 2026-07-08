@@ -139,6 +139,12 @@ func runPromptTemplateManagerAppSourceTests() {
         "settings panel opens on the same active screen as the workbench entry point"
     )
     expect(
+        settingsPanelController.contains("let frame = Self.defaultFrame(in: activeVisibleFrame())") &&
+            settingsPanelController.contains("WorkbenchPanelController.defaultFrame(in: visibleFrame)") &&
+            !settingsPanelController.contains("panel?.frame ?? Self.defaultFrame"),
+        "settings panel opens prompt manager at the same default size as the main workbench"
+    )
+    expect(
         settingsPanelController.contains("hasInstalledContent") &&
             !settingsPanelController.contains("contentView == nil"),
         "settings panel installs prompt manager content instead of relying on AppKit's default empty contentView"
@@ -230,7 +236,9 @@ private func assertAppControlsUseRules(root: URL) {
         ".pickerStyle(": "picker styling belongs in CodexPicker",
         ".toggleStyle(": "toggle styling belongs in CodexToggleSelector",
         ".contentShape(": "control hit areas belong in rule files",
+        ".codexControlHitArea(": "control hit areas belong in named control rules",
         ".glassEffect(": "control glass styling belongs in rule files or named containers",
+        ".ultraThinMaterial": "app glass surfaces should use native Liquid Glass",
         ".codexRectangleButtonHitArea(": "page views must not call hit-area helpers",
         ".codexCapsuleButtonHitArea(": "page views must not call hit-area helpers",
         ".codexCircularButtonHitArea(": "page views must not call hit-area helpers",
@@ -268,6 +276,13 @@ private func assertControlRuleFilesExist(root: URL) {
         let path = viewsRoot.appendingPathComponent(filename).path
         expect(FileManager.default.fileExists(atPath: path), "\(filename) exists")
     }
+
+    expect(
+        !FileManager.default.fileExists(
+            atPath: viewsRoot.appendingPathComponent("ButtonHitAreaModifier.swift").path
+        ),
+        "obsolete button hit-area compatibility helpers are removed"
+    )
 }
 
 private func assertInitialRuleNamesExist(root: URL) {
@@ -323,6 +338,24 @@ private func assertControlWrapperMetadataRules(root: URL) {
         button.contains("var isDisabled: Bool = false") &&
             button.contains(".disabled(isDisabled)"),
         "codex button owns disabled state"
+    )
+    expect(
+        button.contains("""
+        Button(role: role, action: action) {
+            label()
+                .modifier(CodexButtonRuleModifier(rule: rule))
+        }
+        .buttonStyle(.plain)
+"""),
+        "codex button applies visual and hit-area rules inside the button label so the full visible control is clickable"
+    )
+    expect(
+        button.contains("CodexTypography.menuPrimary") &&
+            button.contains("CodexSpacing.contentInline") &&
+            button.contains("CodexSpacing.tightVertical") &&
+            button.contains("CodexTypography.controlLabel") &&
+            button.contains("WorkbenchMetrics.composerControlHeight"),
+        "codex button rules own common toolbar and composer button typography, padding, and sizing"
     )
     expect(
         textField.contains("var isDisabled: Bool = false") &&
@@ -413,7 +446,6 @@ private func isSystemControlExceptionFile(_ url: URL) -> Bool {
 
 private func isControlCompatibilityFile(_ url: URL) -> Bool {
     [
-        "ButtonHitAreaModifier.swift",
         "AppMultilineTextEditor.swift"
     ].contains(url.lastPathComponent)
 }

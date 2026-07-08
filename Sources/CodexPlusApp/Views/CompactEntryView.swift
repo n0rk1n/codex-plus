@@ -45,12 +45,12 @@ struct CompactEntryView: View {
                             .scaleEffect(draggedTile == tile ? 1.03 : 1)
                             .opacity(draggedTile == tile ? 0.92 : 1)
                             .zIndex(draggedTile == tile ? 1 : 0)
-                            .codexControlHitArea(.rectangle)
+                            .codexControlInteraction(.dashboardTileDragItem)
                     }
                 }
                 .frame(width: tileStripWidth, height: tileRowHeight)
                 .frame(maxWidth: .infinity)
-                .codexControlHitArea(.rectangle)
+                .codexControlInteraction(.dashboardTileDragRow)
                 .highPriorityGesture(rowDragGesture(rowWidth: tileStripWidth))
                 .animation(.snappy(duration: 0.18), value: draggedTile)
                 .animation(.snappy(duration: 0.18), value: previewTileOrder.tiles)

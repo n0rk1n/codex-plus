@@ -68,7 +68,7 @@ public enum ConversationDisplayEvent: Equatable, Identifiable, Sendable {
 }
 
 public extension ConversationDisplayEvent {
-    public var isTechnicalTimelineEvent: Bool {
+    var isTechnicalTimelineEvent: Bool {
         switch self {
         case .status, .command, .parseWarning:
             return true
@@ -77,7 +77,7 @@ public extension ConversationDisplayEvent {
         }
     }
 
-    public var isStatusTimelineEvent: Bool {
+    var isStatusTimelineEvent: Bool {
         if case .status = self {
             return true
         }
@@ -85,7 +85,7 @@ public extension ConversationDisplayEvent {
         return false
     }
 
-    public var isCommandTimelineEvent: Bool {
+    var isCommandTimelineEvent: Bool {
         if case .command = self {
             return true
         }
@@ -93,7 +93,7 @@ public extension ConversationDisplayEvent {
         return false
     }
 
-    public var isParseWarningTimelineEvent: Bool {
+    var isParseWarningTimelineEvent: Bool {
         if case .parseWarning = self {
             return true
         }

@@ -115,8 +115,6 @@ struct WorkbenchComposerView: View {
                 action: actions.stop
             ) {
                 Image(systemName: "stop.fill")
-                    .font(CodexTypography.controlLabel)
-                    .frame(width: WorkbenchMetrics.composerControlHeight, height: WorkbenchMetrics.composerControlHeight)
             }
         case .send:
             CodexButton(
@@ -126,8 +124,6 @@ struct WorkbenchComposerView: View {
                 action: submitPrompt
             ) {
                 Image(systemName: "arrow.up")
-                    .font(CodexTypography.controlLabel)
-                    .frame(width: WorkbenchMetrics.composerControlHeight, height: WorkbenchMetrics.composerControlHeight)
             }
         }
     }
@@ -141,10 +137,8 @@ struct WorkbenchComposerView: View {
             action: optimizePrompt
         ) {
             Image(systemName: isOptimizingPrompt ? "lightbulb.fill" : "lightbulb")
-                .font(CodexTypography.controlLabel)
                 .symbolRenderingMode(.hierarchical)
                 .foregroundStyle(isOptimizingPrompt ? CodexPromptOptimizationVisuals.runningColor : .secondary)
-                .frame(width: WorkbenchMetrics.composerControlHeight, height: WorkbenchMetrics.composerControlHeight)
                 .scaleEffect(isOptimizingPrompt && bulbPulse ? 1.12 : 1.0)
                 .opacity(isOptimizingPrompt && bulbPulse ? 0.72 : 1.0)
                 .animation(
@@ -193,8 +187,6 @@ struct WorkbenchComposerView: View {
         ) {
             Image(systemName: "xmark.circle.fill")
                 .symbolRenderingMode(.hierarchical)
-                .font(CodexTypography.controlLabel)
-                .frame(width: 24, height: WorkbenchMetrics.composerControlHeight)
         }
         .padding(.trailing, 6)
     }

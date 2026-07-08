@@ -35,7 +35,7 @@ final class SettingsPanelController {
     }
 
     func show() {
-        let frame = panel?.frame ?? Self.defaultFrame(in: activeVisibleFrame())
+        let frame = Self.defaultFrame(in: activeVisibleFrame())
         let panel = panel ?? panelFactory.makePanel(frame: frame, delegate: panelDelegate)
         panel.isReleasedWhenClosed = false
         panel.hasShadow = false
@@ -83,15 +83,7 @@ final class SettingsPanelController {
     }
 
     static func defaultFrame(in visibleFrame: NSRect) -> NSRect {
-        let width = min(CGFloat(1100), visibleFrame.width > 96 ? visibleFrame.width - 96 : visibleFrame.width)
-        let height = min(CGFloat(700), visibleFrame.height > 96 ? visibleFrame.height - 96 : visibleFrame.height)
-
-        return NSRect(
-            x: visibleFrame.midX - (width / 2),
-            y: visibleFrame.midY - (height / 2),
-            width: width,
-            height: height
-        )
+        WorkbenchPanelController.defaultFrame(in: visibleFrame)
     }
 
     private func activeVisibleFrame() -> NSRect {

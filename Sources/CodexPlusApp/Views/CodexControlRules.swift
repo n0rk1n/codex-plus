@@ -65,6 +65,11 @@ enum CodexToggleSelectorRule {
     case filterToggle
 }
 
+enum CodexControlInteractionRule {
+    case dashboardTileDragItem
+    case dashboardTileDragRow
+}
+
 enum CodexReadOnlyNoticeRule {
     case promptTemplateSystemTemplate
 
@@ -131,5 +136,21 @@ extension View {
         glassEffect(.regular, in: Capsule(style: .continuous))
             .compositingGroup()
             .mask(Capsule(style: .continuous))
+    }
+
+    func codexControlInteraction(_ rule: CodexControlInteractionRule) -> some View {
+        modifier(CodexControlInteractionRuleModifier(rule: rule))
+    }
+}
+
+private struct CodexControlInteractionRuleModifier: ViewModifier {
+    let rule: CodexControlInteractionRule
+
+    @ViewBuilder
+    func body(content: Content) -> some View {
+        switch rule {
+        case .dashboardTileDragItem, .dashboardTileDragRow:
+            content.codexControlHitArea(.rectangle)
+        }
     }
 }

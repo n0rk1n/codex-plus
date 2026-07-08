@@ -454,23 +454,15 @@ struct PromptTemplateManagerView: View {
 
     private func sidebarIcon(_ systemImage: String) -> some View {
         Image(systemName: systemImage)
-            .font(CodexTypography.menuPrimary)
-            .frame(width: 28, height: 28)
     }
 
     private func headerActionLabel(systemImage: String, title: String, foregroundColor: Color = .primary) -> some View {
         Label(title, systemImage: systemImage)
-            .font(CodexTypography.microControl)
             .foregroundStyle(foregroundColor)
-            .padding(.horizontal, CodexSpacing.contentInline)
-            .padding(.vertical, CodexSpacing.compactVertical)
     }
 
     private func footerActionLabel(systemImage: String, title: String) -> some View {
         Label(title, systemImage: systemImage)
-            .font(CodexTypography.microControl)
-            .padding(.horizontal, CodexSpacing.contentInline)
-            .padding(.vertical, CodexSpacing.compactVertical)
     }
 
     private func editor(text: Binding<String>, minHeight: CGFloat) -> some View {

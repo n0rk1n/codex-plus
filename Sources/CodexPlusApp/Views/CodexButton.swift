@@ -12,8 +12,9 @@ struct CodexButton<Label: View>: View {
     var body: some View {
         Button(role: role, action: action) {
             label()
+                .modifier(CodexButtonRuleModifier(rule: rule))
         }
-        .modifier(CodexButtonRuleModifier(rule: rule))
+        .buttonStyle(.plain)
         .codexOptionalHelp(help)
         .codexOptionalAccessibilityLabel(accessibilityLabel)
         .disabled(isDisabled)
@@ -28,59 +29,63 @@ private struct CodexButtonRuleModifier: ViewModifier {
         switch rule {
         case .toolbarCapsule:
             content
-                .buttonStyle(.plain)
+                .font(CodexTypography.menuPrimary)
+                .padding(.horizontal, CodexSpacing.contentInline)
+                .padding(.vertical, CodexSpacing.tightVertical)
                 .glassEffect(.regular, in: Capsule(style: .continuous))
                 .compositingGroup()
                 .mask(Capsule(style: .continuous))
                 .codexControlHitArea(.capsule)
         case .toolbarIconCircle:
             content
-                .buttonStyle(.plain)
+                .font(CodexTypography.menuPrimary)
+                .frame(width: 32, height: 32)
                 .glassEffect(.regular, in: Circle())
                 .compositingGroup()
                 .mask(Circle())
                 .codexControlHitArea(.circle)
         case .composerIconCircle:
             content
-                .buttonStyle(.plain)
+                .font(CodexTypography.controlLabel)
+                .frame(width: WorkbenchMetrics.composerControlHeight, height: WorkbenchMetrics.composerControlHeight)
                 .codexControlHitArea(.circle)
         case .workspaceCapsule:
             content
-                .buttonStyle(.plain)
                 .codexControlHitArea(.capsule)
         case .workspaceClear:
             content
-                .buttonStyle(.plain)
+                .font(CodexTypography.controlLabel)
+                .frame(width: 24, height: WorkbenchMetrics.composerControlHeight)
                 .codexControlHitArea(.rectangle)
         case .rowRectangle:
             content
-                .buttonStyle(.plain)
                 .codexControlHitArea(.rectangle)
         case let .rowRounded(cornerRadius):
             content
-                .buttonStyle(.plain)
                 .codexControlHitArea(.rounded(cornerRadius: cornerRadius))
         case let .cardRounded(cornerRadius):
             content
-                .buttonStyle(.plain)
                 .codexControlHitArea(.rounded(cornerRadius: cornerRadius))
         case .formHeaderCapsule:
             content
-                .buttonStyle(.plain)
+                .font(CodexTypography.microControl)
+                .padding(.horizontal, CodexSpacing.contentInline)
+                .padding(.vertical, CodexSpacing.compactVertical)
                 .glassEffect(.regular, in: Capsule(style: .continuous))
                 .compositingGroup()
                 .mask(Capsule(style: .continuous))
                 .codexControlHitArea(.capsule)
         case .formFooterCapsule:
             content
-                .buttonStyle(.plain)
+                .font(CodexTypography.microControl)
+                .padding(.horizontal, CodexSpacing.contentInline)
+                .padding(.vertical, CodexSpacing.compactVertical)
                 .glassEffect(.regular, in: Capsule(style: .continuous))
                 .compositingGroup()
                 .mask(Capsule(style: .continuous))
                 .codexControlHitArea(.capsule)
         case .inlineTextLink:
             content
-                .buttonStyle(.plain)
                 .codexControlHitArea(.rectangle)
         }
     }

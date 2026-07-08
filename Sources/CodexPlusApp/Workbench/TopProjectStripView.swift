@@ -54,13 +54,10 @@ struct TopProjectStripView: View {
         isDisabled: Bool = false,
         action: @escaping () -> Void
     ) -> some View {
-            CodexButton(rule: .toolbarCapsule, isDisabled: isDisabled, action: action) {
-                Label(title, systemImage: systemName)
-                    .font(CodexTypography.menuPrimary)
-                    .padding(.horizontal, CodexSpacing.contentInline)
-                    .padding(.vertical, CodexSpacing.tightVertical)
-            }
+        CodexButton(rule: .toolbarCapsule, isDisabled: isDisabled, action: action) {
+            Label(title, systemImage: systemName)
         }
+    }
 
     private func iconActionButton(
         help: String,
@@ -75,8 +72,6 @@ struct TopProjectStripView: View {
             action: action
         ) {
             Image(systemName: systemName)
-                .font(CodexTypography.menuPrimary)
-                .frame(width: 32, height: 32)
         }
     }
 }
