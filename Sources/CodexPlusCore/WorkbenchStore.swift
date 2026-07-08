@@ -184,6 +184,14 @@ public final class WorkbenchStore: ObservableObject {
             return
         }
 
+        let runPrompt: String
+        do {
+            runPrompt = try modelInputPrompt(for: conversation, pendingPrompt: trimmedPrompt)
+        } catch {
+            setError(title: "无法装配压缩上下文", error: error)
+            return
+        }
+
         guard persistUpdatedConversation(conversationID, mutation: { session in
             session.state = .running
             session.prompt = trimmedPrompt
@@ -192,7 +200,7 @@ public final class WorkbenchStore: ObservableObject {
             return
         }
         refreshSnapshot()
-        startEngineRun(for: conversationID, prompt: trimmedPrompt)
+        startEngineRun(for: conversationID, prompt: runPrompt)
     }
 
     public func stopActiveRun() {
@@ -368,6 +376,24 @@ public final class WorkbenchStore: ObservableObject {
         } catch {
             setError(title: "无法启动 Codex", error: error)
         }
+    }
+
+    private func modelInputPrompt(
+        for conversation: ConversationSession,
+        pendingPrompt: String
+    ) throws -> String {
+        let compressionState = try repository.loadCompressionState(conversationID: conversation.id)
+        guard !compressionState.activeVersions.isEmpty else {
+            return pendingPrompt
+        }
+
+        return try ContextCompressionAssemblerV2.assemble(
+            ContextCompressionAssemblyInput(
+                conversation: conversation,
+                compressionState: compressionState,
+                pendingUserPrompt: pendingPrompt
+            )
+        ).text
     }
 
     private func finishRun(for conversationID: UUID, result: CodexRunResult) {
