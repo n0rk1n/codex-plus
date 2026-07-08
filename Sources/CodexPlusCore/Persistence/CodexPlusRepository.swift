@@ -1,6 +1,6 @@
 import Foundation
 
-public protocol CodexPlusRepository: ProjectRepository, ConversationRepository, ArchiveRepository, MemoryRepository, AttachmentRepository, PromptTemplateRepository, Sendable {}
+public protocol CodexPlusRepository: ProjectRepository, ConversationRepository, ArchiveRepository, MemoryRepository, AttachmentRepository, PromptTemplateRepository, ContextCompressionRepository, Sendable {}
 
 public extension CodexPlusRepository {
     func deleteArchivedConversation(_ id: UUID) throws -> String? {
@@ -64,6 +64,46 @@ public extension CodexPlusRepository {
     }
 
     func loadDefaultPromptTemplateIDs() throws -> [PromptTemplateType: UUID] {
+        throw UnsupportedRepositoryOperation()
+    }
+
+    func loadCompressionState(conversationID: UUID) throws -> ConversationCompressionState {
+        throw UnsupportedRepositoryOperation()
+    }
+
+    func replaceCompressionRounds(
+        _ rounds: [CompressionRound],
+        events: [CompressionRoundEvent],
+        conversationID: UUID
+    ) throws {
+        throw UnsupportedRepositoryOperation()
+    }
+
+    func saveCompressionVersion(_ version: CompressionVersion) throws {
+        throw UnsupportedRepositoryOperation()
+    }
+
+    func saveCompressionVersionSources(_ sources: [CompressionVersionSource]) throws {
+        throw UnsupportedRepositoryOperation()
+    }
+
+    func saveCompressionLineageEdges(_ edges: [CompressionLineageEdge]) throws {
+        throw UnsupportedRepositoryOperation()
+    }
+
+    func saveCompressionInput(_ input: CompressionInputRecord) throws {
+        throw UnsupportedRepositoryOperation()
+    }
+
+    func saveCompressionTombstones(_ tombstones: [CompressionTombstone]) throws {
+        throw UnsupportedRepositoryOperation()
+    }
+
+    func setActiveCompressionVersion(_ active: CompressionActiveVersion) throws {
+        throw UnsupportedRepositoryOperation()
+    }
+
+    func clearActiveCompressionVersion(conversationID: UUID, roundID: UUID?, rangeID: UUID?) throws {
         throw UnsupportedRepositoryOperation()
     }
 }
@@ -884,6 +924,419 @@ public final class SQLiteCodexPlusRepository: CodexPlusRepository, @unchecked Se
 
         return defaults
     }
+
+    public func loadCompressionState(conversationID: UUID) throws -> ConversationCompressionState {
+        let conversationIDText = conversationID.uuidString.lowercased()
+        let rounds = try database.query(
+            """
+            SELECT id, conversation_id, round_index, user_event_id, first_assistant_event_id, last_assistant_event_id,
+                   run_state, run_started_at, run_finished_at, created_at, updated_at
+            FROM compression_rounds
+            WHERE conversation_id = ?
+            ORDER BY round_index ASC, id ASC;
+            """,
+            [.text(conversationIDText)]
+        ).map(decodeCompressionRound)
+        let roundIDs = Set(rounds.map(\.id.uuidString).map { $0.lowercased() })
+        let roundEvents = try database.query(
+            """
+            SELECT re.id, re.round_id, re.event_id, re.segment_kind, re.ordinal
+            FROM compression_round_events re
+            INNER JOIN compression_rounds r ON r.id = re.round_id
+            WHERE r.conversation_id = ?
+            ORDER BY r.round_index ASC, re.ordinal ASC, re.id ASC;
+            """,
+            [.text(conversationIDText)]
+        ).map(decodeCompressionRoundEvent)
+        let inputs = try database.query(
+            """
+            SELECT id, conversation_id, mode, template_id, user_instruction, input_snapshot,
+                   provider_name, provider_model, created_at
+            FROM compression_inputs
+            WHERE conversation_id = ?
+            ORDER BY created_at ASC, id ASC;
+            """,
+            [.text(conversationIDText)]
+        ).map(decodeCompressionInput)
+        let versions = try database.query(
+            """
+            SELECT id, conversation_id, scope_kind, operation, status, content, template_id,
+                   compression_input_id, error_message, created_at, updated_at
+            FROM compression_versions
+            WHERE conversation_id = ?
+            ORDER BY created_at ASC, id ASC;
+            """,
+            [.text(conversationIDText)]
+        ).map(decodeCompressionVersion)
+        let versionIDs = Set(versions.map(\.id.uuidString).map { $0.lowercased() })
+        let versionSources = try database.query(
+            """
+            SELECT vs.id, vs.version_id, vs.source_kind, vs.source_id, vs.ordinal
+            FROM compression_version_sources vs
+            INNER JOIN compression_versions v ON v.id = vs.version_id
+            WHERE v.conversation_id = ?
+            ORDER BY v.created_at ASC, vs.ordinal ASC, vs.id ASC;
+            """,
+            [.text(conversationIDText)]
+        ).map(decodeCompressionVersionSource)
+        let lineageEdges = try database.query(
+            """
+            SELECT e.id, e.parent_version_id, e.child_version_id, e.edge_kind, e.created_at
+            FROM compression_lineage_edges e
+            INNER JOIN compression_versions v ON v.id = e.child_version_id
+            WHERE v.conversation_id = ?
+            ORDER BY e.created_at ASC, e.id ASC;
+            """,
+            [.text(conversationIDText)]
+        ).map(decodeCompressionLineageEdge)
+        let activeVersions = try database.query(
+            """
+            SELECT id, conversation_id, round_id, range_id, active_version_id
+            FROM compression_active_versions
+            WHERE conversation_id = ?
+            ORDER BY id ASC;
+            """,
+            [.text(conversationIDText)]
+        ).map(decodeCompressionActiveVersion)
+        let tombstones = try database.query(
+            """
+            SELECT t.id, t.version_id, t.reason, t.replaced_by_version_id, t.created_at
+            FROM compression_tombstones t
+            INNER JOIN compression_versions v ON v.id = t.version_id
+            WHERE v.conversation_id = ?
+            ORDER BY t.created_at ASC, t.id ASC;
+            """,
+            [.text(conversationIDText)]
+        ).map(decodeCompressionTombstone)
+
+        return ConversationCompressionState(
+            rounds: rounds,
+            roundEvents: roundEvents.filter { roundIDs.contains($0.roundID.uuidString.lowercased()) },
+            versions: versions,
+            versionSources: versionSources.filter { versionIDs.contains($0.versionID.uuidString.lowercased()) },
+            lineageEdges: lineageEdges,
+            activeVersions: activeVersions,
+            inputs: inputs,
+            tombstones: tombstones
+        )
+    }
+
+    public func replaceCompressionRounds(
+        _ rounds: [CompressionRound],
+        events: [CompressionRoundEvent],
+        conversationID: UUID
+    ) throws {
+        let conversationIDText = conversationID.uuidString.lowercased()
+        try database.execute("BEGIN IMMEDIATE TRANSACTION;")
+
+        do {
+            try database.execute(
+                """
+                DELETE FROM compression_round_events
+                WHERE round_id IN (
+                    SELECT id FROM compression_rounds WHERE conversation_id = ?
+                );
+                """,
+                [.text(conversationIDText)]
+            )
+            try database.execute(
+                "DELETE FROM compression_rounds WHERE conversation_id = ?;",
+                [.text(conversationIDText)]
+            )
+
+            for round in rounds {
+                try saveCompressionRound(round)
+            }
+
+            for event in events {
+                try saveCompressionRoundEvent(event)
+            }
+
+            try database.execute("COMMIT TRANSACTION;")
+        } catch {
+            try? database.execute("ROLLBACK TRANSACTION;")
+            throw error
+        }
+    }
+
+    public func saveCompressionVersion(_ version: CompressionVersion) throws {
+        try database.execute(
+            """
+            INSERT INTO compression_versions (
+                id,
+                conversation_id,
+                scope_kind,
+                operation,
+                status,
+                content,
+                template_id,
+                compression_input_id,
+                error_message,
+                created_at,
+                updated_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ON CONFLICT(id) DO UPDATE SET
+                conversation_id = excluded.conversation_id,
+                scope_kind = excluded.scope_kind,
+                operation = excluded.operation,
+                status = excluded.status,
+                content = excluded.content,
+                template_id = excluded.template_id,
+                compression_input_id = excluded.compression_input_id,
+                error_message = excluded.error_message,
+                created_at = excluded.created_at,
+                updated_at = excluded.updated_at;
+            """,
+            [
+                .text(version.id.uuidString.lowercased()),
+                .text(version.conversationID.uuidString.lowercased()),
+                .text(version.scopeKind.rawValue),
+                .text(version.operation.rawValue),
+                .text(version.status.rawValue),
+                .text(version.content),
+                version.templateID.map { .text($0.uuidString.lowercased()) } ?? .null,
+                version.compressionInputID.map { .text($0.uuidString.lowercased()) } ?? .null,
+                version.errorMessage.map(SQLiteValue.text) ?? .null,
+                .real(version.createdAt.timeIntervalSince1970),
+                .real(version.updatedAt.timeIntervalSince1970)
+            ]
+        )
+    }
+
+    public func saveCompressionVersionSources(_ sources: [CompressionVersionSource]) throws {
+        for source in sources {
+            try database.execute(
+                """
+                INSERT INTO compression_version_sources (id, version_id, source_kind, source_id, ordinal)
+                VALUES (?, ?, ?, ?, ?)
+                ON CONFLICT(id) DO UPDATE SET
+                    version_id = excluded.version_id,
+                    source_kind = excluded.source_kind,
+                    source_id = excluded.source_id,
+                    ordinal = excluded.ordinal;
+                """,
+                [
+                    .text(source.id.uuidString.lowercased()),
+                    .text(source.versionID.uuidString.lowercased()),
+                    .text(source.sourceKind.rawValue),
+                    .text(source.sourceID.uuidString.lowercased()),
+                    .integer(Int64(source.ordinal))
+                ]
+            )
+        }
+    }
+
+    public func saveCompressionLineageEdges(_ edges: [CompressionLineageEdge]) throws {
+        for edge in edges {
+            try database.execute(
+                """
+                INSERT INTO compression_lineage_edges (id, parent_version_id, child_version_id, edge_kind, created_at)
+                VALUES (?, ?, ?, ?, ?)
+                ON CONFLICT(id) DO UPDATE SET
+                    parent_version_id = excluded.parent_version_id,
+                    child_version_id = excluded.child_version_id,
+                    edge_kind = excluded.edge_kind,
+                    created_at = excluded.created_at;
+                """,
+                [
+                    .text(edge.id.uuidString.lowercased()),
+                    .text(edge.parentVersionID.uuidString.lowercased()),
+                    .text(edge.childVersionID.uuidString.lowercased()),
+                    .text(edge.edgeKind.rawValue),
+                    .real(edge.createdAt.timeIntervalSince1970)
+                ]
+            )
+        }
+    }
+
+    public func saveCompressionInput(_ input: CompressionInputRecord) throws {
+        try database.execute(
+            """
+            INSERT INTO compression_inputs (
+                id,
+                conversation_id,
+                mode,
+                template_id,
+                user_instruction,
+                input_snapshot,
+                provider_name,
+                provider_model,
+                created_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ON CONFLICT(id) DO UPDATE SET
+                conversation_id = excluded.conversation_id,
+                mode = excluded.mode,
+                template_id = excluded.template_id,
+                user_instruction = excluded.user_instruction,
+                input_snapshot = excluded.input_snapshot,
+                provider_name = excluded.provider_name,
+                provider_model = excluded.provider_model,
+                created_at = excluded.created_at;
+            """,
+            [
+                .text(input.id.uuidString.lowercased()),
+                .text(input.conversationID.uuidString.lowercased()),
+                .text(input.mode.rawValue),
+                input.templateID.map { .text($0.uuidString.lowercased()) } ?? .null,
+                .text(input.userInstruction),
+                .text(input.inputSnapshot),
+                .text(input.providerName),
+                .text(input.providerModel),
+                .real(input.createdAt.timeIntervalSince1970)
+            ]
+        )
+    }
+
+    public func saveCompressionTombstones(_ tombstones: [CompressionTombstone]) throws {
+        for tombstone in tombstones {
+            try database.execute(
+                """
+                INSERT INTO compression_tombstones (id, version_id, reason, replaced_by_version_id, created_at)
+                VALUES (?, ?, ?, ?, ?)
+                ON CONFLICT(id) DO UPDATE SET
+                    version_id = excluded.version_id,
+                    reason = excluded.reason,
+                    replaced_by_version_id = excluded.replaced_by_version_id,
+                    created_at = excluded.created_at;
+                """,
+                [
+                    .text(tombstone.id.uuidString.lowercased()),
+                    .text(tombstone.versionID.uuidString.lowercased()),
+                    .text(tombstone.reason),
+                    tombstone.replacedByVersionID.map { .text($0.uuidString.lowercased()) } ?? .null,
+                    .real(tombstone.createdAt.timeIntervalSince1970)
+                ]
+            )
+        }
+    }
+
+    public func setActiveCompressionVersion(_ active: CompressionActiveVersion) throws {
+        try database.execute("BEGIN IMMEDIATE TRANSACTION;")
+
+        do {
+            try clearActiveCompressionVersion(
+                conversationID: active.conversationID,
+                roundID: active.roundID,
+                rangeID: active.rangeID
+            )
+            try database.execute(
+                """
+                INSERT INTO compression_active_versions (id, conversation_id, round_id, range_id, active_version_id)
+                VALUES (?, ?, ?, ?, ?)
+                ON CONFLICT(id) DO UPDATE SET
+                    conversation_id = excluded.conversation_id,
+                    round_id = excluded.round_id,
+                    range_id = excluded.range_id,
+                    active_version_id = excluded.active_version_id;
+                """,
+                [
+                    .text(active.id.uuidString.lowercased()),
+                    .text(active.conversationID.uuidString.lowercased()),
+                    active.roundID.map { .text($0.uuidString.lowercased()) } ?? .null,
+                    active.rangeID.map { .text($0.uuidString.lowercased()) } ?? .null,
+                    .text(active.activeVersionID.uuidString.lowercased())
+                ]
+            )
+            try database.execute("COMMIT TRANSACTION;")
+        } catch {
+            try? database.execute("ROLLBACK TRANSACTION;")
+            throw error
+        }
+    }
+
+    public func clearActiveCompressionVersion(conversationID: UUID, roundID: UUID?, rangeID: UUID?) throws {
+        if let roundID {
+            try database.execute(
+                "DELETE FROM compression_active_versions WHERE conversation_id = ? AND round_id = ?;",
+                [
+                    .text(conversationID.uuidString.lowercased()),
+                    .text(roundID.uuidString.lowercased())
+                ]
+            )
+            return
+        }
+
+        if let rangeID {
+            try database.execute(
+                "DELETE FROM compression_active_versions WHERE conversation_id = ? AND range_id = ?;",
+                [
+                    .text(conversationID.uuidString.lowercased()),
+                    .text(rangeID.uuidString.lowercased())
+                ]
+            )
+            return
+        }
+
+        try database.execute(
+            "DELETE FROM compression_active_versions WHERE conversation_id = ?;",
+            [.text(conversationID.uuidString.lowercased())]
+        )
+    }
+
+    private func saveCompressionRound(_ round: CompressionRound) throws {
+        try database.execute(
+            """
+            INSERT INTO compression_rounds (
+                id,
+                conversation_id,
+                round_index,
+                user_event_id,
+                first_assistant_event_id,
+                last_assistant_event_id,
+                run_state,
+                run_started_at,
+                run_finished_at,
+                created_at,
+                updated_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ON CONFLICT(id) DO UPDATE SET
+                conversation_id = excluded.conversation_id,
+                round_index = excluded.round_index,
+                user_event_id = excluded.user_event_id,
+                first_assistant_event_id = excluded.first_assistant_event_id,
+                last_assistant_event_id = excluded.last_assistant_event_id,
+                run_state = excluded.run_state,
+                run_started_at = excluded.run_started_at,
+                run_finished_at = excluded.run_finished_at,
+                created_at = excluded.created_at,
+                updated_at = excluded.updated_at;
+            """,
+            [
+                .text(round.id.uuidString.lowercased()),
+                .text(round.conversationID.uuidString.lowercased()),
+                .integer(Int64(round.roundIndex)),
+                .text(round.userEventID.uuidString.lowercased()),
+                round.firstAssistantEventID.map { .text($0.uuidString.lowercased()) } ?? .null,
+                round.lastAssistantEventID.map { .text($0.uuidString.lowercased()) } ?? .null,
+                .text(round.runState),
+                round.runStartedAt.map { .real($0.timeIntervalSince1970) } ?? .null,
+                round.runFinishedAt.map { .real($0.timeIntervalSince1970) } ?? .null,
+                .real(round.createdAt.timeIntervalSince1970),
+                .real(round.updatedAt.timeIntervalSince1970)
+            ]
+        )
+    }
+
+    private func saveCompressionRoundEvent(_ event: CompressionRoundEvent) throws {
+        try database.execute(
+            """
+            INSERT INTO compression_round_events (id, round_id, event_id, segment_kind, ordinal)
+            VALUES (?, ?, ?, ?, ?)
+            ON CONFLICT(id) DO UPDATE SET
+                round_id = excluded.round_id,
+                event_id = excluded.event_id,
+                segment_kind = excluded.segment_kind,
+                ordinal = excluded.ordinal;
+            """,
+            [
+                .text(event.id.uuidString.lowercased()),
+                .text(event.roundID.uuidString.lowercased()),
+                .text(event.eventID.uuidString.lowercased()),
+                .text(event.segmentKind.rawValue),
+                .integer(Int64(event.ordinal))
+            ]
+        )
+    }
 }
 
 private enum RepositoryError: Error, CustomStringConvertible {
@@ -953,6 +1406,19 @@ private func optionalText(for column: String, in row: [String: SQLiteValue]) thr
     }
 }
 
+private func optionalDouble(for column: String, in row: [String: SQLiteValue]) throws -> Double? {
+    switch try value(for: column, in: row) {
+    case let .real(real):
+        return real
+    case let .integer(integer):
+        return Double(integer)
+    case .null:
+        return nil
+    default:
+        throw RepositoryError.invalidValue(column: column, value: try value(for: column, in: row))
+    }
+}
+
 private func int64(for column: String, in row: [String: SQLiteValue]) throws -> Int64 {
     switch try value(for: column, in: row) {
     case let .integer(integer):
@@ -964,6 +1430,18 @@ private func int64(for column: String, in row: [String: SQLiteValue]) throws -> 
 
 private func uuid(for column: String, in row: [String: SQLiteValue]) throws -> UUID {
     let string = try text(for: column, in: row)
+    guard let uuid = UUID(uuidString: string) else {
+        throw RepositoryError.invalidUUID(string)
+    }
+
+    return uuid
+}
+
+private func optionalUUID(for column: String, in row: [String: SQLiteValue]) throws -> UUID? {
+    guard let string = try optionalText(for: column, in: row) else {
+        return nil
+    }
+
     guard let uuid = UUID(uuidString: string) else {
         throw RepositoryError.invalidUUID(string)
     }
@@ -1073,6 +1551,137 @@ private func decodePromptTemplate(_ row: [String: SQLiteValue]) throws -> Prompt
         note: try text(for: "note", in: row),
         createdAt: Date(timeIntervalSince1970: try double(for: "created_at", in: row)),
         updatedAt: Date(timeIntervalSince1970: try double(for: "updated_at", in: row))
+    )
+}
+
+private func decodeCompressionRound(_ row: [String: SQLiteValue]) throws -> CompressionRound {
+    CompressionRound(
+        id: try uuid(for: "id", in: row),
+        conversationID: try uuid(for: "conversation_id", in: row),
+        roundIndex: Int(try int64(for: "round_index", in: row)),
+        userEventID: try uuid(for: "user_event_id", in: row),
+        firstAssistantEventID: try optionalUUID(for: "first_assistant_event_id", in: row),
+        lastAssistantEventID: try optionalUUID(for: "last_assistant_event_id", in: row),
+        runState: try text(for: "run_state", in: row),
+        runStartedAt: try optionalDouble(for: "run_started_at", in: row).map(Date.init(timeIntervalSince1970:)),
+        runFinishedAt: try optionalDouble(for: "run_finished_at", in: row).map(Date.init(timeIntervalSince1970:)),
+        createdAt: Date(timeIntervalSince1970: try double(for: "created_at", in: row)),
+        updatedAt: Date(timeIntervalSince1970: try double(for: "updated_at", in: row))
+    )
+}
+
+private func decodeCompressionRoundEvent(_ row: [String: SQLiteValue]) throws -> CompressionRoundEvent {
+    let rawSegmentKind = try text(for: "segment_kind", in: row)
+    guard let segmentKind = CompressionSegmentKind(rawValue: rawSegmentKind) else {
+        throw RepositoryError.invalidValue(column: "segment_kind", value: .text(rawSegmentKind))
+    }
+
+    return CompressionRoundEvent(
+        id: try uuid(for: "id", in: row),
+        roundID: try uuid(for: "round_id", in: row),
+        eventID: try uuid(for: "event_id", in: row),
+        segmentKind: segmentKind,
+        ordinal: Int(try int64(for: "ordinal", in: row))
+    )
+}
+
+private func decodeCompressionVersion(_ row: [String: SQLiteValue]) throws -> CompressionVersion {
+    let rawScopeKind = try text(for: "scope_kind", in: row)
+    guard let scopeKind = CompressionVersionScopeKind(rawValue: rawScopeKind) else {
+        throw RepositoryError.invalidValue(column: "scope_kind", value: .text(rawScopeKind))
+    }
+
+    let rawOperation = try text(for: "operation", in: row)
+    guard let operation = CompressionVersionOperation(rawValue: rawOperation) else {
+        throw RepositoryError.invalidValue(column: "operation", value: .text(rawOperation))
+    }
+
+    let rawStatus = try text(for: "status", in: row)
+    guard let status = CompressionVersionStatus(rawValue: rawStatus) else {
+        throw RepositoryError.invalidValue(column: "status", value: .text(rawStatus))
+    }
+
+    return CompressionVersion(
+        id: try uuid(for: "id", in: row),
+        conversationID: try uuid(for: "conversation_id", in: row),
+        scopeKind: scopeKind,
+        operation: operation,
+        status: status,
+        content: try text(for: "content", in: row),
+        templateID: try optionalUUID(for: "template_id", in: row),
+        compressionInputID: try optionalUUID(for: "compression_input_id", in: row),
+        errorMessage: try optionalText(for: "error_message", in: row),
+        createdAt: Date(timeIntervalSince1970: try double(for: "created_at", in: row)),
+        updatedAt: Date(timeIntervalSince1970: try double(for: "updated_at", in: row))
+    )
+}
+
+private func decodeCompressionVersionSource(_ row: [String: SQLiteValue]) throws -> CompressionVersionSource {
+    let rawSourceKind = try text(for: "source_kind", in: row)
+    guard let sourceKind = CompressionVersionSourceKind(rawValue: rawSourceKind) else {
+        throw RepositoryError.invalidValue(column: "source_kind", value: .text(rawSourceKind))
+    }
+
+    return CompressionVersionSource(
+        id: try uuid(for: "id", in: row),
+        versionID: try uuid(for: "version_id", in: row),
+        sourceKind: sourceKind,
+        sourceID: try uuid(for: "source_id", in: row),
+        ordinal: Int(try int64(for: "ordinal", in: row))
+    )
+}
+
+private func decodeCompressionLineageEdge(_ row: [String: SQLiteValue]) throws -> CompressionLineageEdge {
+    let rawEdgeKind = try text(for: "edge_kind", in: row)
+    guard let edgeKind = CompressionLineageEdgeKind(rawValue: rawEdgeKind) else {
+        throw RepositoryError.invalidValue(column: "edge_kind", value: .text(rawEdgeKind))
+    }
+
+    return CompressionLineageEdge(
+        id: try uuid(for: "id", in: row),
+        parentVersionID: try uuid(for: "parent_version_id", in: row),
+        childVersionID: try uuid(for: "child_version_id", in: row),
+        edgeKind: edgeKind,
+        createdAt: Date(timeIntervalSince1970: try double(for: "created_at", in: row))
+    )
+}
+
+private func decodeCompressionActiveVersion(_ row: [String: SQLiteValue]) throws -> CompressionActiveVersion {
+    CompressionActiveVersion(
+        id: try uuid(for: "id", in: row),
+        conversationID: try uuid(for: "conversation_id", in: row),
+        roundID: try optionalUUID(for: "round_id", in: row),
+        rangeID: try optionalUUID(for: "range_id", in: row),
+        activeVersionID: try uuid(for: "active_version_id", in: row)
+    )
+}
+
+private func decodeCompressionInput(_ row: [String: SQLiteValue]) throws -> CompressionInputRecord {
+    let rawMode = try text(for: "mode", in: row)
+    guard let mode = CompressionInputMode(rawValue: rawMode) else {
+        throw RepositoryError.invalidValue(column: "mode", value: .text(rawMode))
+    }
+
+    return CompressionInputRecord(
+        id: try uuid(for: "id", in: row),
+        conversationID: try uuid(for: "conversation_id", in: row),
+        mode: mode,
+        templateID: try optionalUUID(for: "template_id", in: row),
+        userInstruction: try text(for: "user_instruction", in: row),
+        inputSnapshot: try text(for: "input_snapshot", in: row),
+        providerName: try text(for: "provider_name", in: row),
+        providerModel: try text(for: "provider_model", in: row),
+        createdAt: Date(timeIntervalSince1970: try double(for: "created_at", in: row))
+    )
+}
+
+private func decodeCompressionTombstone(_ row: [String: SQLiteValue]) throws -> CompressionTombstone {
+    CompressionTombstone(
+        id: try uuid(for: "id", in: row),
+        versionID: try uuid(for: "version_id", in: row),
+        reason: try text(for: "reason", in: row),
+        replacedByVersionID: try optionalUUID(for: "replaced_by_version_id", in: row),
+        createdAt: Date(timeIntervalSince1970: try double(for: "created_at", in: row))
     )
 }
 

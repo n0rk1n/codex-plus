@@ -3,6 +3,19 @@ import XCTest
 @testable import CodexPlusCore
 
 final class ContextCompressionPersistenceTests: XCTestCase {
+    private let conversationID = UUID(uuidString: "11111111-1111-1111-1111-111111111111")!
+    private let userEventID = UUID(uuidString: "22222222-2222-2222-2222-222222222222")!
+    private let assistantEventID = UUID(uuidString: "22222222-2222-2222-2222-222222222223")!
+    private let roundID = UUID(uuidString: "33333333-3333-3333-3333-333333333333")!
+    private let roundEventID = UUID(uuidString: "33333333-3333-3333-3333-333333333334")!
+    private let parentVersionID = UUID(uuidString: "44444444-4444-4444-4444-444444444444")!
+    private let childVersionID = UUID(uuidString: "55555555-5555-5555-5555-555555555555")!
+    private let sourceID = UUID(uuidString: "66666666-6666-6666-6666-666666666666")!
+    private let edgeID = UUID(uuidString: "77777777-7777-7777-7777-777777777777")!
+    private let inputID = UUID(uuidString: "88888888-8888-8888-8888-888888888888")!
+    private let activeID = UUID(uuidString: "99999999-9999-9999-9999-999999999999")!
+    private let tombstoneID = UUID(uuidString: "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa")!
+
     func testSchemaCreatesCompressionTablesAndBumpsVersion() throws {
         let database = try temporaryDatabase()
 
@@ -134,6 +147,123 @@ final class ContextCompressionPersistenceTests: XCTestCase {
                 into: database
             )
         )
+    }
+
+    func testRepositoryRoundTripsCompressionState() throws {
+        let database = try temporaryDatabase()
+        try CodexPlusSchema.migrate(database)
+        try insertConversationFixture(into: database)
+        try insertConversationEventFixture(id: userEventID.uuidString.lowercased(), ordinal: 0, into: database)
+        try insertConversationEventFixture(id: assistantEventID.uuidString.lowercased(), ordinal: 1, into: database)
+        let repository = SQLiteCodexPlusRepository(database: database)
+        let round = CompressionRound(
+            id: roundID,
+            conversationID: conversationID,
+            roundIndex: 0,
+            userEventID: userEventID,
+            firstAssistantEventID: assistantEventID,
+            lastAssistantEventID: assistantEventID,
+            runState: "completed",
+            runStartedAt: Date(timeIntervalSince1970: 2),
+            runFinishedAt: Date(timeIntervalSince1970: 3),
+            createdAt: Date(timeIntervalSince1970: 4),
+            updatedAt: Date(timeIntervalSince1970: 5)
+        )
+        let roundEvent = CompressionRoundEvent(
+            id: roundEventID,
+            roundID: roundID,
+            eventID: assistantEventID,
+            segmentKind: .assistant,
+            ordinal: 1
+        )
+        let input = CompressionInputRecord(
+            id: inputID,
+            conversationID: conversationID,
+            mode: .defaultTemplate,
+            templateID: nil,
+            userInstruction: "保留关键事实",
+            inputSnapshot: "source text",
+            providerName: "Codex CLI",
+            providerModel: "gpt-test",
+            createdAt: Date(timeIntervalSince1970: 6)
+        )
+        let parentVersion = CompressionVersion(
+            id: parentVersionID,
+            conversationID: conversationID,
+            scopeKind: .round,
+            operation: .original,
+            status: .historical,
+            content: "original",
+            templateID: nil,
+            compressionInputID: nil,
+            errorMessage: nil,
+            createdAt: Date(timeIntervalSince1970: 7),
+            updatedAt: Date(timeIntervalSince1970: 8)
+        )
+        let childVersion = CompressionVersion(
+            id: childVersionID,
+            conversationID: conversationID,
+            scopeKind: .round,
+            operation: .defaultCompression,
+            status: .active,
+            content: "compressed",
+            templateID: nil,
+            compressionInputID: inputID,
+            errorMessage: nil,
+            createdAt: Date(timeIntervalSince1970: 9),
+            updatedAt: Date(timeIntervalSince1970: 10)
+        )
+        let source = CompressionVersionSource(
+            id: sourceID,
+            versionID: childVersionID,
+            sourceKind: .round,
+            sourceID: roundID,
+            ordinal: 0
+        )
+        let edge = CompressionLineageEdge(
+            id: edgeID,
+            parentVersionID: parentVersionID,
+            childVersionID: childVersionID,
+            edgeKind: .compress,
+            createdAt: Date(timeIntervalSince1970: 11)
+        )
+        let active = CompressionActiveVersion(
+            id: activeID,
+            conversationID: conversationID,
+            roundID: roundID,
+            rangeID: nil,
+            activeVersionID: childVersionID
+        )
+        let tombstone = CompressionTombstone(
+            id: tombstoneID,
+            versionID: parentVersionID,
+            reason: "rollback",
+            replacedByVersionID: childVersionID,
+            createdAt: Date(timeIntervalSince1970: 12)
+        )
+
+        try repository.replaceCompressionRounds([round], events: [roundEvent], conversationID: conversationID)
+        try repository.saveCompressionInput(input)
+        try repository.saveCompressionVersion(parentVersion)
+        try repository.saveCompressionVersion(childVersion)
+        try repository.saveCompressionVersionSources([source])
+        try repository.saveCompressionLineageEdges([edge])
+        try repository.setActiveCompressionVersion(active)
+        try repository.saveCompressionTombstones([tombstone])
+
+        let state = try repository.loadCompressionState(conversationID: conversationID)
+        XCTAssertEqual(state.rounds, [round])
+        XCTAssertEqual(state.roundEvents, [roundEvent])
+        XCTAssertEqual(state.inputs, [input])
+        XCTAssertEqual(state.versions, [parentVersion, childVersion])
+        XCTAssertEqual(state.versionSources, [source])
+        XCTAssertEqual(state.lineageEdges, [edge])
+        XCTAssertEqual(state.activeVersions, [active])
+        XCTAssertEqual(state.tombstones, [tombstone])
+
+        try repository.clearActiveCompressionVersion(conversationID: conversationID, roundID: roundID, rangeID: nil)
+
+        XCTAssertTrue(try repository.loadCompressionState(conversationID: conversationID).activeVersions.isEmpty)
     }
 
     private func temporaryDatabase() throws -> SQLiteDatabase {

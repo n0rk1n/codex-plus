@@ -110,4 +110,44 @@ public final class SQLiteCodexPlusStore: CodexPlusRepository, @unchecked Sendabl
     public func loadDefaultPromptTemplateIDs() throws -> [PromptTemplateType: UUID] {
         try repository.loadDefaultPromptTemplateIDs()
     }
+
+    public func loadCompressionState(conversationID: UUID) throws -> ConversationCompressionState {
+        try repository.loadCompressionState(conversationID: conversationID)
+    }
+
+    public func replaceCompressionRounds(
+        _ rounds: [CompressionRound],
+        events: [CompressionRoundEvent],
+        conversationID: UUID
+    ) throws {
+        try repository.replaceCompressionRounds(rounds, events: events, conversationID: conversationID)
+    }
+
+    public func saveCompressionVersion(_ version: CompressionVersion) throws {
+        try repository.saveCompressionVersion(version)
+    }
+
+    public func saveCompressionVersionSources(_ sources: [CompressionVersionSource]) throws {
+        try repository.saveCompressionVersionSources(sources)
+    }
+
+    public func saveCompressionLineageEdges(_ edges: [CompressionLineageEdge]) throws {
+        try repository.saveCompressionLineageEdges(edges)
+    }
+
+    public func saveCompressionInput(_ input: CompressionInputRecord) throws {
+        try repository.saveCompressionInput(input)
+    }
+
+    public func saveCompressionTombstones(_ tombstones: [CompressionTombstone]) throws {
+        try repository.saveCompressionTombstones(tombstones)
+    }
+
+    public func setActiveCompressionVersion(_ active: CompressionActiveVersion) throws {
+        try repository.setActiveCompressionVersion(active)
+    }
+
+    public func clearActiveCompressionVersion(conversationID: UUID, roundID: UUID?, rangeID: UUID?) throws {
+        try repository.clearActiveCompressionVersion(conversationID: conversationID, roundID: roundID, rangeID: rangeID)
+    }
 }

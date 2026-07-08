@@ -163,6 +163,37 @@ public struct CompressionTombstone: Equatable, Identifiable, Sendable {
     public var createdAt: Date
 }
 
+public struct ConversationCompressionState: Equatable, Sendable {
+    public var rounds: [CompressionRound]
+    public var roundEvents: [CompressionRoundEvent]
+    public var versions: [CompressionVersion]
+    public var versionSources: [CompressionVersionSource]
+    public var lineageEdges: [CompressionLineageEdge]
+    public var activeVersions: [CompressionActiveVersion]
+    public var inputs: [CompressionInputRecord]
+    public var tombstones: [CompressionTombstone]
+
+    public init(
+        rounds: [CompressionRound] = [],
+        roundEvents: [CompressionRoundEvent] = [],
+        versions: [CompressionVersion] = [],
+        versionSources: [CompressionVersionSource] = [],
+        lineageEdges: [CompressionLineageEdge] = [],
+        activeVersions: [CompressionActiveVersion] = [],
+        inputs: [CompressionInputRecord] = [],
+        tombstones: [CompressionTombstone] = []
+    ) {
+        self.rounds = rounds
+        self.roundEvents = roundEvents
+        self.versions = versions
+        self.versionSources = versionSources
+        self.lineageEdges = lineageEdges
+        self.activeVersions = activeVersions
+        self.inputs = inputs
+        self.tombstones = tombstones
+    }
+}
+
 public enum AssembledModelInputComponent: Equatable, Sendable {
     case sourceRound(roundID: UUID, text: String)
     case version(versionID: UUID, text: String)
