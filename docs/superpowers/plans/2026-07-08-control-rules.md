@@ -59,6 +59,7 @@ private func assertAppControlsUseRules(root: URL) {
         ".pickerStyle(": "picker styling belongs in CodexPicker",
         ".toggleStyle(": "toggle styling belongs in CodexToggleSelector",
         ".contentShape(": "control hit areas belong in rule files",
+        ".glassEffect(": "control glass styling belongs in rule files or named containers",
         ".codexRectangleButtonHitArea(": "page views must not call hit-area helpers",
         ".codexCapsuleButtonHitArea(": "page views must not call hit-area helpers",
         ".codexCircularButtonHitArea(": "page views must not call hit-area helpers",
@@ -161,6 +162,7 @@ private func isControlRuleImplementationFile(_ url: URL) -> Bool {
 
 private func isSystemControlExceptionFile(_ url: URL) -> Bool {
     [
+        "LiquidGlassContainer.swift",
         "PermissionPrompter.swift",
         "SettingsPanelController.swift"
     ].contains(url.lastPathComponent)
@@ -541,6 +543,7 @@ private struct CodexTextFieldRuleModifier: ViewModifier {
 Create `Sources/CodexPlusApp/Views/CodexMultilineTextField.swift`:
 
 ```swift
+import CodexPlusCore
 import SwiftUI
 
 struct CodexMultilineTextField: View {
@@ -1538,6 +1541,7 @@ Ensure `isSystemControlExceptionFile(_:)` contains only:
 ```swift
 private func isSystemControlExceptionFile(_ url: URL) -> Bool {
     [
+        "LiquidGlassContainer.swift",
         "PermissionPrompter.swift",
         "SettingsPanelController.swift"
     ].contains(url.lastPathComponent)
@@ -1549,10 +1553,10 @@ private func isSystemControlExceptionFile(_ url: URL) -> Bool {
 Run:
 
 ```bash
-rg -n "\\.buttonStyle\\(\\.plain\\)|\\.textFieldStyle\\(|\\.pickerStyle\\(|\\.toggleStyle\\(|\\.codex(Rectangle|Capsule|Circular|Rounded)ButtonHitArea|readOnlyInputArea|AppMultilineTextField\\(|AppMultilineTextEditor\\(" Sources/CodexPlusApp
+rg -n "\\.buttonStyle\\(\\.plain\\)|\\.textFieldStyle\\(|\\.pickerStyle\\(|\\.toggleStyle\\(|\\.glassEffect\\(|\\.codex(Rectangle|Capsule|Circular|Rounded)ButtonHitArea|readOnlyInputArea|AppMultilineTextField\\(|AppMultilineTextEditor\\(" Sources/CodexPlusApp
 ```
 
-Expected: matches only inside rule files and compatibility implementation files.
+Expected: matches only inside rule files, `LiquidGlassContainer.swift`, and compatibility implementation files.
 
 Run:
 
