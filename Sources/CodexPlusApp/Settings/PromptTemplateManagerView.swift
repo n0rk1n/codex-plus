@@ -8,6 +8,7 @@ struct PromptTemplateManagerView: View {
     @State private var pendingAction: PendingDirtyAction?
     @State private var pendingDeleteTemplate: PromptTemplate?
     @State private var pendingRenameTemplate: PromptTemplate?
+    @State private var isShowingReadOnlyTemplateNotice = false
     @State private var renameText = ""
 
     init(repository: any PromptTemplateRepository) {
@@ -153,15 +154,7 @@ struct PromptTemplateManagerView: View {
                     }
                 }
 
-                Text(template.type.displayName)
-                    .font(.caption2)
-                    .foregroundStyle(.secondary)
-                    .lineLimit(1)
-
-                Text(template.source.displayName)
-                    .font(.caption2)
-                    .foregroundStyle(template.source == .systemBuiltIn ? .green : .secondary)
-                    .lineLimit(1)
+                templateMetadataRow(template)
             }
             .frame(maxWidth: .infinity, alignment: .leading)
             .padding(10)
@@ -188,6 +181,24 @@ struct PromptTemplateManagerView: View {
         }
     }
 
+    private func templateMetadataRow(_ template: PromptTemplate) -> some View {
+        HStack(alignment: .firstTextBaseline, spacing: 8) {
+            Text(template.type.displayName)
+                .font(.caption2)
+                .foregroundStyle(.secondary)
+                .lineLimit(1)
+                .truncationMode(.tail)
+
+            Spacer(minLength: 8)
+
+            Text(template.source.displayName)
+                .font(.caption2)
+                .foregroundStyle(template.source == .systemBuiltIn ? .green : .secondary)
+                .lineLimit(1)
+                .fixedSize(horizontal: true, vertical: false)
+        }
+    }
+
     private func rowBackground(isSelected: Bool) -> some View {
         RoundedRectangle(cornerRadius: 8, style: .continuous)
             .fill(isSelected ? Color.accentColor.opacity(0.18) : Color.white.opacity(0.05))
@@ -199,20 +210,31 @@ struct PromptTemplateManagerView: View {
             if store.draft == nil {
                 emptyDetailState
             } else {
-                VStack(spacing: 0) {
-                    detailHeader
+                ZStack {
+                    VStack(spacing: 0) {
+                        detailHeader
 
-                    Divider()
-                        .overlay(.white.opacity(0.08))
+                        Divider()
+                            .overlay(.white.opacity(0.08))
 
-                    detailForm
+                        detailForm
 
-                    Spacer(minLength: 0)
+                        Spacer(minLength: 0)
 
-                    Divider()
-                        .overlay(.white.opacity(0.08))
+                        Divider()
+                            .overlay(.white.opacity(0.08))
 
-                    detailFooter
+                        detailFooter
+                    }
+
+                    if isShowingReadOnlyTemplateNotice {
+                        readOnlyTemplateNotice
+                    }
+                }
+                .onChange(of: store.isEditable) {
+                    if store.isEditable {
+                        isShowingReadOnlyTemplateNotice = false
+                    }
                 }
             }
         }
@@ -277,44 +299,54 @@ struct PromptTemplateManagerView: View {
                 }
 
                 labeledField("名称 *") {
-                    TextField("模板名称", text: draftTextBinding(\.name))
-                        .textFieldStyle(.roundedBorder)
-                        .disabled(!store.isEditable)
+                    readOnlyInputArea {
+                        TextField("模板名称", text: draftTextBinding(\.name))
+                            .textFieldStyle(.roundedBorder)
+                            .disabled(!store.isEditable)
+                    }
                 }
 
                 labeledField("类型 *") {
-                    Picker("", selection: draftTypeBinding) {
-                        Text("请选择类型")
-                            .tag(Optional<PromptTemplateType>.none)
+                    readOnlyInputArea {
+                        Picker("", selection: draftTypeBinding) {
+                            Text("请选择类型")
+                                .tag(Optional<PromptTemplateType>.none)
 
-                        ForEach(PromptTemplateType.allCases, id: \.self) { type in
-                            Text(type.displayName)
-                                .tag(Optional(type))
+                            ForEach(PromptTemplateType.allCases, id: \.self) { type in
+                                Text(type.displayName)
+                                    .tag(Optional(type))
+                            }
                         }
+                        .pickerStyle(.menu)
+                        .labelsHidden()
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .disabled(!store.isEditable)
                     }
-                    .pickerStyle(.menu)
-                    .labelsHidden()
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .disabled(!store.isEditable)
                 }
 
                 labeledField("系统提示词 *") {
-                    editor(text: draftTextBinding(\.systemPrompt), minHeight: 140)
-                        .disabled(!store.isEditable)
+                    readOnlyInputArea {
+                        editor(text: draftTextBinding(\.systemPrompt), minHeight: 140)
+                            .disabled(!store.isEditable)
+                    }
                 }
 
                 labeledField("用户提示词") {
-                    editor(text: draftTextBinding(\.userPrompt), minHeight: 100)
-                        .disabled(!store.isEditable)
+                    readOnlyInputArea {
+                        editor(text: draftTextBinding(\.userPrompt), minHeight: 100)
+                            .disabled(!store.isEditable)
+                    }
                 }
 
                 labeledField("说明") {
-                    AppMultilineTextField(
-                        placeholder: "说明",
-                        text: draftTextBinding(\.note),
-                        lineLimit: MultilineInputDefaults.promptTemplateNoteLineLimit
-                    )
-                        .disabled(!store.isEditable)
+                    readOnlyInputArea {
+                        AppMultilineTextField(
+                            placeholder: "说明",
+                            text: draftTextBinding(\.note),
+                            lineLimit: MultilineInputDefaults.promptTemplateNoteLineLimit
+                        )
+                            .disabled(!store.isEditable)
+                    }
                 }
 
                 if let validationError = store.validationError {
@@ -328,6 +360,24 @@ struct PromptTemplateManagerView: View {
             .padding(18)
         }
         .opacity(store.isEditable ? 1 : 0.56)
+    }
+
+    private var readOnlyTemplateNotice: some View {
+        Text("系统内置提示词为只读内容。如需修改，请先创建用户自定义提示词。")
+            .font(.system(size: 13, weight: .semibold))
+            .foregroundStyle(.white)
+            .multilineTextAlignment(.center)
+            .padding(.horizontal, 18)
+            .padding(.vertical, 12)
+            .background(Color.black.opacity(0.9), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+            .overlay(
+                RoundedRectangle(cornerRadius: 10, style: .continuous)
+                    .stroke(Color.white.opacity(0.12), lineWidth: 1)
+            )
+            .shadow(color: .black.opacity(0.32), radius: 18, y: 8)
+            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .center)
+            .allowsHitTesting(false)
+            .transition(.opacity.combined(with: .scale(scale: 0.96)))
     }
 
     private var detailFooter: some View {
@@ -468,6 +518,17 @@ struct PromptTemplateManagerView: View {
         }
     }
 
+    private func readOnlyInputArea<Content: View>(@ViewBuilder content: () -> Content) -> some View {
+        content()
+            .overlay {
+                if !store.isEditable {
+                    Color.clear
+                        .contentShape(Rectangle())
+                        .onTapGesture(perform: showReadOnlyTemplateNotice)
+                }
+            }
+    }
+
     private var sourceFilterBinding: Binding<PromptTemplateSourceFilter> {
         Binding(
             get: { store.sourceFilter },
@@ -515,6 +576,25 @@ struct PromptTemplateManagerView: View {
             return "类型必须选择一项。"
         case .emptySystemPrompt:
             return "系统提示词不能为空。"
+        }
+    }
+
+    private func showReadOnlyTemplateNotice() {
+        guard !store.isEditable else {
+            return
+        }
+        guard !isShowingReadOnlyTemplateNotice else {
+            return
+        }
+
+        withAnimation(.easeOut(duration: 0.16)) {
+            isShowingReadOnlyTemplateNotice = true
+        }
+
+        DispatchQueue.main.asyncAfter(deadline: .now() + 3) {
+            withAnimation(.easeIn(duration: 0.2)) {
+                isShowingReadOnlyTemplateNotice = false
+            }
         }
     }
 

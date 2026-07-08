@@ -52,11 +52,14 @@ func runPromptTemplateManagerAppSourceTests() {
     )
     expect(
         managerView.contains("Picker(\"\", selection: sourceFilterBinding)") &&
+            managerView.contains("private func templateMetadataRow(_ template: PromptTemplate) -> some View") &&
+            managerView.contains("HStack(alignment: .firstTextBaseline, spacing: 8)") &&
+            managerView.contains("Spacer(minLength: 8)") &&
             managerView.contains("Text(template.type.displayName)") &&
             !managerView.contains("Text(\"类型  \\(template.type.displayName)\")") &&
             managerView.contains("Text(template.source.displayName)") &&
             !managerView.contains("Text(\"来源  \\(template.source.displayName)\")"),
-        "prompt manager sidebar removes redundant type and source labels while keeping values visible"
+        "prompt manager sidebar shows type left and source right on one metadata row"
     )
     expect(
         managerView.contains("Picker(\"\", selection: draftTypeBinding)") &&
@@ -80,6 +83,21 @@ func runPromptTemplateManagerAppSourceTests() {
     expect(
         managerView.contains(".codexCapsuleButtonHitArea()"),
         "prompt template manager action buttons use the shared capsule hit-area modifier"
+    )
+    expect(
+        managerView.contains("@State private var isShowingReadOnlyTemplateNotice = false") &&
+            managerView.contains("readOnlyTemplateNotice") &&
+            managerView.contains("showReadOnlyTemplateNotice") &&
+            managerView.contains("系统内置提示词为只读内容") &&
+            managerView.contains("创建用户自定义提示词") &&
+            managerView.contains("DispatchQueue.main.asyncAfter(deadline: .now() + 3)") &&
+            !managerView.contains("DispatchQueue.main.asyncAfter(deadline: .now() + 5)") &&
+            !managerView.contains("想要修改") &&
+            managerView.contains("guard !store.isEditable") &&
+            managerView.contains("guard !isShowingReadOnlyTemplateNotice") &&
+            managerView.contains("Color.clear") &&
+            managerView.contains(".contentShape(Rectangle())"),
+        "prompt manager read-only detail controls show one centered notice for three seconds"
     )
     expect(
         settingsPanelController.contains("PromptTemplateSettingsStore(repository: repository)") &&
