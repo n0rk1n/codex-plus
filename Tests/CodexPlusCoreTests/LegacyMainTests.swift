@@ -1941,12 +1941,12 @@ func runLegacyMainActorTests() {
     let archiveViewPath = FileManager.default.currentDirectoryPath
         + "/Sources/CodexPlusApp/Workbench/ArchivedConversationView.swift"
     let archiveViewSource = (try? String(contentsOfFile: archiveViewPath, encoding: .utf8)) ?? ""
-    if let actionRange = archiveViewSource.range(of: "actions.open(record.id)"),
+    if let actionRange = archiveViewSource.range(of: "CodexButton(rule: .rowRectangle, action: {"),
        let buttonEndRange = archiveViewSource[actionRange.upperBound...].range(of: ".swipeActions(edge: .trailing)") {
         let rowButtonSource = archiveViewSource[actionRange.lowerBound..<buttonEndRange.upperBound]
         expect(
-            rowButtonSource.contains(".codexRectangleButtonHitArea()"),
-            "archived conversation result rows use the shared full-row hit-area modifier"
+            rowButtonSource.contains("CodexButton(rule: .rowRectangle"),
+            "archived conversation result rows use the shared row rule"
         )
         expect(
             archiveViewSource.contains(".swipeActions(edge: .trailing)"),
@@ -2009,14 +2009,14 @@ func runLegacyMainActorTests() {
     let topProjectStripPath = FileManager.default.currentDirectoryPath
         + "/Sources/CodexPlusApp/Workbench/TopProjectStripView.swift"
     let topProjectStripSource = (try? String(contentsOfFile: topProjectStripPath, encoding: .utf8)) ?? ""
-    if let actionRange = topProjectStripSource.range(of: "actions.selectConversation(conversationID)"),
-       let buttonEndRange = topProjectStripSource[actionRange.upperBound...].range(of: ".buttonStyle(.plain)") {
+    if let actionRange = topProjectStripSource.range(of: "CodexButton(\n            rule: .cardRounded(cornerRadius: WorkbenchMetrics.projectCardCornerRadius)"),
+       let buttonEndRange = topProjectStripSource[actionRange.upperBound...].range(of: "projectCardContent(card)") {
         let projectCardButtonSource = topProjectStripSource[actionRange.lowerBound..<buttonEndRange.upperBound]
         expect(
             projectCardButtonSource.contains(
-                ".codexRoundedButtonHitArea(cornerRadius: WorkbenchMetrics.projectCardCornerRadius)"
+                "CodexButton(\n            rule: .cardRounded(cornerRadius: WorkbenchMetrics.projectCardCornerRadius)"
             ),
-            "top project cards use the shared rounded full-card hit-area modifier"
+            "top project cards use the shared rounded card rule"
         )
         expect(
             !projectCardButtonSource.contains(".opacity(card.isActive ? 1 : 0.82)"),

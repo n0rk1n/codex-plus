@@ -5,16 +5,13 @@ struct CodexDesktopTileView: View {
     let onOpen: () -> Void
 
     var body: some View {
-        Button(action: onOpen) {
+        CodexButton(rule: .cardRounded(cornerRadius: 22), accessibilityLabel: "Open Codex Desktop", action: onOpen) {
             LiquidGlassContainer(cornerRadius: 22) {
                 image
                     .frame(width: 48, height: 48)
                     .frame(width: 92, height: 92)
             }
         }
-        .buttonStyle(.plain)
-        .codexRoundedButtonHitArea(cornerRadius: 22)
-        .accessibilityLabel("Open Codex Desktop")
     }
 
     @ViewBuilder

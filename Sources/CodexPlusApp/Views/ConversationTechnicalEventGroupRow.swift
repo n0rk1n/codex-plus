@@ -8,7 +8,7 @@ struct ConversationTechnicalEventGroupRow: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 2) {
-            Button(action: onToggle) {
+            CodexButton(rule: .rowRectangle, accessibilityLabel: accessibilityText, action: onToggle) {
                 HStack(spacing: 10) {
                     Image(systemName: isExpanded ? "chevron.down" : "chevron.right")
                         .font(.system(size: 11, weight: .semibold))
@@ -31,9 +31,6 @@ struct ConversationTechnicalEventGroupRow: View {
                 }
                 .padding(.vertical, 6)
             }
-            .buttonStyle(.plain)
-            .codexRectangleButtonHitArea()
-            .accessibilityLabel(accessibilityText)
 
             if isExpanded {
                 VStack(alignment: .leading, spacing: 0) {

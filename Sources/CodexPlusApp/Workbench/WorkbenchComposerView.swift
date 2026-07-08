@@ -103,31 +103,37 @@ struct WorkbenchComposerView: View {
     private var composerButton: some View {
         switch snapshot.composerAction {
         case .stop:
-            Button(action: actions.stop) {
+            CodexButton(
+                rule: .composerIconCircle,
+                isDisabled: snapshot.activeConversation == nil,
+                action: actions.stop
+            ) {
                 Image(systemName: "stop.fill")
                     .font(.system(size: 15, weight: .semibold))
                     .frame(width: WorkbenchMetrics.composerControlHeight, height: WorkbenchMetrics.composerControlHeight)
             }
-            .buttonStyle(.plain)
-            .codexCircularButtonHitArea()
-            .disabled(snapshot.activeConversation == nil)
         case .send:
-            Button(action: submitPrompt) {
+            CodexButton(
+                rule: .composerIconCircle,
+                isDisabled: !snapshot.canSubmitPrompt
+                    || prompt.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
+                action: submitPrompt
+            ) {
                 Image(systemName: "arrow.up")
                     .font(.system(size: 15, weight: .semibold))
                     .frame(width: WorkbenchMetrics.composerControlHeight, height: WorkbenchMetrics.composerControlHeight)
             }
-            .buttonStyle(.plain)
-            .codexCircularButtonHitArea()
-            .disabled(
-                !snapshot.canSubmitPrompt
-                    || prompt.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-            )
         }
     }
 
     private var promptOptimizationButton: some View {
-        Button(action: optimizePrompt) {
+        CodexButton(
+            rule: .composerIconCircle,
+            isDisabled: isOptimizingPrompt || snapshot.composerAction != .send,
+            help: isOptimizingPrompt ? "正在优化提示词" : "优化输入提示词",
+            accessibilityLabel: isOptimizingPrompt ? "正在优化提示词" : "优化输入提示词",
+            action: optimizePrompt
+        ) {
             Image(systemName: isOptimizingPrompt ? "lightbulb.fill" : "lightbulb")
                 .font(.system(size: 15, weight: .semibold))
                 .symbolRenderingMode(.hierarchical)
@@ -142,15 +148,11 @@ struct WorkbenchComposerView: View {
                     value: bulbPulse
                 )
         }
-        .buttonStyle(.plain)
-        .disabled(isOptimizingPrompt || snapshot.composerAction != .send)
-        .help(isOptimizingPrompt ? "正在优化提示词" : "优化输入提示词")
-        .accessibilityLabel(isOptimizingPrompt ? "正在优化提示词" : "优化输入提示词")
     }
 
     private var workspacePickerButton: some View {
         HStack(spacing: 0) {
-            Button(action: actions.pickWorkspace) {
+            CodexButton(rule: .workspaceCapsule, action: actions.pickWorkspace) {
                 HStack(spacing: 6) {
                     Image(systemName: "folder")
                         .font(.system(size: 12, weight: .semibold))
@@ -166,8 +168,6 @@ struct WorkbenchComposerView: View {
                 .frame(height: WorkbenchMetrics.composerControlHeight)
                 .fixedSize(horizontal: true, vertical: false)
             }
-            .buttonStyle(.plain)
-            .codexCapsuleButtonHitArea()
 
             if activeProjectName != nil {
                 workspaceClearButton
@@ -181,17 +181,18 @@ struct WorkbenchComposerView: View {
     }
 
     private var workspaceClearButton: some View {
-        Button(action: actions.clearWorkspace) {
+        CodexButton(
+            rule: .workspaceClear,
+            help: WorkbenchStrings.clearWorkspace,
+            accessibilityLabel: WorkbenchStrings.clearWorkspace,
+            action: actions.clearWorkspace
+        ) {
             Image(systemName: "xmark.circle.fill")
                 .symbolRenderingMode(.hierarchical)
                 .font(.system(size: 15, weight: .semibold))
                 .frame(width: 24, height: WorkbenchMetrics.composerControlHeight)
         }
-        .buttonStyle(.plain)
-        .codexRectangleButtonHitArea()
         .padding(.trailing, 6)
-        .help(WorkbenchStrings.clearWorkspace)
-        .accessibilityLabel(WorkbenchStrings.clearWorkspace)
     }
 
     private var activePlaceholder: String {

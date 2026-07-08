@@ -20,35 +20,34 @@ struct WorkbenchView: View {
                 )
 
                 if let error = store.snapshot.error {
-                    HStack(alignment: .top, spacing: 10) {
-                        Image(systemName: "exclamationmark.triangle.fill")
-                            .foregroundStyle(.yellow)
+                    LiquidGlassContainer(cornerRadius: WorkbenchMetrics.errorCornerRadius) {
+                        HStack(alignment: .top, spacing: 10) {
+                            Image(systemName: "exclamationmark.triangle.fill")
+                                .foregroundStyle(.yellow)
 
-                        VStack(alignment: .leading, spacing: 2) {
-                            Text(error.title)
-                                .font(.caption.weight(.semibold))
-                            Text(error.message)
-                                .font(.caption2)
-                                .foregroundStyle(.secondary)
-                                .lineLimit(2)
+                            VStack(alignment: .leading, spacing: 2) {
+                                Text(error.title)
+                                    .font(.caption.weight(.semibold))
+                                Text(error.message)
+                                    .font(.caption2)
+                                    .foregroundStyle(.secondary)
+                                    .lineLimit(2)
+                            }
+
+                            Spacer(minLength: 8)
+
+                            CodexButton(
+                                rule: .toolbarIconCircle,
+                                accessibilityLabel: WorkbenchStrings.closeError,
+                                action: { store.clearError() }
+                            ) {
+                                Image(systemName: "xmark.circle.fill")
+                                    .font(.system(size: 14, weight: .semibold))
+                            }
                         }
-
-                        Spacer(minLength: 8)
-
-                        Button(action: { store.clearError() }) {
-                            Image(systemName: "xmark.circle.fill")
-                        .font(.system(size: 14, weight: .semibold))
-                        }
-                        .buttonStyle(.plain)
-                        .codexCircularButtonHitArea()
-                        .accessibilityLabel(WorkbenchStrings.closeError)
+                        .padding(.horizontal, 12)
+                        .padding(.vertical, 8)
                     }
-                    .padding(.horizontal, 12)
-                    .padding(.vertical, 8)
-                    .glassEffect(
-                        .regular,
-                        in: RoundedRectangle(cornerRadius: WorkbenchMetrics.errorCornerRadius, style: .continuous)
-                    )
                 }
 
                 if store.snapshot.isShowingArchiveSearch {

@@ -48,12 +48,12 @@ struct CompactEntryView: View {
                             .scaleEffect(draggedTile == tile ? 1.03 : 1)
                             .opacity(draggedTile == tile ? 0.92 : 1)
                             .zIndex(draggedTile == tile ? 1 : 0)
-                            .contentShape(Rectangle())
+                            .codexControlHitArea(.rectangle)
                     }
                 }
                 .frame(width: tileStripWidth, height: tileRowHeight)
                 .frame(maxWidth: .infinity)
-                .contentShape(Rectangle())
+                .codexControlHitArea(.rectangle)
                 .highPriorityGesture(rowDragGesture(rowWidth: tileStripWidth))
                 .animation(.snappy(duration: 0.18), value: draggedTile)
                 .animation(.snappy(duration: 0.18), value: previewTileOrder.tiles)
@@ -61,16 +61,17 @@ struct CompactEntryView: View {
 
                 LiquidGlassContainer(cornerRadius: 24) {
                     HStack(alignment: .bottom, spacing: 10) {
-                        Button(action: { onOpenDraft(prompt) }) {
+                        CodexButton(
+                            rule: .rowRectangle,
+                            help: "Choose Workspace",
+                            accessibilityLabel: "Choose Workspace",
+                            action: { onOpenDraft(prompt) }
+                        ) {
                             Image(systemName: "folder")
                                 .font(.system(size: 15, weight: .semibold))
                                 .foregroundStyle(promptIconColor)
                                 .frame(width: 32, height: 32)
                         }
-                        .buttonStyle(.plain)
-                        .codexRectangleButtonHitArea()
-                        .help("Choose Workspace")
-                        .accessibilityLabel("Choose Workspace")
 
                         AppMultilineTextField(
                             placeholder: "Ask Codex...",

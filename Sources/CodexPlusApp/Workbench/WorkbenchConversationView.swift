@@ -67,21 +67,15 @@ struct WorkbenchConversationView: View {
     }
 
     private func archiveButton(for conversationID: UUID) -> some View {
-        Button {
+        CodexButton(rule: .toolbarCapsule, help: "归档当前对话", action: {
             actions.archiveConversation(conversationID)
-        } label: {
+        }) {
             Label("归档", systemImage: "archivebox.and.arrow.down")
                 .font(.caption.weight(.semibold))
                 .labelStyle(.titleAndIcon)
                 .padding(.horizontal, 10)
                 .frame(height: 28)
         }
-        .buttonStyle(.plain)
-        .glassEffect(.regular, in: Capsule(style: .continuous))
-        .compositingGroup()
-        .mask(Capsule(style: .continuous))
-        .codexCapsuleButtonHitArea()
-        .help("归档当前对话")
     }
 
     private var emptyState: some View {

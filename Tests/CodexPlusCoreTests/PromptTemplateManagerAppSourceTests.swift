@@ -18,6 +18,9 @@ func runPromptTemplateManagerAppSourceTests() {
     let windowCoordinator = readSource(
         root.appendingPathComponent("Sources/CodexPlusApp/WindowCoordinator.swift")
     )
+    let workbenchPanelController = readSource(
+        root.appendingPathComponent("Sources/CodexPlusApp/Workbench/WorkbenchPanelController.swift")
+    )
     let topProjectStripView = readSource(
         root.appendingPathComponent("Sources/CodexPlusApp/Workbench/TopProjectStripView.swift")
     )
@@ -145,8 +148,15 @@ func runPromptTemplateManagerAppSourceTests() {
     )
     expect(
         topProjectStripView.contains("systemName: \"gearshape\"") &&
-            topProjectStripView.contains(".codexCircularButtonHitArea()"),
-        "workbench circular icon buttons use the shared full-circle hit-area modifier"
+            topProjectStripView.contains("rule: .toolbarIconCircle"),
+        "workbench circular icon buttons use the shared toolbar icon rule"
+    )
+    expect(
+        workbenchPanelController.contains("visibleFrame.width * 0.90") &&
+            workbenchPanelController.contains("visibleFrame.height * 0.84") &&
+            !workbenchPanelController.contains("CGFloat(1240)") &&
+            !workbenchPanelController.contains("CGFloat(720)"),
+        "workbench panel default frame uses the green-box screen ratio instead of fixed desktop caps"
     )
 }
 

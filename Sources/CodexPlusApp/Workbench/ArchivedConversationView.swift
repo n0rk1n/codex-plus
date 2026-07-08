@@ -56,9 +56,9 @@ struct ArchivedConversationView: View {
 
             List {
                 ForEach(results) { record in
-                    Button {
+                    CodexButton(rule: .rowRectangle, action: {
                         actions.open(record.id)
-                    } label: {
+                    }) {
                         VStack(alignment: .leading, spacing: 4) {
                             Text(record.title)
                                 .font(.system(size: 13, weight: .semibold))
@@ -73,8 +73,6 @@ struct ArchivedConversationView: View {
                         .frame(maxWidth: .infinity, alignment: .leading)
                         .padding(.vertical, 4)
                     }
-                    .buttonStyle(.plain)
-                    .codexRectangleButtonHitArea()
                     .swipeActions(edge: .trailing) {
                         Button(role: .destructive) {
                             pendingDeleteRecord = record
@@ -176,15 +174,13 @@ struct ArchivedConversationView: View {
             Text("已经恢复，是否")
                 .foregroundStyle(.primary)
 
-            Button {
+            CodexButton(rule: .inlineTextLink, action: {
                 actions.jumpToRestored(notice.conversationID)
                 restoreNotice = nil
-            } label: {
+            }) {
                 Text("跳转对话")
                     .foregroundStyle(Color.blue.opacity(0.72))
             }
-            .buttonStyle(.plain)
-            .codexRectangleButtonHitArea()
         }
         .font(.system(size: 13, weight: .medium))
         .padding(.horizontal, 14)
