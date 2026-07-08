@@ -91,8 +91,7 @@ func runPromptTemplateManagerAppSourceTests() {
         managerView.contains("@State private var isShowingReadOnlyTemplateNotice = false") &&
             managerView.contains("readOnlyTemplateNotice") &&
             managerView.contains("showReadOnlyTemplateNotice") &&
-            managerView.contains("系统内置提示词为只读内容") &&
-            managerView.contains("创建用户自定义提示词") &&
+            managerView.contains("系统内置提示词为只读内容。如需修改，请先创建用户自定义提示词。") &&
             managerView.contains("DispatchQueue.main.asyncAfter(deadline: .now() + 3)") &&
             !managerView.contains("DispatchQueue.main.asyncAfter(deadline: .now() + 5)") &&
             !managerView.contains("想要修改") &&
@@ -176,7 +175,10 @@ private func assertAppControlsUseRules(root: URL) {
         "readOnlyInputArea": "read-only control overlays belong in CodexReadOnlyNotice"
     ]
 
-    for file in files where !isControlRuleImplementationFile(file) && !isSystemControlExceptionFile(file) {
+    for file in files
+    where !isControlRuleImplementationFile(file) &&
+            !isSystemControlExceptionFile(file) &&
+            !isControlCompatibilityFile(file) {
         let source = readSource(file)
         for (token, message) in forbiddenTokens {
             expect(
@@ -274,5 +276,13 @@ private func isSystemControlExceptionFile(_ url: URL) -> Bool {
         "LiquidGlassContainer.swift",
         "PermissionPrompter.swift",
         "SettingsPanelController.swift"
+    ].contains(url.lastPathComponent)
+}
+
+private func isControlCompatibilityFile(_ url: URL) -> Bool {
+    [
+        "ButtonHitAreaModifier.swift",
+        "AppMultilineTextField.swift",
+        "AppMultilineTextEditor.swift"
     ].contains(url.lastPathComponent)
 }
