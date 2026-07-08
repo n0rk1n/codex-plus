@@ -94,6 +94,354 @@ Create tests:
 - `Tests/CodexPlusCoreXCTests/WorkbenchContextCompressionTests.swift`
 - `Tests/CodexPlusCoreXCTests/ArchiveContextCompressionTests.swift`
 
+## Implementation Contracts
+
+These contracts are part of the plan. If an implementation task finds a better name, it can rename consistently, but it must preserve the same boundaries and behavior.
+
+### Core Type Shape
+
+`ContextCompressionModels.swift` should expose small value types. Do not hide persistence-critical state inside UI-only structs.
+
+```swift
+public enum CompressionSegmentKind: String, Codable, CaseIterable, Sendable {
+    case user
+    case assistant
+}
+
+public enum CompressionVersionScopeKind: String, Codable, CaseIterable, Sendable {
+    case round
+    case range
+    case assembled
+}
+
+public enum CompressionVersionOperation: String, Codable, CaseIterable, Sendable {
+    case original
+    case manualEdit = "manual_edit"
+    case defaultCompression = "default_compression"
+    case customCompression = "custom_compression"
+    case systemCompression = "system_compression"
+    case exclude
+    case failedCompression = "failed_compression"
+    case tombstone
+}
+
+public enum CompressionVersionStatus: String, Codable, CaseIterable, Sendable {
+    case active
+    case historical
+    case failed
+    case tombstoned
+}
+
+public struct CompressionRound: Equatable, Identifiable, Sendable {
+    public let id: UUID
+    public var conversationID: UUID
+    public var roundIndex: Int
+    public var userEventID: UUID
+    public var firstAssistantEventID: UUID?
+    public var lastAssistantEventID: UUID?
+    public var runState: String
+    public var runStartedAt: Date?
+    public var runFinishedAt: Date?
+    public var createdAt: Date
+    public var updatedAt: Date
+}
+
+public struct CompressionRoundEvent: Equatable, Identifiable, Sendable {
+    public let id: UUID
+    public var roundID: UUID
+    public var eventID: UUID
+    public var segmentKind: CompressionSegmentKind
+    public var ordinal: Int
+}
+
+public struct CompressionVersion: Equatable, Identifiable, Sendable {
+    public let id: UUID
+    public var conversationID: UUID
+    public var scopeKind: CompressionVersionScopeKind
+    public var operation: CompressionVersionOperation
+    public var status: CompressionVersionStatus
+    public var content: String
+    public var templateID: UUID?
+    public var compressionInputID: UUID?
+    public var errorMessage: String?
+    public var createdAt: Date
+    public var updatedAt: Date
+}
+```
+
+Required helper behavior:
+
+```swift
+extension CompressionVersion {
+    public var canBecomeActive: Bool {
+        status != .failed
+            && status != .tombstoned
+            && operation != .failedCompression
+            && operation != .tombstone
+    }
+
+    public var emitsModelInput: Bool {
+        canBecomeActive && operation != .exclude
+    }
+}
+```
+
+### Repository API Shape
+
+`ContextCompressionRepository` should be broad enough for the service to use without touching SQL, but narrow enough that UI cannot write arbitrary partial state.
+
+```swift
+public protocol ContextCompressionRepository: Sendable {
+    func loadCompressionState(conversationID: UUID) throws -> ConversationCompressionState
+    func replaceCompressionRounds(_ rounds: [CompressionRound], events: [CompressionRoundEvent], conversationID: UUID) throws
+
+    func saveCompressionVersion(_ version: CompressionVersion) throws
+    func saveCompressionVersionSources(_ sources: [CompressionVersionSource]) throws
+    func saveCompressionLineageEdges(_ edges: [CompressionLineageEdge]) throws
+    func saveCompressionInput(_ input: CompressionInputRecord) throws
+    func saveCompressionTombstones(_ tombstones: [CompressionTombstone]) throws
+
+    func setActiveCompressionVersion(_ active: CompressionActiveVersion) throws
+    func clearActiveCompressionVersion(conversationID: UUID, roundID: UUID?, rangeID: UUID?) throws
+}
+```
+
+The implementation can add transactional batch methods if the first pass exposes race conditions, but the service must never require UI callers to perform multi-write transactions themselves.
+
+### SQLite Data Rules
+
+Use TEXT UUIDs in lowercased UUID string format, matching existing repository style.
+
+Important table rules:
+
+- `compression_rounds` is rebuilt from source events and should be idempotent for the same conversation event sequence.
+- `compression_versions.content` stores the exact text emitted for that version. Empty string is valid.
+- `compression_inputs.input_snapshot` stores the exact compression provider input, not just IDs.
+- `compression_active_versions` stores the current projection choice. It is the fast path, not the source of truth.
+- `compression_lineage_edges` and `compression_version_sources` are the audit path.
+- `compression_tombstones` hides replaced downstream branches from normal UI but does not erase lineage records.
+
+The schema should enforce these invariants where SQLite can do it cheaply:
+
+```sql
+CHECK (round_index >= 0)
+CHECK (ordinal >= 0)
+CHECK (status IN ('active', 'historical', 'failed', 'tombstoned'))
+CHECK (operation IN (
+    'original',
+    'manual_edit',
+    'default_compression',
+    'custom_compression',
+    'system_compression',
+    'exclude',
+    'failed_compression',
+    'tombstone'
+))
+```
+
+Transaction boundary:
+
+```text
+BEGIN IMMEDIATE
+  save compression input if one exists
+  save new version
+  save version sources
+  save lineage edges
+  mark previous active versions historical when replaced
+  insert tombstones for hidden downstream branch if rollback
+  set active version if the new version can become active
+COMMIT
+```
+
+If any step fails, the active lineage must remain exactly as it was before the operation.
+
+### Assembly Algorithm Contract
+
+The assembler is the most important correctness boundary. Workbench, preview, budget, system compression, archive, and send must all call it.
+
+Pseudo-code:
+
+```swift
+func assemble(input: ContextCompressionAssemblyInput) throws -> AssembledModelInput {
+    let state = input.compressionState
+    let activeRangeReplacements = state.activeVersions.filter(\.coversRange)
+    let coveredRoundIDs = Set(activeRangeReplacements.flatMap(\.sourceRoundIDs))
+    var components: [AssembledModelInputComponent] = []
+
+    for round in state.rounds.sorted(by: \.roundIndex) {
+        if coveredRoundIDs.contains(round.id) {
+            if let replacement = activeRangeReplacements.first(where: { $0.startsAt(round.id) }) {
+                components.append(.version(replacement.versionID, replacement.content))
+            }
+            continue
+        }
+
+        if let active = state.activeVersion(for: round.id) {
+            if active.operation == .exclude {
+                components.append(.excluded(round.id))
+            } else {
+                components.append(.version(active.id, active.content))
+            }
+            continue
+        }
+
+        components.append(.sourceRound(round.id, input.originalText(for: round)))
+    }
+
+    if let pendingPrompt = input.pendingUserPrompt?.trimmingCharacters(in: .whitespacesAndNewlines),
+       !pendingPrompt.isEmpty {
+        components.append(.pendingUserPrompt(pendingPrompt))
+    }
+
+    return AssembledModelInput(components: components)
+}
+```
+
+Required assembly outcomes:
+
+- Original-only conversation emits original user and assistant text in round order.
+- Manual edit emits edited content instead of the edited segment.
+- Exclusion emits no text for that round but keeps an `.excluded` component for traceability.
+- Joined compression emits once at the first covered round and suppresses later covered rounds.
+- Failed and tombstoned versions are ignored.
+- The same input state always produces byte-identical output text.
+
+### Budget Gate Contract
+
+`ContextBudgetProvider` must provide evidence, not guesses.
+
+```swift
+public protocol ContextBudgetProvider: Sendable {
+    func measure(_ request: ContextBudgetRequest) async -> ContextBudgetSnapshot
+}
+
+public struct ContextBudgetRequest: Equatable, Sendable {
+    public var modelName: String?
+    public var assembledInput: String
+    public var reservedOutputTokens: Int
+    public var workingDirectoryURL: URL
+}
+```
+
+Policy:
+
+- `.hardLimit` blocks send.
+- `.warning` and `.notice` do not block send.
+- `.unknown` does not block send by itself, but the UI must say the budget is unknown.
+- If the provider has explicit evidence that assembled input exceeds usable input tokens, it must return `.hardLimit`.
+- System compression uses the same assembled input that triggered `.hardLimit`; it must not silently choose a different source set.
+
+### Compression Execution Contract
+
+`CompressionExecutionProvider` is replaceable. The first implementation uses current Codex CLI through `ExecutionEngine`; future replacement should implement the same protocol.
+
+```swift
+public protocol CompressionExecutionProvider: Sendable {
+    func startCompression(
+        request: CompressionExecutionRequest,
+        onFinish: @escaping @Sendable (CompressionExecutionResult) -> Void
+    ) -> (any ExecutionHandle)?
+}
+```
+
+Provider output rules:
+
+- Success requires non-empty output.
+- Only final compression text becomes `CompressionVersion.content`.
+- Provider events, intermediate logs, and command output are not appended to `ConversationSession.events`.
+- Failure creates a failed compression version with source mappings and error text.
+- Cancellation creates a failed compression version only if the provider returned enough metadata to explain the attempt; otherwise it should leave active lineage unchanged and surface a UI error.
+
+### Workbench State Contract
+
+`WorkbenchSnapshot` should expose enough state for SwiftUI to render without querying repositories.
+
+```swift
+public struct WorkbenchContextCompressionState: Equatable, Sendable {
+    public var rounds: [CompressionRoundPresentation]
+    public var selectedRange: CompressionRoundRangeSelection?
+    public var inspector: CompressionInspectorState?
+    public var budget: ContextBudgetSnapshot?
+    public var sendBlockReason: String?
+    public var canRunSystemCompression: Bool
+    public var activeOperation: CompressionOperationState?
+    public var modelInputPreview: String?
+}
+```
+
+Store action rules:
+
+- UI can request an action; store/service decide whether it is valid.
+- Store refreshes compression state after every successful action.
+- Store refreshes budget after assembly changes and before send.
+- Send button reads `snapshot.canSubmitPrompt` plus `compression.sendBlockReason`.
+- System compression button appears only when `sendBlockReason == "需要压缩后继续"` and the conversation is not running.
+
+### UI Contract
+
+The main timeline is source-first:
+
+- Original source text remains the default visual object.
+- Active compression status is shown as a boundary/marker overlay.
+- Excluded source text is dimmed and marked `已排除模型上下文`.
+- Failed compression does not dim source text; it shows `压缩失败` in history/marker.
+- Joined compression shows relationship hints with adjacent covered blocks.
+- Full history lives in the right inspector.
+- Model input preview shows only final assembled text.
+
+Interaction entry points:
+
+- Segment marker click: quick popover.
+- `查看完整历史`: opens inspector.
+- Round/range selection: shows contextual action bar.
+- Inspector actions: edit, continue compression, rollback, exclude, restore original, preview.
+- Composer hard limit: shows disabled send reason plus `交付系统完成压缩`.
+
+### Archive Contract
+
+Archive output should have stable sections:
+
+```markdown
+## Conversation
+
+<existing original transcript rendering>
+
+## Context Compression
+
+### Active Model Input At Archive Time
+
+<assembled text>
+
+### Rounds
+
+<round source mappings>
+
+### Versions
+
+<linear history, failed attempts, tombstones, provider metadata>
+
+### Lineage
+
+<parent-child and joined source relationships>
+```
+
+Archive search uses original transcript text only. Do not index compressed output as the primary searchable body.
+
+## Phasing And Commit Strategy
+
+Commit after each task or tightly coupled task pair:
+
+- Task 1: `feat: add context compression models`
+- Task 2-3: `feat: persist context compression state`
+- Task 4-6: `feat: assemble active context compression lineage`
+- Task 7-9: `feat: add context compression providers and service`
+- Task 10: `feat: wire context compression into workbench state`
+- Task 11-15: split into UI commits by visible surface
+- Task 16: `feat: archive context compression lineage`
+- Task 17-18: `chore: retire legacy compression snapshots`
+
+Do not batch the whole implementation into one commit. This feature is too central and too risky for a monolithic diff.
+
 ## Implementation Tasks
 
 ### Task 1: Add Core Compression Models
