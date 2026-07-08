@@ -11,8 +11,6 @@ struct SideEdgeAffordanceView: View {
             action: onActivate
         ) {
             Capsule(style: .continuous)
-                .fill(Color.white.opacity(0.08))
-                .frame(maxWidth: .infinity, maxHeight: .infinity)
                 .padding(2)
         }
     }

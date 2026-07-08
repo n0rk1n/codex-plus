@@ -1,12 +1,14 @@
 import SwiftUI
 
 struct WorkbenchLauncherView: View {
+    let onActivate: () -> Void
+
     var body: some View {
         CodexButton(
             rule: .toolbarIconCircle,
             help: "打开 Codex Plus",
             accessibilityLabel: "打开 Codex Plus",
-            action: {}
+            action: onActivate
         ) {
             ZStack {
                 Circle()

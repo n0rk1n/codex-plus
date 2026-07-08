@@ -49,7 +49,10 @@ final class WorkbenchLauncherPanelController {
         let panel = panel ?? makePanel(frame: frame)
         panel.isMovableByWindowBackground = false
         panel.setFrame(frame, display: true)
-        panel.contentView = WorkbenchLauncherHostingView(rootView: WorkbenchLauncherView(), onClick: onOpenWorkbench)
+        panel.contentView = WorkbenchLauncherHostingView(
+            rootView: WorkbenchLauncherView(onActivate: onOpenWorkbench),
+            onClick: onOpenWorkbench
+        )
         panel.orderFrontRegardless()
         self.panel = panel
     }

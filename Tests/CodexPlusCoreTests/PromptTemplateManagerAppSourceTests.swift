@@ -18,8 +18,11 @@ func runPromptTemplateManagerAppSourceTests() {
     let windowCoordinator = readSource(
         root.appendingPathComponent("Sources/CodexPlusApp/WindowCoordinator.swift")
     )
-    let workbenchPanelController = readSource(
-        root.appendingPathComponent("Sources/CodexPlusApp/Workbench/WorkbenchPanelController.swift")
+    let workbenchLauncherView = readSource(
+        root.appendingPathComponent("Sources/CodexPlusApp/Workbench/WorkbenchLauncherView.swift")
+    )
+    let workbenchLauncherPanelController = readSource(
+        root.appendingPathComponent("Sources/CodexPlusApp/Workbench/WorkbenchLauncherPanelController.swift")
     )
     let topProjectStripView = readSource(
         root.appendingPathComponent("Sources/CodexPlusApp/Workbench/TopProjectStripView.swift")
@@ -152,11 +155,19 @@ func runPromptTemplateManagerAppSourceTests() {
         "workbench circular icon buttons use the shared toolbar icon rule"
     )
     expect(
-        workbenchPanelController.contains("visibleFrame.width * 0.90") &&
-            workbenchPanelController.contains("visibleFrame.height * 0.84") &&
-            !workbenchPanelController.contains("CGFloat(1240)") &&
-            !workbenchPanelController.contains("CGFloat(720)"),
-        "workbench panel default frame uses the green-box screen ratio instead of fixed desktop caps"
+        topProjectStripView.contains("ScrollView(.horizontal") &&
+            topProjectStripView.contains("shouldShowProjectCardRail(projectCardCount: cards.count)") &&
+            topProjectStripView.contains(
+                "CodexButton(\n            rule: .cardRounded(cornerRadius: WorkbenchMetrics.projectCardCornerRadius)"
+            ),
+        "workbench top strip keeps the horizontal project card rail and routes cards through the shared rounded card rule"
+    )
+    expect(
+        workbenchLauncherView.contains("let onActivate: () -> Void") &&
+            workbenchLauncherView.contains("action: onActivate") &&
+            workbenchLauncherPanelController.contains("WorkbenchLauncherView(onActivate: onOpenWorkbench)") &&
+            workbenchLauncherPanelController.contains("onClick: onOpenWorkbench"),
+        "workbench launcher routes both the SwiftUI button and host click handling through the real activation closure"
     )
 }
 
