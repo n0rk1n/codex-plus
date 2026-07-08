@@ -558,6 +558,7 @@ public final class SQLiteCodexPlusRepository: CodexPlusRepository, @unchecked Se
                 """,
                 [.text(conversationID), .text(conversationID)]
             )
+            try deleteCompressionState(conversationID: conversationID)
             try database.execute(
                 """
                 DELETE FROM conversation_events
@@ -1337,6 +1338,64 @@ public final class SQLiteCodexPlusRepository: CodexPlusRepository, @unchecked Se
         for event in result.events {
             try saveCompressionRoundEvent(event)
         }
+    }
+
+    private func deleteCompressionState(conversationID: String) throws {
+        try database.execute(
+            """
+            DELETE FROM compression_tombstones
+            WHERE version_id IN (
+                SELECT id FROM compression_versions WHERE conversation_id = ?
+            );
+            """,
+            [.text(conversationID)]
+        )
+        try database.execute(
+            "DELETE FROM compression_active_versions WHERE conversation_id = ?;",
+            [.text(conversationID)]
+        )
+        try database.execute(
+            """
+            DELETE FROM compression_lineage_edges
+            WHERE parent_version_id IN (
+                SELECT id FROM compression_versions WHERE conversation_id = ?
+            )
+               OR child_version_id IN (
+                SELECT id FROM compression_versions WHERE conversation_id = ?
+            );
+            """,
+            [.text(conversationID), .text(conversationID)]
+        )
+        try database.execute(
+            """
+            DELETE FROM compression_version_sources
+            WHERE version_id IN (
+                SELECT id FROM compression_versions WHERE conversation_id = ?
+            );
+            """,
+            [.text(conversationID)]
+        )
+        try database.execute(
+            "DELETE FROM compression_versions WHERE conversation_id = ?;",
+            [.text(conversationID)]
+        )
+        try database.execute(
+            "DELETE FROM compression_inputs WHERE conversation_id = ?;",
+            [.text(conversationID)]
+        )
+        try database.execute(
+            """
+            DELETE FROM compression_round_events
+            WHERE round_id IN (
+                SELECT id FROM compression_rounds WHERE conversation_id = ?
+            );
+            """,
+            [.text(conversationID)]
+        )
+        try database.execute(
+            "DELETE FROM compression_rounds WHERE conversation_id = ?;",
+            [.text(conversationID)]
+        )
     }
 
     private func saveCompressionRoundEvent(_ event: CompressionRoundEvent) throws {
