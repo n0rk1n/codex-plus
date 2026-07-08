@@ -2,6 +2,9 @@ import Foundation
 
 func runPromptTemplateManagerAppSourceTests() {
     let root = URL(fileURLWithPath: FileManager.default.currentDirectoryPath, isDirectory: true)
+    assertControlRuleFilesExist(root: root)
+    assertInitialRuleNamesExist(root: root)
+    assertAppControlsUseRules(root: root)
     let managerView = readSource(
         root.appendingPathComponent("Sources/CodexPlusApp/Settings/PromptTemplateManagerView.swift")
     )
@@ -154,4 +157,122 @@ private func readSource(_ url: URL) -> String {
         expect(false, "source file is readable: \(url.path)")
         return ""
     }
+}
+
+private func assertAppControlsUseRules(root: URL) {
+    let appRoot = root.appendingPathComponent("Sources/CodexPlusApp")
+    let files = swiftSourceFiles(under: appRoot)
+    let forbiddenTokens = [
+        ".buttonStyle(.plain)": "plain button styling belongs in CodexButton",
+        ".textFieldStyle(": "text field styling belongs in CodexTextField",
+        ".pickerStyle(": "picker styling belongs in CodexPicker",
+        ".toggleStyle(": "toggle styling belongs in CodexToggleSelector",
+        ".contentShape(": "control hit areas belong in rule files",
+        ".glassEffect(": "control glass styling belongs in rule files or named containers",
+        ".codexRectangleButtonHitArea(": "page views must not call hit-area helpers",
+        ".codexCapsuleButtonHitArea(": "page views must not call hit-area helpers",
+        ".codexCircularButtonHitArea(": "page views must not call hit-area helpers",
+        ".codexRoundedButtonHitArea(": "page views must not call hit-area helpers",
+        "readOnlyInputArea": "read-only control overlays belong in CodexReadOnlyNotice"
+    ]
+
+    for file in files where !isControlRuleImplementationFile(file) && !isSystemControlExceptionFile(file) {
+        let source = readSource(file)
+        for (token, message) in forbiddenTokens {
+            expect(
+                !source.contains(token),
+                "\(file.path.replacingOccurrences(of: root.path + "/", with: "")): \(message)"
+            )
+        }
+    }
+}
+
+private func assertControlRuleFilesExist(root: URL) {
+    let viewsRoot = root.appendingPathComponent("Sources/CodexPlusApp/Views")
+    let requiredFiles = [
+        "CodexControlRules.swift",
+        "CodexButton.swift",
+        "CodexTextField.swift",
+        "CodexMultilineTextField.swift",
+        "CodexMultilineTextEditor.swift",
+        "CodexPicker.swift",
+        "CodexToggleSelector.swift",
+        "CodexReadOnlyNotice.swift"
+    ]
+
+    for filename in requiredFiles {
+        let path = viewsRoot.appendingPathComponent(filename).path
+        expect(FileManager.default.fileExists(atPath: path), "\(filename) exists")
+    }
+}
+
+private func assertInitialRuleNamesExist(root: URL) {
+    let rules = readSource(
+        root.appendingPathComponent("Sources/CodexPlusApp/Views/CodexControlRules.swift")
+    )
+    let requiredRuleNames = [
+        "case toolbarCapsule",
+        "case toolbarIconCircle",
+        "case composerIconCircle",
+        "case workspaceCapsule",
+        "case workspaceClear",
+        "case rowRectangle",
+        "case rowRounded(cornerRadius: CGFloat)",
+        "case cardRounded(cornerRadius: CGFloat)",
+        "case formHeaderCapsule",
+        "case formFooterCapsule",
+        "case inlineTextLink",
+        "case composerInline",
+        "case searchField",
+        "case formField",
+        "case multilinePrompt",
+        "case multilineNote",
+        "case longPromptEditor",
+        "case segmentedFilter",
+        "case requiredMenu",
+        "case filterToggle"
+    ]
+
+    for ruleName in requiredRuleNames {
+        expect(rules.contains(ruleName), "control rules define \(ruleName)")
+    }
+}
+
+private func swiftSourceFiles(under root: URL) -> [URL] {
+    guard let enumerator = FileManager.default.enumerator(
+        at: root,
+        includingPropertiesForKeys: [.isRegularFileKey],
+        options: [.skipsHiddenFiles]
+    ) else {
+        expect(false, "can enumerate \(root.path)")
+        return []
+    }
+
+    return enumerator.compactMap { item in
+        guard let url = item as? URL, url.pathExtension == "swift" else {
+            return nil
+        }
+        return url
+    }
+}
+
+private func isControlRuleImplementationFile(_ url: URL) -> Bool {
+    [
+        "CodexControlRules.swift",
+        "CodexButton.swift",
+        "CodexTextField.swift",
+        "CodexMultilineTextField.swift",
+        "CodexMultilineTextEditor.swift",
+        "CodexPicker.swift",
+        "CodexToggleSelector.swift",
+        "CodexReadOnlyNotice.swift"
+    ].contains(url.lastPathComponent)
+}
+
+private func isSystemControlExceptionFile(_ url: URL) -> Bool {
+    [
+        "LiquidGlassContainer.swift",
+        "PermissionPrompter.swift",
+        "SettingsPanelController.swift"
+    ].contains(url.lastPathComponent)
 }
