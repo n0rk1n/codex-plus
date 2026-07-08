@@ -16,8 +16,7 @@ final class ConversationRoundBuilderTests: XCTestCase {
 
         let result = ConversationRoundBuilder.buildRounds(
             conversation: conversation,
-            now: Date(timeIntervalSince1970: 100),
-            idGenerator: deterministicIDs(startingAt: 10)
+            now: Date(timeIntervalSince1970: 100)
         )
 
         XCTAssertEqual(result.rounds.count, 1)
@@ -51,8 +50,7 @@ final class ConversationRoundBuilderTests: XCTestCase {
 
         let result = ConversationRoundBuilder.buildRounds(
             conversation: conversation,
-            now: Date(timeIntervalSince1970: 100),
-            idGenerator: deterministicIDs(startingAt: 20)
+            now: Date(timeIntervalSince1970: 100)
         )
 
         XCTAssertEqual(result.rounds.count, 1)
@@ -78,8 +76,7 @@ final class ConversationRoundBuilderTests: XCTestCase {
 
         let result = ConversationRoundBuilder.buildRounds(
             conversation: conversation,
-            now: Date(timeIntervalSince1970: 100),
-            idGenerator: deterministicIDs(startingAt: 30)
+            now: Date(timeIntervalSince1970: 100)
         )
 
         XCTAssertEqual(result.rounds.map(\.roundIndex), [0, 1])
@@ -94,8 +91,7 @@ final class ConversationRoundBuilderTests: XCTestCase {
 
         let result = ConversationRoundBuilder.buildRounds(
             conversation: conversation,
-            now: Date(timeIntervalSince1970: 100),
-            idGenerator: deterministicIDs(startingAt: 40)
+            now: Date(timeIntervalSince1970: 100)
         )
 
         XCTAssertEqual(result.rounds.count, 1)
@@ -120,14 +116,6 @@ final class ConversationRoundBuilderTests: XCTestCase {
             lastActivityAt: Date(timeIntervalSince1970: 2),
             events: events
         )
-    }
-
-    private func deterministicIDs(startingAt start: Int) -> () -> UUID {
-        var next = start
-        return {
-            defer { next += 1 }
-            return self.uuid(next)
-        }
     }
 
     private func uuid(_ value: Int) -> UUID {

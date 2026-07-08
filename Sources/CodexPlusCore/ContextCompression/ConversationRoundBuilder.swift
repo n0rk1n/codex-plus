@@ -13,8 +13,7 @@ public struct ConversationRoundBuildResult: Equatable, Sendable {
 public enum ConversationRoundBuilder {
     public static func buildRounds(
         conversation: ConversationSession,
-        now: Date = Date(),
-        idGenerator: () -> UUID = UUID.init
+        now: Date = Date()
     ) -> ConversationRoundBuildResult {
         var rounds: [CompressionRound] = []
         var roundEvents: [CompressionRoundEvent] = []
@@ -51,13 +50,13 @@ public enum ConversationRoundBuilder {
             switch event {
             case let .userPrompt(id, _):
                 flushCurrentRound()
-                let roundID = idGenerator()
+                let roundID = id
                 current = PendingRound(
                     id: roundID,
                     userEventID: id,
                     events: [
                         CompressionRoundEvent(
-                            id: idGenerator(),
+                            id: id,
                             roundID: roundID,
                             eventID: id,
                             segmentKind: .user,
@@ -72,7 +71,7 @@ public enum ConversationRoundBuilder {
 
                 pending.events.append(
                     CompressionRoundEvent(
-                        id: idGenerator(),
+                        id: event.id,
                         roundID: pending.id,
                         eventID: event.id,
                         segmentKind: .assistant,

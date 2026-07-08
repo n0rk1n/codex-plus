@@ -183,6 +183,7 @@ public final class SQLiteCodexPlusRepository: CodexPlusRepository, @unchecked Se
 
     public func saveConversation(_ conversation: ConversationSession, projectID: UUID) throws {
         try database.execute("BEGIN IMMEDIATE TRANSACTION;")
+        try database.execute("PRAGMA defer_foreign_keys = ON;")
 
         do {
             try database.execute(
@@ -274,6 +275,8 @@ public final class SQLiteCodexPlusRepository: CodexPlusRepository, @unchecked Se
                     ]
                 )
             }
+
+            try syncCompressionRounds(for: conversation)
 
             try database.execute("COMMIT TRANSACTION;")
         } catch {
@@ -1315,6 +1318,25 @@ public final class SQLiteCodexPlusRepository: CodexPlusRepository, @unchecked Se
                 .real(round.updatedAt.timeIntervalSince1970)
             ]
         )
+    }
+
+    private func syncCompressionRounds(for conversation: ConversationSession) throws {
+        let result = ConversationRoundBuilder.buildRounds(
+            conversation: conversation,
+            now: conversation.lastActivityAt
+        )
+
+        for round in result.rounds {
+            try database.execute(
+                "DELETE FROM compression_round_events WHERE round_id = ?;",
+                [.text(round.id.uuidString.lowercased())]
+            )
+            try saveCompressionRound(round)
+        }
+
+        for event in result.events {
+            try saveCompressionRoundEvent(event)
+        }
     }
 
     private func saveCompressionRoundEvent(_ event: CompressionRoundEvent) throws {
