@@ -5,25 +5,25 @@ struct BatteryTileView: View {
     let status: BatteryStatus
 
     var body: some View {
-        LiquidGlassContainer(cornerRadius: 22) {
+        LiquidGlassContainer(cornerRadius: CodexRadius.card) {
             VStack(spacing: 7) {
                 Image(systemName: symbolName)
-                    .font(.system(size: 27, weight: .semibold))
+                    .font(CodexTypography.batteryPercentValue)
                     .symbolRenderingMode(.hierarchical)
 
                 Text(percentageText)
-                    .font(.system(size: 20, weight: .semibold, design: .rounded))
+                    .font(CodexTypography.batteryStateValue)
                     .lineLimit(1)
                     .minimumScaleFactor(0.75)
 
                 Text(stateText)
-                    .font(.caption2.weight(.medium))
+                    .font(CodexTypography.caption2Medium)
                     .foregroundStyle(.secondary)
                     .lineLimit(1)
                     .minimumScaleFactor(0.72)
             }
             .foregroundStyle(foregroundStyle)
-            .frame(width: 92, height: 92)
+            .frame(width: CGFloat(CompactDashboardTileDragPolicy.batteryTileWidth), height: CGFloat(CompactDashboardTileDragPolicy.tileStripHeight))
         }
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(accessibilityText)
@@ -70,7 +70,7 @@ struct BatteryTileView: View {
     private var foregroundStyle: Color {
         switch status.state {
         case .charging, .full, .pluggedIn:
-            return .green
+            return CodexColors.stateCompleted
         case .discharging:
             return .primary
         case .unknown:

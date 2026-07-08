@@ -67,10 +67,16 @@ private struct CodexButtonRuleModifier: ViewModifier {
         case .formHeaderCapsule:
             content
                 .buttonStyle(.plain)
+                .glassEffect(.regular, in: Capsule(style: .continuous))
+                .compositingGroup()
+                .mask(Capsule(style: .continuous))
                 .codexControlHitArea(.capsule)
         case .formFooterCapsule:
             content
                 .buttonStyle(.plain)
+                .glassEffect(.regular, in: Capsule(style: .continuous))
+                .compositingGroup()
+                .mask(Capsule(style: .continuous))
                 .codexControlHitArea(.capsule)
         case .inlineTextLink:
             content

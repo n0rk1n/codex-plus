@@ -3,6 +3,7 @@ import Foundation
 public enum PromptTemplateLibrary {
     private static let archiveBuiltInID = UUID(uuidString: "00000000-0000-0000-0000-000000000101")!
     private static let optimizeBuiltInID = UUID(uuidString: "00000000-0000-0000-0000-000000000102")!
+    private static let contextCompressionBuiltInID = UUID(uuidString: "00000000-0000-0000-0000-000000000103")!
 
     public static func builtInTemplates(now: Date = Date()) -> [PromptTemplate] {
         [
@@ -25,6 +26,17 @@ public enum PromptTemplateLibrary {
                 systemPrompt: "你是 Codex 提示词优化助手。请把用户输入改写成更清晰、可执行、边界明确的 Codex 请求，保留用户原意，不添加用户没有要求的范围。",
                 userPrompt: "请优化这段用户输入，使它更适合发送给 Codex。",
                 note: "用于优化用户对话输入框中的提示词。",
+                createdAt: now,
+                updatedAt: now
+            ),
+            PromptTemplate(
+                id: contextCompressionBuiltInID,
+                source: .systemBuiltIn,
+                type: .conversationContextCompression,
+                name: "对话上下文压缩",
+                systemPrompt: "你是“上下文压缩代理”。请将给定会话内容压缩为模型可继续使用的上下文摘要，优先保留约束、决策、待办、关键事实和时间顺序。输出必须保留可追溯来源（来源事件范围、来源时间）和不确定/已过期信息标记。",
+                userPrompt: "请基于给定会话历史与来源事件信息生成上下文压缩摘要。输出中文，控制在 800 字以内，给出：1) 当前事实；2) 关键约束；3) 最近状态；4) 未决项。不要发明用户未提到的信息。",
+                note: "用于在超长上下文时生成可编辑的上下文压缩块。",
                 createdAt: now,
                 updatedAt: now
             )

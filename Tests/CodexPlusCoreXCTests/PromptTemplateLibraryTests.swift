@@ -6,7 +6,7 @@ final class PromptTemplateLibraryTests: XCTestCase {
     func testBuiltInTemplatesAreReadOnlyAndCoverBothTypes() {
         let templates = PromptTemplateLibrary.builtInTemplates(now: Date(timeIntervalSince1970: 100))
 
-        XCTAssertEqual(templates.map(\.source), [.systemBuiltIn, .systemBuiltIn])
+        XCTAssertTrue(templates.allSatisfy { $0.source == .systemBuiltIn })
         XCTAssertEqual(Set(templates.map(\.type)), Set(PromptTemplateType.allCases))
         XCTAssertTrue(templates.allSatisfy { !$0.name.isEmpty })
         XCTAssertTrue(templates.allSatisfy { !$0.systemPrompt.isEmpty })

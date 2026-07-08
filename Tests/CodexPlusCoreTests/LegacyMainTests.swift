@@ -1995,7 +1995,7 @@ func runLegacyMainActorTests() {
             "archived conversation restore prompt includes jump link text"
         )
         expect(
-            archiveViewSource.contains("Color.blue.opacity"),
+            archiveViewSource.contains("CodexColors.stateRunning.opacity"),
             "archived conversation restore jump text is light blue"
         )
         expect(
@@ -2006,25 +2006,23 @@ func runLegacyMainActorTests() {
         expect(false, "archived conversation result row source is discoverable")
     }
 
-    let topProjectStripPath = FileManager.default.currentDirectoryPath
-        + "/Sources/CodexPlusApp/Workbench/TopProjectStripView.swift"
-    let topProjectStripSource = (try? String(contentsOfFile: topProjectStripPath, encoding: .utf8)) ?? ""
-    if let actionRange = topProjectStripSource.range(of: "CodexButton(\n            rule: .cardRounded(cornerRadius: WorkbenchMetrics.projectCardCornerRadius)"),
-       let buttonEndRange = topProjectStripSource[actionRange.upperBound...].range(of: "projectCardContent(card)") {
-        let projectCardButtonSource = topProjectStripSource[actionRange.lowerBound..<buttonEndRange.upperBound]
-        expect(
-            projectCardButtonSource.contains(
-                "CodexButton(\n            rule: .cardRounded(cornerRadius: WorkbenchMetrics.projectCardCornerRadius)"
-            ),
-            "top project cards use the shared rounded card rule"
-        )
-        expect(
-            !projectCardButtonSource.contains(".opacity(card.isActive ? 1 : 0.82)"),
-            "top project cards keep text at full opacity when a new conversation draft is open"
-        )
-    } else {
-        expect(false, "top project card button source is discoverable")
-    }
+    let conversationListPath = FileManager.default.currentDirectoryPath
+        + "/Sources/CodexPlusApp/Workbench/WorkbenchConversationListView.swift"
+    let conversationListSource = (try? String(contentsOfFile: conversationListPath, encoding: .utf8)) ?? ""
+    expect(
+        conversationListSource.contains("struct WorkbenchConversationListView") &&
+            conversationListSource.contains("ForEach(card.conversationSummaries)") &&
+            conversationListSource.contains("actions.selectConversation(conversation.id)"),
+        "workbench conversation list renders selectable conversation rows"
+    )
+    expect(
+        conversationListSource.contains("rule: .rowRounded(cornerRadius: WorkbenchMetrics.conversationListRowCornerRadius)"),
+        "workbench conversation rows use the shared rounded row rule"
+    )
+    expect(
+        !conversationListSource.contains(".opacity(card.isActive ? 1 : 0.82)"),
+        "workbench conversation list keeps row text at full opacity when a new conversation draft is open"
+    )
 
     let workbenchComposerPath = FileManager.default.currentDirectoryPath
         + "/Sources/CodexPlusApp/Workbench/WorkbenchComposerView.swift"

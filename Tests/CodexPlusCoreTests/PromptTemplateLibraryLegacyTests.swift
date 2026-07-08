@@ -4,7 +4,7 @@ import CodexPlusCore
 func runPromptTemplateLibraryTests() {
     let builtIns = PromptTemplateLibrary.builtInTemplates(now: Date(timeIntervalSince1970: 100))
     expect(
-        builtIns.map(\.source) == [.systemBuiltIn, .systemBuiltIn],
+        builtIns.allSatisfy { $0.source == .systemBuiltIn },
         "prompt templates keep built-ins system sourced"
     )
     expect(

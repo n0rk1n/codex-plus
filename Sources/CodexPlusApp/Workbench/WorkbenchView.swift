@@ -12,7 +12,6 @@ struct WorkbenchView: View {
         LiquidGlassScene(padding: 0, minWidth: 980, minHeight: 620) {
             VStack(spacing: WorkbenchMetrics.verticalSpacing) {
                 TopProjectStripView(
-                    cards: store.snapshot.projectCards,
                     isPinned: store.snapshot.isPinned,
                     isNewConversationDisabled: !store.snapshot.canStartNewConversation,
                     isShowingArchiveSearch: store.snapshot.isShowingArchiveSearch,
@@ -22,19 +21,19 @@ struct WorkbenchView: View {
                 if let error = store.snapshot.error {
                     LiquidGlassContainer(cornerRadius: WorkbenchMetrics.errorCornerRadius) {
                         HStack(alignment: .top, spacing: 10) {
-                            Image(systemName: "exclamationmark.triangle.fill")
-                                .foregroundStyle(.yellow)
+                                Image(systemName: "exclamationmark.triangle.fill")
+                                .foregroundStyle(CodexColors.stateWarning)
 
                             VStack(alignment: .leading, spacing: 2) {
                                 Text(error.title)
-                                    .font(.caption.weight(.semibold))
+                                    .font(CodexTypography.statusBar)
                                 Text(error.message)
-                                    .font(.caption2)
+                                    .font(CodexTypography.caption2)
                                     .foregroundStyle(.secondary)
                                     .lineLimit(2)
                             }
 
-                            Spacer(minLength: 8)
+                            Spacer(minLength: CodexSpacing.tightVertical)
 
                             CodexButton(
                                 rule: .toolbarIconCircle,
@@ -42,11 +41,11 @@ struct WorkbenchView: View {
                                 action: { store.clearError() }
                             ) {
                                 Image(systemName: "xmark.circle.fill")
-                                    .font(.system(size: 14, weight: .semibold))
+                                    .font(CodexTypography.tinyControlLabel)
                             }
                         }
-                        .padding(.horizontal, 12)
-                        .padding(.vertical, 8)
+                        .padding(.horizontal, CodexSpacing.contentInline)
+                        .padding(.vertical, CodexSpacing.tightVertical)
                     }
                 }
 
@@ -56,19 +55,11 @@ struct WorkbenchView: View {
                         openedConversation: store.snapshot.openedArchiveConversation,
                         actions: actions.archive
                     )
+
+                    WorkbenchStatusBarView(state: store.snapshot.statusBar, codexUsageStatus: codexUsageMonitor.status)
                 } else {
-                    WorkbenchConversationView(
-                        snapshot: store.snapshot,
-                        actions: actions.conversation
-                    )
-
-                    WorkbenchComposerView(
-                        snapshot: store.snapshot,
-                        actions: actions.composer
-                    )
+                    conversationWorkspace
                 }
-
-                WorkbenchStatusBarView(state: store.snapshot.statusBar, codexUsageStatus: codexUsageMonitor.status)
             }
             .padding(WorkbenchMetrics.scenePadding)
             .alert("终止任务后归档？", isPresented: pendingArchiveConfirmationBinding) {
@@ -81,6 +72,31 @@ struct WorkbenchView: View {
             } message: {
                 Text("这个对话仍在运行。归档前需要先停止当前 Codex 任务；停止后会保存完整事件流，并将对话标记为已归档。")
             }
+        }
+    }
+
+    private var conversationWorkspace: some View {
+        VStack(spacing: WorkbenchMetrics.verticalSpacing) {
+            HStack(spacing: WorkbenchMetrics.contentColumnSpacing) {
+                WorkbenchConversationListView(
+                    cards: store.snapshot.projectCards,
+                    actions: actions.projectStrip
+                )
+
+                VStack(spacing: WorkbenchMetrics.verticalSpacing) {
+                    WorkbenchConversationView(
+                        snapshot: store.snapshot,
+                        actions: actions.conversation
+                    )
+
+                    WorkbenchComposerView(
+                        snapshot: store.snapshot,
+                        actions: actions.composer
+                    )
+                }
+            }
+
+            WorkbenchStatusBarView(state: store.snapshot.statusBar, codexUsageStatus: codexUsageMonitor.status)
         }
     }
 

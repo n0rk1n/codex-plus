@@ -8,7 +8,6 @@ struct PromptTemplateManagerView: View {
     @State private var pendingAction: PendingDirtyAction?
     @State private var pendingDeleteTemplate: PromptTemplate?
     @State private var pendingRenameTemplate: PromptTemplate?
-    @State private var isShowingReadOnlyTemplateNotice = false
     @State private var renameText = ""
 
     init(repository: any PromptTemplateRepository) {
@@ -42,7 +41,11 @@ struct PromptTemplateManagerView: View {
             Text("删除后将从提示词模板列表移除“\(template.name)”。系统内置提示词不会被删除。")
         }
         .alert("重命名提示词模板", isPresented: $isShowingRenamePrompt) {
-            TextField("名称", text: $renameText)
+            CodexTextField(
+                rule: .formField,
+                placeholder: "名称",
+                text: $renameText
+            )
             Button("取消", role: .cancel) {
                 clearRenamePrompt()
             }
@@ -75,20 +78,24 @@ struct PromptTemplateManagerView: View {
             VStack(alignment: .leading, spacing: 12) {
                 HStack(spacing: 12) {
                     Text("提示词模板")
-                        .font(.system(size: 15, weight: .semibold))
+                        .font(CodexTypography.controlLabel)
 
                     Spacer()
 
-                    Button(action: { performOrConfirm(.create) }) {
+                    CodexButton(
+                        rule: .toolbarIconCircle,
+                        action: { performOrConfirm(.create) }
+                    ) {
                         sidebarIcon("plus")
                     }
-                    .buttonStyle(.plain)
-                    .codexCircularButtonHitArea()
                     .help("新增用户自定义提示词")
                 }
 
-                TextField("搜索名称、说明、系统提示词、用户提示词", text: $store.searchQuery)
-                    .textFieldStyle(.roundedBorder)
+                CodexTextField(
+                    rule: .searchField,
+                    placeholder: "搜索名称、说明、系统提示词、用户提示词",
+                    text: $store.searchQuery
+                )
 
                 sourceFilter
                 typeFilter
@@ -105,33 +112,30 @@ struct PromptTemplateManagerView: View {
                     }
                 }
             }
-            .padding(12)
+            .padding(CodexSpacing.contentInline)
         }
     }
 
     private var sourceFilter: some View {
-        Picker("", selection: sourceFilterBinding) {
+        CodexPicker(rule: .segmentedFilter, title: "", selection: sourceFilterBinding) {
             Text("全部").tag(PromptTemplateSourceFilter.all)
             Text("系统内置").tag(PromptTemplateSourceFilter.source(.systemBuiltIn))
             Text("用户自定义").tag(PromptTemplateSourceFilter.source(.userCustom))
         }
-        .pickerStyle(.segmented)
-        .labelsHidden()
     }
 
     private var typeFilter: some View {
         VStack(alignment: .leading, spacing: 8) {
             Text("类型筛选")
-                .font(.caption.weight(.semibold))
+                .font(CodexTypography.captionStrong)
                 .foregroundStyle(.secondary)
 
             HStack(spacing: 8) {
                 ForEach(PromptTemplateType.allCases, id: \.self) { type in
-                    Toggle(isOn: typeFilterBinding(type)) {
+                    CodexToggleSelector(rule: .filterToggle, isOn: typeFilterBinding(type)) {
                         Text(type.shortDisplayName)
-                            .font(.caption.weight(.semibold))
+                            .font(CodexTypography.captionStrong)
                     }
-                    .toggleStyle(.button)
                     .help(type.displayName)
                 }
             }
@@ -139,17 +143,21 @@ struct PromptTemplateManagerView: View {
     }
 
     private func templateRow(_ template: PromptTemplate) -> some View {
-        Button(action: { performOrConfirm(.select(template.id)) }) {
+        CodexButton(
+            rule: .rowRounded(cornerRadius: 8),
+            accessibilityLabel: template.name,
+            action: { performOrConfirm(.select(template.id)) }
+        ) {
             VStack(alignment: .leading, spacing: 6) {
                 HStack(spacing: 6) {
                     Text(template.name)
-                        .font(.system(size: 13, weight: .semibold))
+                        .font(CodexTypography.menuPrimary)
                         .lineLimit(1)
 
                     if store.isDefaultTemplate(template) {
                         Image(systemName: "checkmark.seal.fill")
-                            .font(.system(size: 11, weight: .semibold))
-                            .foregroundStyle(.blue)
+                            .font(CodexTypography.compactBadge)
+                            .foregroundStyle(CodexColors.stateRunning)
                             .help("此类型默认模板")
                     }
                 }
@@ -157,11 +165,9 @@ struct PromptTemplateManagerView: View {
                 templateMetadataRow(template)
             }
             .frame(maxWidth: .infinity, alignment: .leading)
-            .padding(10)
+            .padding(CodexSpacing.tightInline)
             .background(rowBackground(isSelected: store.selectedTemplateID == template.id))
         }
-        .buttonStyle(.plain)
-        .codexRoundedButtonHitArea(cornerRadius: 8)
         .help(template.name)
         .swipeActions(edge: .trailing) {
             if template.source == .userCustom {
@@ -176,7 +182,7 @@ struct PromptTemplateManagerView: View {
                 } label: {
                     Text("重命名")
                 }
-                .tint(.blue)
+                .tint(CodexColors.stateRunning)
             }
         }
     }
@@ -184,7 +190,7 @@ struct PromptTemplateManagerView: View {
     private func templateMetadataRow(_ template: PromptTemplate) -> some View {
         HStack(alignment: .firstTextBaseline, spacing: 8) {
             Text(template.type.displayName)
-                .font(.caption2)
+                .font(CodexTypography.caption2)
                 .foregroundStyle(.secondary)
                 .lineLimit(1)
                 .truncationMode(.tail)
@@ -192,8 +198,8 @@ struct PromptTemplateManagerView: View {
             Spacer(minLength: 8)
 
             Text(template.source.displayName)
-                .font(.caption2)
-                .foregroundStyle(template.source == .systemBuiltIn ? .green : .secondary)
+                .font(CodexTypography.caption2)
+                .foregroundStyle(template.source == .systemBuiltIn ? CodexColors.stateCompleted : .secondary)
                 .lineLimit(1)
                 .fixedSize(horizontal: true, vertical: false)
         }
@@ -201,7 +207,7 @@ struct PromptTemplateManagerView: View {
 
     private func rowBackground(isSelected: Bool) -> some View {
         RoundedRectangle(cornerRadius: 8, style: .continuous)
-            .fill(isSelected ? Color.accentColor.opacity(0.18) : Color.white.opacity(0.05))
+            .fill(isSelected ? CodexColors.surfaceSelection : CodexColors.surfaceSubtle)
     }
 
     @ViewBuilder
@@ -210,31 +216,20 @@ struct PromptTemplateManagerView: View {
             if store.draft == nil {
                 emptyDetailState
             } else {
-                ZStack {
-                    VStack(spacing: 0) {
-                        detailHeader
+                VStack(spacing: 0) {
+                    detailHeader
 
-                        Divider()
-                            .overlay(.white.opacity(0.08))
+                Divider()
+                    .overlay(CodexColors.surfaceDivider)
 
-                        detailForm
+                    detailForm
 
-                        Spacer(minLength: 0)
+                    Spacer(minLength: 0)
 
-                        Divider()
-                            .overlay(.white.opacity(0.08))
+                    Divider()
+                        .overlay(CodexColors.surfaceDivider)
 
-                        detailFooter
-                    }
-
-                    if isShowingReadOnlyTemplateNotice {
-                        readOnlyTemplateNotice
-                    }
-                }
-                .onChange(of: store.isEditable) {
-                    if store.isEditable {
-                        isShowingReadOnlyTemplateNotice = false
-                    }
+                    detailFooter
                 }
             }
         }
@@ -243,72 +238,85 @@ struct PromptTemplateManagerView: View {
     private var detailHeader: some View {
         HStack(alignment: .top, spacing: 16) {
             VStack(alignment: .leading, spacing: 6) {
-                Text(detailTitle)
-                    .font(.system(size: 20, weight: .semibold))
+            Text(detailTitle)
+                .font(CodexTypography.sectionHeader)
 
                 Text(store.isEditable ? "用户自定义提示词，可编辑并保存。" : "系统内置提示词不可直接编辑，可复制为用户模板。")
-                    .font(.caption)
+                    .font(CodexTypography.caption)
                     .foregroundStyle(.secondary)
             }
 
             Spacer(minLength: 16)
 
-            Button(action: { performOrConfirm(.copy) }) {
+            CodexButton(
+                rule: .formHeaderCapsule,
+                action: { performOrConfirm(.copy) }
+            ) {
                 headerActionLabel(
                     systemImage: "doc.on.doc",
                     title: store.isEditable ? "复制" : "复制为用户模板",
-                    foregroundColor: .blue
+                    foregroundColor: CodexColors.stateRunning
                 )
             }
-            .buttonStyle(.plain)
-            .codexCapsuleButtonHitArea()
             .help("复制当前模板为用户自定义模板")
 
             if let selectedTemplate = store.selectedTemplate {
-                Button(action: { store.setDefaultTemplate(selectedTemplate.id) }) {
+                CodexButton(
+                    rule: .formHeaderCapsule,
+                    isDisabled: store.isDefaultTemplate(selectedTemplate),
+                    action: { store.setDefaultTemplate(selectedTemplate.id) }
+                ) {
                     headerActionLabel(
                         systemImage: store.isDefaultTemplate(selectedTemplate) ? "checkmark.seal.fill" : "checkmark.seal",
                         title: store.isDefaultTemplate(selectedTemplate) ? "当前默认" : "设为默认",
-                        foregroundColor: .blue
+                        foregroundColor: CodexColors.stateRunning
                     )
                 }
-                .buttonStyle(.plain)
                 .help("设为“\(selectedTemplate.type.shortDisplayName)”类型默认模板")
-                .disabled(store.isDefaultTemplate(selectedTemplate))
             }
 
             if store.isEditable {
-                Button(role: .destructive) {
-                    pendingDeleteTemplate = store.selectedTemplate
-                } label: {
-                    headerActionLabel(systemImage: "trash", title: "删除", foregroundColor: .red)
+                CodexButton(
+                    rule: .formHeaderCapsule,
+                    role: .destructive,
+                    action: { pendingDeleteTemplate = store.selectedTemplate }
+                ) {
+                    headerActionLabel(systemImage: "trash", title: "删除", foregroundColor: CodexColors.stateFailed)
                 }
-                .buttonStyle(.plain)
-                .codexCapsuleButtonHitArea()
                 .help("删除当前用户自定义模板")
             }
         }
-        .padding(18)
+        .padding(CodexSpacing.compactField)
     }
 
     private var detailForm: some View {
         ScrollView {
-            VStack(alignment: .leading, spacing: 14) {
+            VStack(alignment: .leading, spacing: CodexSpacing.compactInline) {
                 if let errorMessage = store.errorMessage {
-                    messageRow(errorMessage, color: .red, symbol: "exclamationmark.triangle.fill")
+                    messageRow(errorMessage, color: CodexColors.stateFailed, symbol: "exclamationmark.triangle.fill")
                 }
 
                 labeledField("名称 *") {
-                    readOnlyInputArea {
-                        TextField("模板名称", text: draftTextBinding(\.name))
-                            .textFieldStyle(.roundedBorder)
-                            .disabled(!store.isEditable)
+                    readOnlyTemplateControl { handle in
+                        CodexTextField(
+                            rule: .formField,
+                            placeholder: "模板名称",
+                            text: draftTextBinding(\.name),
+                            isDisabled: !store.isEditable,
+                            readOnlyNotice: handle
+                        )
                     }
                 }
 
                 labeledField("类型 *") {
-                    readOnlyInputArea {
-                        Picker("", selection: draftTypeBinding) {
+                    readOnlyTemplateControl { handle in
+                        CodexPicker(
+                            rule: .requiredMenu,
+                            title: "",
+                            selection: draftTypeBinding,
+                            isDisabled: !store.isEditable,
+                            readOnlyNotice: handle
+                        ) {
                             Text("请选择类型")
                                 .tag(Optional<PromptTemplateType>.none)
 
@@ -317,97 +325,81 @@ struct PromptTemplateManagerView: View {
                                     .tag(Optional(type))
                             }
                         }
-                        .pickerStyle(.menu)
-                        .labelsHidden()
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .disabled(!store.isEditable)
                     }
                 }
 
                 labeledField("系统提示词 *") {
-                    readOnlyInputArea {
+                    readOnlyTemplateControl { handle in
                         editor(text: draftTextBinding(\.systemPrompt), minHeight: 140)
                             .disabled(!store.isEditable)
+                            .codexReadOnlyControlOverlay(handle)
                     }
                 }
 
                 labeledField("用户提示词") {
-                    readOnlyInputArea {
+                    readOnlyTemplateControl { handle in
                         editor(text: draftTextBinding(\.userPrompt), minHeight: 100)
                             .disabled(!store.isEditable)
+                            .codexReadOnlyControlOverlay(handle)
                     }
                 }
 
                 labeledField("说明") {
-                    readOnlyInputArea {
-                        AppMultilineTextField(
+                    readOnlyTemplateControl { handle in
+                        CodexMultilineTextField(
+                            rule: .multilineNote,
                             placeholder: "说明",
                             text: draftTextBinding(\.note),
-                            lineLimit: MultilineInputDefaults.promptTemplateNoteLineLimit
+                            isDisabled: !store.isEditable,
+                            readOnlyNotice: handle
                         )
-                            .disabled(!store.isEditable)
+                        .lineLimit(MultilineInputDefaults.promptTemplateNoteLineLimit)
                     }
                 }
 
                 if let validationError = store.validationError {
                     messageRow(
                         validationMessage(for: validationError),
-                        color: .orange,
+                        color: CodexColors.stateStopped,
                         symbol: "exclamationmark.circle.fill"
                     )
                 }
             }
-            .padding(18)
+            .padding(CodexSpacing.compactField)
         }
         .opacity(store.isEditable ? 1 : 0.56)
     }
 
-    private var readOnlyTemplateNotice: some View {
-        Text("系统内置提示词为只读内容。如需修改，请先创建用户自定义提示词。")
-            .font(.system(size: 13, weight: .semibold))
-            .foregroundStyle(.white)
-            .multilineTextAlignment(.center)
-            .padding(.horizontal, 18)
-            .padding(.vertical, 12)
-            .background(Color.black.opacity(0.9), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
-            .overlay(
-                RoundedRectangle(cornerRadius: 10, style: .continuous)
-                    .stroke(Color.white.opacity(0.12), lineWidth: 1)
-            )
-            .shadow(color: .black.opacity(0.32), radius: 18, y: 8)
-            .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .center)
-            .allowsHitTesting(false)
-            .transition(.opacity.combined(with: .scale(scale: 0.96)))
-    }
-
     private var detailFooter: some View {
-        HStack(spacing: 12) {
+        HStack(spacing: CodexSpacing.contentInline) {
             Label(
                 store.isEditable ? (store.isDirty ? "有未保存修改" : "可编辑状态") : "只读状态",
                 systemImage: store.isEditable ? "pencil" : "lock.fill"
             )
-            .font(.caption)
+            .font(CodexTypography.caption)
             .foregroundStyle(.secondary)
 
             Spacer()
 
-            Button(action: store.discardChanges) {
+            CodexButton(
+                rule: .formFooterCapsule,
+                isDisabled: !store.isEditable || !store.isDirty,
+                action: { store.discardChanges() }
+            ) {
                 footerActionLabel(systemImage: "arrow.uturn.backward", title: "放弃修改")
             }
-            .buttonStyle(.plain)
-            .codexCapsuleButtonHitArea()
             .help("放弃当前未保存修改")
-            .disabled(!store.isEditable || !store.isDirty)
 
-            Button(action: { _ = store.save() }) {
+            CodexButton(
+                rule: .formFooterCapsule,
+                isDisabled: !store.isEditable || !store.isDirty,
+                action: { _ = store.save() }
+            ) {
                 footerActionLabel(systemImage: "checkmark", title: "保存")
             }
-            .buttonStyle(.plain)
-            .codexCapsuleButtonHitArea()
             .help("保存当前用户自定义模板")
-            .disabled(!store.isEditable || !store.isDirty)
         }
-        .padding(18)
+        .padding(CodexSpacing.compactField)
     }
 
     private var emptyListState: some View {
@@ -415,14 +407,14 @@ struct PromptTemplateManagerView: View {
             Spacer(minLength: 0)
 
             Image(systemName: "line.3.horizontal.decrease.circle")
-                .font(.system(size: 24, weight: .medium))
+                .font(CodexTypography.promptTemplateTitle)
                 .foregroundStyle(.secondary)
 
             Text("没有匹配的提示词模板")
-                .font(.system(size: 14, weight: .semibold))
+                .font(CodexTypography.tinyControlLabel)
 
             Text("调整来源、类型或搜索条件后再试。")
-                .font(.caption)
+                .font(CodexTypography.caption)
                 .foregroundStyle(.secondary)
                 .multilineTextAlignment(.center)
 
@@ -436,14 +428,14 @@ struct PromptTemplateManagerView: View {
             Spacer(minLength: 0)
 
             Image(systemName: "doc.text")
-                .font(.system(size: 28, weight: .medium))
+                .font(CodexTypography.panelHeader)
                 .foregroundStyle(.secondary)
 
             Text("选择一个提示词模板")
-                .font(.system(size: 16, weight: .semibold))
+                .font(CodexTypography.promptTemplateMeta)
 
             Text("左侧可按来源、类型和关键词筛选。")
-                .font(.caption)
+                .font(CodexTypography.caption)
                 .foregroundStyle(.secondary)
 
             Spacer(minLength: 0)
@@ -462,28 +454,23 @@ struct PromptTemplateManagerView: View {
 
     private func sidebarIcon(_ systemImage: String) -> some View {
         Image(systemName: systemImage)
-            .font(.system(size: 13, weight: .semibold))
+            .font(CodexTypography.menuPrimary)
             .frame(width: 28, height: 28)
-            .glassEffect(.regular, in: Circle())
     }
 
     private func headerActionLabel(systemImage: String, title: String, foregroundColor: Color = .primary) -> some View {
         Label(title, systemImage: systemImage)
-            .font(.system(size: 12, weight: .semibold))
+            .font(CodexTypography.microControl)
             .foregroundStyle(foregroundColor)
-            .padding(.horizontal, 12)
-            .padding(.vertical, 7)
-            .glassEffect(.regular, in: Capsule(style: .continuous))
-            .codexCapsuleButtonHitArea()
+            .padding(.horizontal, CodexSpacing.contentInline)
+            .padding(.vertical, CodexSpacing.compactVertical)
     }
 
     private func footerActionLabel(systemImage: String, title: String) -> some View {
         Label(title, systemImage: systemImage)
-            .font(.system(size: 12, weight: .semibold))
-            .padding(.horizontal, 12)
-            .padding(.vertical, 7)
-            .glassEffect(.regular, in: Capsule(style: .continuous))
-            .codexCapsuleButtonHitArea()
+            .font(CodexTypography.microControl)
+            .padding(.horizontal, CodexSpacing.contentInline)
+            .padding(.vertical, CodexSpacing.compactVertical)
     }
 
     private func editor(text: Binding<String>, minHeight: CGFloat) -> some View {
@@ -491,42 +478,39 @@ struct PromptTemplateManagerView: View {
             .frame(minHeight: minHeight)
             .background(
                 RoundedRectangle(cornerRadius: 12, style: .continuous)
-                    .fill(Color.white.opacity(0.05))
+                    .fill(CodexColors.surfaceSubtle)
             )
             .overlay(
                 RoundedRectangle(cornerRadius: 12, style: .continuous)
-                    .stroke(Color.white.opacity(0.08), lineWidth: 1)
+                    .stroke(CodexColors.surfaceStroke, lineWidth: 1)
             )
     }
 
     private func messageRow(_ message: String, color: Color, symbol: String) -> some View {
         Label(message, systemImage: symbol)
-            .font(.caption)
+            .font(CodexTypography.caption)
             .foregroundStyle(color)
             .frame(maxWidth: .infinity, alignment: .leading)
     }
 
     private func labeledField<Content: View>(_ label: String, @ViewBuilder content: () -> Content) -> some View {
-        HStack(alignment: .top, spacing: 14) {
+        HStack(alignment: .top, spacing: CodexSpacing.compactInline) {
             Text(label)
-                .font(.caption.weight(.semibold))
+                .font(CodexTypography.captionStrong)
                 .foregroundStyle(.secondary)
                 .frame(width: 120, alignment: .leading)
-                .padding(.top, 7)
+                .padding(.top, CodexSpacing.compactVertical)
 
             content()
         }
     }
 
-    private func readOnlyInputArea<Content: View>(@ViewBuilder content: () -> Content) -> some View {
-        content()
-            .overlay {
-                if !store.isEditable {
-                    Color.clear
-                        .contentShape(Rectangle())
-                        .onTapGesture(perform: showReadOnlyTemplateNotice)
-                }
-            }
+    private func readOnlyTemplateControl<Content: View>(@ViewBuilder _ content: @escaping (CodexReadOnlyNoticeHandle) -> Content) -> some View {
+        CodexReadOnlyNoticeHost(
+            isReadOnly: !store.isEditable,
+            rule: .promptTemplateSystemTemplate,
+            content: content
+        )
     }
 
     private var sourceFilterBinding: Binding<PromptTemplateSourceFilter> {
@@ -576,25 +560,6 @@ struct PromptTemplateManagerView: View {
             return "类型必须选择一项。"
         case .emptySystemPrompt:
             return "系统提示词不能为空。"
-        }
-    }
-
-    private func showReadOnlyTemplateNotice() {
-        guard !store.isEditable else {
-            return
-        }
-        guard !isShowingReadOnlyTemplateNotice else {
-            return
-        }
-
-        withAnimation(.easeOut(duration: 0.16)) {
-            isShowingReadOnlyTemplateNotice = true
-        }
-
-        DispatchQueue.main.asyncAfter(deadline: .now() + 3) {
-            withAnimation(.easeIn(duration: 0.2)) {
-                isShowingReadOnlyTemplateNotice = false
-            }
         }
     }
 

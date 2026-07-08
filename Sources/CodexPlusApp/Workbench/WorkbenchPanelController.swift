@@ -92,8 +92,8 @@ final class WorkbenchPanelController {
     }
 
     static func defaultFrame(in visibleFrame: NSRect) -> NSRect {
-        let width = min(CGFloat(1240), visibleFrame.width > 96 ? visibleFrame.width - 96 : visibleFrame.width)
-        let height = min(CGFloat(720), visibleFrame.height > 96 ? visibleFrame.height - 96 : visibleFrame.height)
+        let width = (visibleFrame.width * 0.90).rounded()
+        let height = (visibleFrame.height * 0.84).rounded()
 
         return NSRect(
             x: visibleFrame.midX - (width / 2),

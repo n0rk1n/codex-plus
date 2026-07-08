@@ -43,15 +43,16 @@ struct ConversationTabHeaderView: View {
                     conversationTab(conversation, index: index)
                 }
 
-                Button(action: onNewDraft) {
+                CodexButton(
+                    rule: .rowRectangle,
+                    help: "New Conversation",
+                    accessibilityLabel: "New Conversation",
+                    action: onNewDraft
+                ) {
                     Image(systemName: "plus")
-                        .font(.system(size: 12, weight: .semibold))
+                        .font(CodexTypography.microControl)
                         .frame(width: 28, height: 26)
                 }
-                .buttonStyle(.plain)
-                .codexRectangleButtonHitArea()
-                .help("New Conversation")
-                .accessibilityLabel("New Conversation")
             }
         }
     }
@@ -67,23 +68,25 @@ struct ConversationTabHeaderView: View {
     }
 
     private func workspaceTab(_ workspace: WorkspaceSessionGroup, index: Int) -> some View {
-        Button {
-            onSelectWorkspace(workspace.id)
-        } label: {
+        CodexButton(
+            rule: .rowRectangle,
+            help: workspace.path,
+            accessibilityLabel: workspace.displayName,
+            action: {
+                onSelectWorkspace(workspace.id)
+            }
+        ) {
             HStack(spacing: 6) {
                 statusDot(isRunning: workspaceHasRunningConversation(workspace))
 
                 Text(workspace.displayName)
-                    .font(.caption.weight(snapshot.activeWorkspaceID == workspace.id ? .semibold : .regular))
+                    .font(CodexTypography.menuPrimaryRegular.weight(snapshot.activeWorkspaceID == workspace.id ? .semibold : .regular))
                     .lineLimit(1)
             }
-            .padding(.horizontal, 10)
+            .padding(.horizontal, CodexSpacing.tightInline)
             .frame(height: 26)
             .background(tabBackground(isActive: snapshot.activeWorkspaceID == workspace.id))
         }
-        .buttonStyle(.plain)
-        .help(workspace.path)
-        .codexRectangleButtonHitArea()
         .onDrag {
             draggedWorkspaceID = workspace.id
             return NSItemProvider(object: workspace.id.uuidString as NSString)
@@ -95,24 +98,30 @@ struct ConversationTabHeaderView: View {
 
     private func conversationTab(_ conversation: ConversationSession, index: Int) -> some View {
         HStack(spacing: 2) {
-            Button {
-                onArchiveConversation(conversation.id)
-            } label: {
+            CodexButton(
+                rule: .rowRectangle,
+                help: "Archive",
+                accessibilityLabel: "Archive Conversation",
+                action: {
+                    onArchiveConversation(conversation.id)
+                }
+            ) {
                 Image(systemName: "archivebox")
-                    .font(.system(size: 11, weight: .semibold))
+                    .font(CodexTypography.compactBadge)
                     .frame(width: 20, height: 24)
             }
-            .buttonStyle(.plain)
-            .codexRectangleButtonHitArea()
-            .help("Archive")
-            .accessibilityLabel("Archive Conversation")
 
-            Button {
-                onSelectConversation(conversation.id)
-            } label: {
+            CodexButton(
+                rule: .rowRectangle,
+                help: conversation.title,
+                accessibilityLabel: conversation.title,
+                action: {
+                    onSelectConversation(conversation.id)
+                }
+            ) {
                 HStack(spacing: 6) {
                     Text(conversation.title)
-                        .font(.caption2.weight(snapshot.activeConversationID == conversation.id ? .semibold : .regular))
+                        .font(CodexTypography.caption2.weight(snapshot.activeConversationID == conversation.id ? .semibold : .regular))
                         .lineLimit(1)
 
                     statusDot(isRunning: conversation.state == .running)
@@ -121,14 +130,9 @@ struct ConversationTabHeaderView: View {
                 .padding(.trailing, 9)
                 .frame(height: 24)
             }
-            .buttonStyle(.plain)
-            .codexRectangleButtonHitArea()
-            .help(conversation.title)
-            .accessibilityLabel(conversation.title)
         }
         .padding(.leading, 4)
         .background(tabBackground(isActive: snapshot.activeConversationID == conversation.id))
-        .codexRectangleButtonHitArea()
         .onDrag {
             draggedConversationID = conversation.id
             return NSItemProvider(object: conversation.id.uuidString as NSString)
@@ -170,12 +174,12 @@ struct ConversationTabHeaderView: View {
 
     private func tabBackground(isActive: Bool) -> some View {
         RoundedRectangle(cornerRadius: 7, style: .continuous)
-            .fill(isActive ? Color.accentColor.opacity(0.18) : Color.primary.opacity(0.06))
+            .fill(isActive ? CodexColors.surfaceSelection : CodexColors.surfaceInactive)
     }
 
     private func statusDot(isRunning: Bool) -> some View {
         Circle()
-            .fill(isRunning ? Color.green : Color.secondary.opacity(0.45))
+            .fill(isRunning ? ConversationRunState.running.tabDotTint : ConversationRunState.idle.tabDotTint)
             .frame(width: 6, height: 6)
     }
 }

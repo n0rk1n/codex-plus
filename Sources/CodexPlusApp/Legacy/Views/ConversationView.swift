@@ -37,7 +37,7 @@ struct ConversationView: View {
     }
 
     private var panelContent: some View {
-        VStack(spacing: 12) {
+        VStack(spacing: CodexSpacing.contentInline) {
             header
 
             if let session {
@@ -70,13 +70,13 @@ struct ConversationView: View {
                 if let session {
                     HStack(spacing: 8) {
                         VStack(alignment: .leading, spacing: 2) {
-                            Text(session.state.displayName)
-                                .font(.caption.weight(.semibold))
+                            Text(session.state.labelText)
+                                .font(CodexTypography.statusBar)
                                 .foregroundStyle(session.state.tint)
                                 .lineLimit(1)
 
                             Text(session.permissionMode.displayName)
-                                .font(.caption2)
+                                .font(CodexTypography.caption2)
                                 .foregroundStyle(.secondary)
                                 .lineLimit(1)
                         }
@@ -114,13 +114,13 @@ struct ConversationView: View {
                     }
                 }
             }
-            .padding(.horizontal, 12)
-            .padding(.vertical, 10)
+            .padding(.horizontal, CodexSpacing.contentInline)
+            .padding(.vertical, CodexSpacing.tightInline)
         }
     }
 
     private func conversationBody(for session: ConversationSession) -> some View {
-        LiquidGlassContainer(cornerRadius: 24) {
+        LiquidGlassContainer(cornerRadius: CodexRadius.panel) {
             ScrollViewReader { proxy in
                 ScrollView {
                     LazyVStack(alignment: .leading, spacing: 0) {
@@ -129,7 +129,7 @@ struct ConversationView: View {
                                 .id(item.id)
                         }
                     }
-                    .padding(14)
+                    .padding(CodexSpacing.compactInline)
                 }
                 .onChange(of: session.events.count) {
                     scrollToLatest(session: session, using: proxy)
@@ -142,29 +142,29 @@ struct ConversationView: View {
     }
 
     private func footer(for _: ConversationSession) -> some View {
-        LiquidGlassContainer(cornerRadius: 22) {
+        LiquidGlassContainer(cornerRadius: CodexRadius.card) {
             HStack(alignment: .bottom, spacing: 10) {
-                AppMultilineTextField(
+                CodexMultilineTextField(
+                    rule: .conversationFollowUpPrompt,
                     placeholder: "Follow up...",
                     text: $followUp,
-                    fontSize: 14,
-                    lineLimit: MultilineInputDefaults.conversationPromptLineLimit,
                     onSubmit: submitFollowUp
                 )
-                    .focused($isFollowUpFocused)
+                .focused($isFollowUpFocused)
 
-                Button(action: submitFollowUp) {
+                CodexButton(
+                    rule: .composerIconCircle,
+                    action: submitFollowUp
+                ) {
                     Image(systemName: "arrow.up.circle.fill")
-                        .font(.system(size: 20, weight: .semibold))
+                        .font(CodexTypography.sectionHeader)
                 }
-                .buttonStyle(.plain)
-                .codexCircularButtonHitArea()
                 .help("Send")
                 .accessibilityLabel("Send Follow-Up")
                 .disabled(followUp.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
             }
-            .padding(.horizontal, 14)
-            .padding(.vertical, 12)
+            .padding(.horizontal, CodexSpacing.compactInline)
+            .padding(.vertical, CodexSpacing.contentInline)
         }
     }
 
@@ -189,6 +189,8 @@ struct ConversationView: View {
                     toggleTechnicalGroup(id)
                 }
             )
+        case let .compressionSnapshot(snapshot, sourceEvents):
+            ConversationCompressionSnapshotRow(snapshot: snapshot, sourceEvents: sourceEvents)
         }
     }
 
@@ -199,16 +201,17 @@ struct ConversationView: View {
         isDisabled: Bool = false,
         action: @escaping () -> Void
     ) -> some View {
-        Button(action: action) {
+        CodexButton(
+            rule: .rowRectangle,
+            isDisabled: isDisabled,
+            help: help,
+            accessibilityLabel: accessibilityLabel,
+            action: action
+        ) {
             Image(systemName: systemName)
-                .font(.system(size: 13, weight: .semibold))
+                .font(CodexTypography.menuPrimary)
                 .frame(width: 28, height: 28)
         }
-        .buttonStyle(.plain)
-        .codexRectangleButtonHitArea()
-        .help(help)
-        .accessibilityLabel(accessibilityLabel)
-        .disabled(isDisabled)
         .opacity(isDisabled ? 0.38 : 1)
     }
 
@@ -235,38 +238,6 @@ struct ConversationView: View {
             expandedTechnicalGroupIDs.remove(id)
         } else {
             expandedTechnicalGroupIDs.insert(id)
-        }
-    }
-}
-
-private extension ConversationRunState {
-    var displayName: String {
-        switch self {
-        case .idle:
-            return "Idle"
-        case .running:
-            return "Running"
-        case .completed:
-            return "Completed"
-        case .failed:
-            return "Failed"
-        case .stopped:
-            return "Stopped"
-        }
-    }
-
-    var tint: Color {
-        switch self {
-        case .idle:
-            return .secondary
-        case .running:
-            return .blue
-        case .completed:
-            return .green
-        case .failed:
-            return .red
-        case .stopped:
-            return .orange
         }
     }
 }

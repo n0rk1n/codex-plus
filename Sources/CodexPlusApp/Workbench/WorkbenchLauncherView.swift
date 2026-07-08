@@ -12,23 +12,15 @@ struct WorkbenchLauncherView: View {
         ) {
             ZStack {
                 Circle()
-                    .fill(surfaceTintColor)
+                    .fill(CodexColors.launcherSurface)
 
                 Image(systemName: "command")
-                    .font(.system(size: 16, weight: .semibold))
-                    .foregroundStyle(symbolColor)
+                    .font(CodexTypography.launcherSymbol)
+                    .foregroundStyle(CodexColors.launcherSymbol)
                     .blendMode(.difference)
             }
             .frame(width: WorkbenchLauncherMetrics.sphereSize, height: WorkbenchLauncherMetrics.sphereSize)
         }
         .padding((WorkbenchLauncherMetrics.panelSize - WorkbenchLauncherMetrics.sphereSize) / 2)
-    }
-
-    private var symbolColor: Color {
-        Color.white
-    }
-
-    private var surfaceTintColor: Color {
-        Color.white.opacity(0.06)
     }
 }

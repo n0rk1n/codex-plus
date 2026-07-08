@@ -17,12 +17,9 @@ struct CompactEntryView: View {
     @State private var draggedTile: DashboardTile?
     @State private var dragTranslation: CGSize = .zero
 
-    private let reorderThreshold: CGFloat = 44
-    private let tileRowHeight: CGFloat = 92
+    private let reorderThreshold = CGFloat(CompactDashboardTileDragPolicy.tileReorderThreshold)
+    private let tileRowHeight: CGFloat = CGFloat(CompactDashboardTileDragPolicy.tileStripHeight)
     private let tileStripWidth = CGFloat(CompactDashboardTileDragPolicy.tileStripWidth)
-    private let promptIconColor = Color.primary.opacity(0.78)
-    private let promptForegroundColor = Color.primary.opacity(0.86)
-    private let promptPlaceholderColor = Color.secondary.opacity(0.88)
 
     var body: some View {
         LiquidGlassScene(padding: 18) {
@@ -59,7 +56,7 @@ struct CompactEntryView: View {
                 .animation(.snappy(duration: 0.18), value: previewTileOrder.tiles)
                 .animation(.snappy(duration: 0.18), value: dashboardTileOrderRaw)
 
-                LiquidGlassContainer(cornerRadius: 24) {
+                LiquidGlassContainer(cornerRadius: CodexRadius.panel) {
                     HStack(alignment: .bottom, spacing: 10) {
                         CodexButton(
                             rule: .rowRectangle,
@@ -67,25 +64,24 @@ struct CompactEntryView: View {
                             accessibilityLabel: "Choose Workspace",
                             action: { onOpenDraft(prompt) }
                         ) {
-                            Image(systemName: "folder")
-                                .font(.system(size: 15, weight: .semibold))
-                                .foregroundStyle(promptIconColor)
+                                Image(systemName: "folder")
+                                .font(CodexTypography.controlLabel)
+                                .foregroundStyle(CodexColors.compactEntryPromptIcon)
                                 .frame(width: 32, height: 32)
                         }
 
-                        AppMultilineTextField(
+                        CodexMultilineTextField(
+                            rule: .compactPrompt,
                             placeholder: "Ask Codex...",
                             text: $prompt,
-                            fontSize: 15,
-                            foregroundColor: promptForegroundColor,
-                            placeholderColor: promptPlaceholderColor,
-                            lineLimit: MultilineInputDefaults.compactPromptLineLimit,
+                            foregroundColor: CodexColors.compactEntryPromptForeground,
+                            placeholderColor: CodexColors.compactEntryPromptPlaceholder,
                             onSubmit: submitPrompt
                         )
                         .focused($isPromptFocused)
-                    }
-                    .padding(.horizontal, 18)
-                    .padding(.vertical, 14)
+                        }
+                        .padding(.horizontal, CodexSpacing.compactField)
+                        .padding(.vertical, CodexSpacing.compactInline)
                 }
             }
         }
@@ -141,17 +137,17 @@ struct CompactEntryView: View {
     }
 
     private func placeholderView(for tile: DashboardTile) -> some View {
-        RoundedRectangle(cornerRadius: 22, style: .continuous)
-            .fill(.secondary.opacity(0.08))
+        RoundedRectangle(cornerRadius: CodexRadius.card, style: .continuous)
+            .fill(CodexColors.compactEntryPlaceholderFill)
             .overlay(
-                RoundedRectangle(cornerRadius: 22, style: .continuous)
-                    .strokeBorder(.secondary.opacity(0.24), lineWidth: 1)
+                RoundedRectangle(cornerRadius: CodexRadius.card, style: .continuous)
+                    .strokeBorder(CodexColors.compactEntryPlaceholderStroke, lineWidth: 1)
             )
             .frame(
                 width: CGFloat(DashboardTileLayoutPolicy.width(for: tile)),
                 height: tileRowHeight
             )
-            .opacity(0.9)
+            .opacity(CodexColors.compactEntryPlaceholderOpacity)
             .allowsHitTesting(false)
     }
 

@@ -67,6 +67,41 @@ public enum ConversationDisplayEvent: Equatable, Identifiable, Sendable {
     }
 }
 
+public extension ConversationDisplayEvent {
+    public var isTechnicalTimelineEvent: Bool {
+        switch self {
+        case .status, .command, .parseWarning:
+            return true
+        case .userPrompt, .assistantMessage, .error:
+            return false
+        }
+    }
+
+    public var isStatusTimelineEvent: Bool {
+        if case .status = self {
+            return true
+        }
+
+        return false
+    }
+
+    public var isCommandTimelineEvent: Bool {
+        if case .command = self {
+            return true
+        }
+
+        return false
+    }
+
+    public var isParseWarningTimelineEvent: Bool {
+        if case .parseWarning = self {
+            return true
+        }
+
+        return false
+    }
+}
+
 public struct ConversationSession: Equatable, Identifiable, Sendable {
     public let id: UUID
     public var title: String

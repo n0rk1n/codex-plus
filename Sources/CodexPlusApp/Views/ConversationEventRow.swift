@@ -6,21 +6,21 @@ struct ConversationEventRow: View {
 
     var body: some View {
         HStack(alignment: .top, spacing: 10) {
-            Image(systemName: iconName)
-                .font(.system(size: 13, weight: .semibold))
-                .foregroundStyle(tint)
+            Image(systemName: event.timelineIconName)
+                .font(CodexTypography.menuPrimary)
+                .foregroundStyle(event.timelineTint)
                 .frame(width: 18, height: 18)
                 .padding(.top, 2)
 
             VStack(alignment: .leading, spacing: 4) {
                 HStack(spacing: 6) {
-                    Text(title)
-                        .font(.caption.weight(.semibold))
-                        .foregroundStyle(tint)
+                    Text(event.timelineTitle)
+                        .font(CodexTypography.statusBar)
+                        .foregroundStyle(event.timelineTint)
 
-                    if let detail {
+                    if let detail = event.timelineDetailText {
                         Text(detail)
-                            .font(.caption2)
+                            .font(CodexTypography.caption2)
                             .foregroundStyle(.secondary)
                             .lineLimit(1)
                             .truncationMode(.middle)
@@ -28,8 +28,8 @@ struct ConversationEventRow: View {
                     }
                 }
 
-                Text(message)
-                    .font(.system(size: 13))
+                messageBody
+                    .font(CodexTypography.messageBody)
                     .foregroundStyle(.primary)
                     .textSelection(.enabled)
                     .fixedSize(horizontal: false, vertical: true)
@@ -41,108 +41,67 @@ struct ConversationEventRow: View {
         .accessibilityElement(children: .combine)
     }
 
-    private var title: String {
-        switch event {
-        case .userPrompt:
-            return "You"
-        case .status:
-            return "Status"
-        case .assistantMessage:
-            return "Assistant"
-        case .command:
-            return "Command"
-        case .error:
-            return "Error"
-        case .parseWarning:
-            return "Parse Warning"
-        }
-    }
-
     private var message: String {
-        switch event {
-        case let .userPrompt(_, text),
-             let .status(_, text),
-             let .assistantMessage(_, text),
-             let .error(_, text),
-             let .parseWarning(_, text):
-            return text
-        case let .command(_, _, command, _):
-            return command
+        event.timelineMessage
+    }
+
+    @ViewBuilder
+    private var messageBody: some View {
+        if event.shouldRenderTimelineMarkdown {
+            MarkdownMessageText(markdown: message)
+        } else {
+            Text(message)
         }
     }
 
-    private var detail: String? {
-        switch event {
-        case let .command(_, executionID, _, status):
-            if let executionID, !executionID.isEmpty {
-                return "\(status.displayName) \(executionID)"
-            }
-
-            return status.displayName
-        default:
-            return nil
-        }
-    }
-
-    private var iconName: String {
-        switch event {
-        case .userPrompt:
-            return "person.fill"
-        case .status:
-            return "circle.dotted"
-        case .assistantMessage:
-            return "sparkles"
-        case let .command(_, _, _, status):
-            return status == .inProgress ? "terminal.fill" : "terminal"
-        case .error:
-            return "exclamationmark.triangle.fill"
-        case .parseWarning:
-            return "text.badge.xmark"
-        }
-    }
-
-    private var tint: Color {
-        switch event {
-        case .userPrompt:
-            return .accentColor
-        case .status:
-            return .secondary
-        case .assistantMessage:
-            return .primary
-        case let .command(_, _, _, status):
-            return status.tint
-        case .error:
-            return .red
-        case .parseWarning:
-            return .orange
-        }
-    }
 }
 
-private extension CodexCommandStatus {
-    var displayName: String {
-        switch self {
-        case .inProgress:
-            return "Running"
-        case .completed:
-            return "Completed"
-        case .failed:
-            return "Failed"
-        case .unknown:
-            return "Unknown"
+struct ConversationCompressionSnapshotRow: View {
+    let snapshot: ConversationContextCompressionSnapshot
+    let sourceEvents: [ConversationDisplayEvent]
+
+    var body: some View {
+        HStack(alignment: .top, spacing: 10) {
+            Image(systemName: "archivebox.fill")
+                .font(CodexTypography.menuPrimary)
+                .foregroundStyle(CodexColors.stateWarning)
+                .frame(width: 18, height: 18)
+                .padding(.top, 2)
+
+            VStack(alignment: .leading, spacing: 6) {
+                HStack(spacing: 6) {
+                    Text("上下文已压缩")
+                        .font(CodexTypography.statusBar)
+                        .foregroundStyle(CodexColors.stateWarning)
+
+                    Text(sourceDetailText)
+                        .font(CodexTypography.caption2)
+                        .foregroundStyle(.secondary)
+                }
+
+                Text("这段原文已被压缩；发送给模型的是下面的压缩文本，不是你看到的完整原文追溯。原文不可直接修改。")
+                    .font(CodexTypography.caption)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+
+                MarkdownMessageText(markdown: snapshot.editedSummary)
+                    .font(CodexTypography.messageBody)
+                    .foregroundStyle(.primary)
+                    .textSelection(.enabled)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+
+            Spacer(minLength: 0)
         }
+        .padding(.vertical, 8)
+        .accessibilityElement(children: .combine)
     }
 
-    var tint: Color {
-        switch self {
-        case .inProgress:
-            return .blue
-        case .completed:
-            return .green
-        case .failed:
-            return .red
-        case .unknown:
-            return .secondary
+    private var sourceDetailText: String {
+        if sourceEvents.isEmpty {
+            return "来源待追溯"
         }
+
+        return "来源 \(sourceEvents.count) 条"
     }
 }

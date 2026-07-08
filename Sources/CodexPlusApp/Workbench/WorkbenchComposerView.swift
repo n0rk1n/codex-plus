@@ -31,8 +31,8 @@ struct WorkbenchComposerView: View {
                 composerButton
             }
             .animation(.spring(response: 0.24, dampingFraction: 0.78), value: shouldShowPromptOptimizationButton)
-            .padding(.horizontal, 16)
-            .padding(.vertical, 12)
+            .padding(.horizontal, CodexSpacing.contentStack)
+            .padding(.vertical, CodexSpacing.contentInline)
         }
         .alert("当前正在优化提示词", isPresented: $isShowingStopOptimizationConfirmation) {
             Button("继续等待", role: .cancel) {}
@@ -63,15 +63,15 @@ struct WorkbenchComposerView: View {
 
     private var promptInputField: some View {
         ZStack(alignment: .leading) {
-            TextField(activePlaceholder, text: $prompt)
-                .textFieldStyle(.plain)
-                .font(.system(size: 14))
-                .lineLimit(1)
-                .submitLabel(.send)
-                .focused($isFocused)
-                .disabled(isTextInputDisabled)
-                .opacity(promptInputOpacity)
-                .onSubmit(submitPrompt)
+            CodexTextField(
+                rule: .composerInline,
+                placeholder: activePlaceholder,
+                text: $prompt,
+                isDisabled: isTextInputDisabled,
+                onSubmit: submitPrompt
+            )
+            .focused($isFocused)
+            .opacity(promptInputOpacity)
 
             if isOptimizingPrompt {
                 optimizingPromptOverlay
@@ -83,18 +83,24 @@ struct WorkbenchComposerView: View {
 
     private var optimizingPromptOverlay: some View {
         Text("正在优化提示词")
-            .font(.system(size: 14, weight: .semibold))
+            .font(CodexTypography.tinyControlLabel)
             .foregroundStyle(
                 LinearGradient(
-                    colors: optimizingPromptGlow
-                        ? [Color.yellow, Color.cyan, Color.purple]
-                        : [Color.purple, Color.orange, Color.blue],
+                    colors: CodexPromptOptimizationVisuals.gradient(isOptimizing: optimizingPromptGlow),
                     startPoint: .leading,
                     endPoint: .trailing
                 )
             )
-            .shadow(color: Color.yellow.opacity(optimizingPromptGlow ? 0.45 : 0.15), radius: optimizingPromptGlow ? 9 : 3)
-            .shadow(color: Color.cyan.opacity(optimizingPromptGlow ? 0.22 : 0.08), radius: optimizingPromptGlow ? 14 : 5)
+            .shadow(
+                color: CodexPromptOptimizationVisuals.runningColor.opacity(CodexPromptOptimizationVisuals.glowPrimaryOpacity(isOptimizing: optimizingPromptGlow)),
+                radius: optimizingPromptGlow ? 9 : 3
+            )
+            .shadow(
+                color: CodexPromptOptimizationVisuals.glowSecondaryColor.opacity(
+                    CodexPromptOptimizationVisuals.glowSecondaryOpacity(isOptimizing: optimizingPromptGlow)
+                ),
+                radius: optimizingPromptGlow ? 14 : 5
+            )
             .opacity(optimizingPromptGlow ? 1 : 0.68)
             .animation(.easeInOut(duration: 1.8).repeatForever(autoreverses: true), value: optimizingPromptGlow)
             .allowsHitTesting(false)
@@ -109,7 +115,7 @@ struct WorkbenchComposerView: View {
                 action: actions.stop
             ) {
                 Image(systemName: "stop.fill")
-                    .font(.system(size: 15, weight: .semibold))
+                    .font(CodexTypography.controlLabel)
                     .frame(width: WorkbenchMetrics.composerControlHeight, height: WorkbenchMetrics.composerControlHeight)
             }
         case .send:
@@ -120,7 +126,7 @@ struct WorkbenchComposerView: View {
                 action: submitPrompt
             ) {
                 Image(systemName: "arrow.up")
-                    .font(.system(size: 15, weight: .semibold))
+                    .font(CodexTypography.controlLabel)
                     .frame(width: WorkbenchMetrics.composerControlHeight, height: WorkbenchMetrics.composerControlHeight)
             }
         }
@@ -135,9 +141,9 @@ struct WorkbenchComposerView: View {
             action: optimizePrompt
         ) {
             Image(systemName: isOptimizingPrompt ? "lightbulb.fill" : "lightbulb")
-                .font(.system(size: 15, weight: .semibold))
+                .font(CodexTypography.controlLabel)
                 .symbolRenderingMode(.hierarchical)
-                .foregroundStyle(isOptimizingPrompt ? .yellow : .secondary)
+                .foregroundStyle(isOptimizingPrompt ? CodexPromptOptimizationVisuals.runningColor : .secondary)
                 .frame(width: WorkbenchMetrics.composerControlHeight, height: WorkbenchMetrics.composerControlHeight)
                 .scaleEffect(isOptimizingPrompt && bulbPulse ? 1.12 : 1.0)
                 .opacity(isOptimizingPrompt && bulbPulse ? 0.72 : 1.0)
@@ -155,10 +161,10 @@ struct WorkbenchComposerView: View {
             CodexButton(rule: .workspaceCapsule, action: actions.pickWorkspace) {
                 HStack(spacing: 6) {
                     Image(systemName: "folder")
-                        .font(.system(size: 12, weight: .semibold))
+                        .font(CodexTypography.microControl)
 
                     Text(activeProjectName ?? WorkbenchStrings.chooseWorkspace)
-                        .font(.system(size: 12, weight: .semibold))
+                        .font(CodexTypography.microControl)
                         .lineLimit(1)
                         .truncationMode(.tail)
                         .frame(maxWidth: workspacePickerTextMaxWidth, alignment: .leading)
@@ -173,9 +179,7 @@ struct WorkbenchComposerView: View {
                 workspaceClearButton
             }
         }
-        .glassEffect(.regular, in: Capsule(style: .continuous))
-        .compositingGroup()
-        .mask(Capsule(style: .continuous))
+        .codexWorkspaceSelectionGlass()
         .help(activeProjectPath ?? WorkbenchStrings.chooseWorkspace)
         .accessibilityLabel(WorkbenchStrings.chooseWorkspace)
     }
@@ -189,7 +193,7 @@ struct WorkbenchComposerView: View {
         ) {
             Image(systemName: "xmark.circle.fill")
                 .symbolRenderingMode(.hierarchical)
-                .font(.system(size: 15, weight: .semibold))
+                .font(CodexTypography.controlLabel)
                 .frame(width: 24, height: WorkbenchMetrics.composerControlHeight)
         }
         .padding(.trailing, 6)

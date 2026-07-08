@@ -24,6 +24,21 @@ func runPromptTemplateManagerAppSourceTests() {
     let workbenchLauncherPanelController = readSource(
         root.appendingPathComponent("Sources/CodexPlusApp/Workbench/WorkbenchLauncherPanelController.swift")
     )
+    let workbenchView = readSource(
+        root.appendingPathComponent("Sources/CodexPlusApp/Workbench/WorkbenchView.swift")
+    )
+    let workbenchConversationListView = readSource(
+        root.appendingPathComponent("Sources/CodexPlusApp/Workbench/WorkbenchConversationListView.swift")
+    )
+    let conversationEventRow = readSource(
+        root.appendingPathComponent("Sources/CodexPlusApp/Views/ConversationEventRow.swift")
+    )
+    let conversationDisplayPresentation = readSource(
+        root.appendingPathComponent("Sources/CodexPlusApp/Views/ConversationDisplayEvent+Presentation.swift")
+    )
+    let markdownMessageText = readSource(
+        root.appendingPathComponent("Sources/CodexPlusApp/Views/MarkdownMessageText.swift")
+    )
     let topProjectStripView = readSource(
         root.appendingPathComponent("Sources/CodexPlusApp/Workbench/TopProjectStripView.swift")
     )
@@ -61,7 +76,7 @@ func runPromptTemplateManagerAppSourceTests() {
         "prompt manager multiline prompt fields use the shared AppKit text view with explicit text container inset"
     )
     expect(
-        managerView.contains("Picker(\"\", selection: sourceFilterBinding)") &&
+        managerView.contains("CodexPicker(rule: .segmentedFilter, title: \"\", selection: sourceFilterBinding)") &&
             managerView.contains("private func templateMetadataRow(_ template: PromptTemplate) -> some View") &&
             managerView.contains("HStack(alignment: .firstTextBaseline, spacing: 8)") &&
             managerView.contains("Spacer(minLength: 8)") &&
@@ -72,8 +87,9 @@ func runPromptTemplateManagerAppSourceTests() {
         "prompt manager sidebar shows type left and source right on one metadata row"
     )
     expect(
-        managerView.contains("Picker(\"\", selection: draftTypeBinding)") &&
-            !managerView.contains("Picker(\"类型\", selection: draftTypeBinding)"),
+        managerView.contains("title: \"\"") &&
+            managerView.contains("selection: draftTypeBinding") &&
+            !managerView.contains("title: \"类型\""),
         "prompt manager type menu hides the duplicate picker label"
     )
     expect(
@@ -86,27 +102,24 @@ func runPromptTemplateManagerAppSourceTests() {
     )
     expect(
         managerView.contains("systemImage: \"doc.on.doc\"") &&
-            managerView.contains("foregroundColor: .blue") &&
-            managerView.contains("headerActionLabel(systemImage: \"trash\", title: \"删除\", foregroundColor: .red)"),
+            managerView.contains("foregroundColor: CodexColors.stateRunning") &&
+            managerView.contains("headerActionLabel(systemImage: \"trash\", title: \"删除\", foregroundColor: CodexColors.stateFailed)"),
         "prompt manager header copy and delete actions are color-coded"
     )
     expect(
-        managerView.contains(".codexCapsuleButtonHitArea()"),
-        "prompt template manager action buttons use the shared capsule hit-area modifier"
+        managerView.contains("rule: .formHeaderCapsule") &&
+            managerView.contains("rule: .formFooterCapsule"),
+        "prompt manager header/footer action buttons use shared form button rules"
     )
     expect(
-        managerView.contains("@State private var isShowingReadOnlyTemplateNotice = false") &&
-            managerView.contains("readOnlyTemplateNotice") &&
-            managerView.contains("showReadOnlyTemplateNotice") &&
-            managerView.contains("系统内置提示词为只读内容。如需修改，请先创建用户自定义提示词。") &&
-            managerView.contains("DispatchQueue.main.asyncAfter(deadline: .now() + 3)") &&
-            !managerView.contains("DispatchQueue.main.asyncAfter(deadline: .now() + 5)") &&
-            !managerView.contains("想要修改") &&
-            managerView.contains("guard !store.isEditable") &&
-            managerView.contains("guard !isShowingReadOnlyTemplateNotice") &&
-            managerView.contains("Color.clear") &&
-            managerView.contains(".contentShape(Rectangle())"),
-        "prompt manager read-only detail controls show one centered notice for three seconds"
+        managerView.contains("readOnlyTemplateControl { handle in") &&
+            managerView.contains("CodexReadOnlyNoticeHost(") &&
+            managerView.contains("isReadOnly: !store.isEditable") &&
+            managerView.contains("rule: .promptTemplateSystemTemplate") &&
+            !managerView.contains("isShowingReadOnlyTemplateNotice") &&
+            !managerView.contains("DispatchQueue.main.asyncAfter(deadline: .now() + 3)") &&
+            !managerView.contains(".contentShape(Rectangle())"),
+        "prompt manager read-only detail controls use the shared read-only notice host"
     )
     expect(
         settingsPanelController.contains("PromptTemplateSettingsStore(repository: repository)") &&
@@ -155,12 +168,40 @@ func runPromptTemplateManagerAppSourceTests() {
         "workbench circular icon buttons use the shared toolbar icon rule"
     )
     expect(
-        topProjectStripView.contains("ScrollView(.horizontal") &&
-            topProjectStripView.contains("shouldShowProjectCardRail(projectCardCount: cards.count)") &&
-            topProjectStripView.contains(
-                "CodexButton(\n            rule: .cardRounded(cornerRadius: WorkbenchMetrics.projectCardCornerRadius)"
-            ),
-        "workbench top strip keeps the horizontal project card rail and routes cards through the shared rounded card rule"
+        workbenchView.contains("""
+    private var conversationWorkspace: some View {
+        VStack(spacing: WorkbenchMetrics.verticalSpacing) {
+            HStack(spacing: WorkbenchMetrics.contentColumnSpacing) {
+""") &&
+            workbenchView.contains("HStack(spacing: WorkbenchMetrics.contentColumnSpacing)") &&
+            workbenchView.contains("WorkbenchConversationListView(") &&
+            workbenchView.contains("VStack(spacing: WorkbenchMetrics.verticalSpacing)") &&
+            workbenchView.contains("WorkbenchConversationView(") &&
+            workbenchView.contains("WorkbenchComposerView(") &&
+            workbenchView.contains("""
+            }
+
+            WorkbenchStatusBarView(state: store.snapshot.statusBar, codexUsageStatus: codexUsageMonitor.status)
+        }
+""") &&
+            workbenchConversationListView.contains("ForEach(card.conversationSummaries)") &&
+            workbenchConversationListView.contains("maxHeight: .infinity") &&
+            !topProjectStripView.contains("ScrollView(.horizontal"),
+        "workbench conversation page keeps the left list through chat and composer, with status at the bottom"
+    )
+    expect(
+        conversationEventRow.contains("MarkdownMessageText(markdown: message)") &&
+            conversationDisplayPresentation.contains("case .userPrompt, .assistantMessage:") &&
+            markdownMessageText.contains("AttributedString(markdown: markdown") &&
+            markdownMessageText.contains("Text(attributedMarkdown)") &&
+            markdownMessageText.contains("Text(markdown)"),
+        "conversation event rows render user and assistant messages as markdown with plain-text fallback"
+    )
+    expect(
+        conversationEventRow.contains(".font(CodexTypography.messageBody)") &&
+            readSource(root.appendingPathComponent("Sources/CodexPlusApp/Views/CodexDesignTokens.swift"))
+            .contains("static let messageBody = Font.system(size: 15)"),
+        "conversation event body text uses a larger 15 point font"
     )
     expect(
         workbenchLauncherView.contains("let onActivate: () -> Void") &&
@@ -194,7 +235,6 @@ private func assertAppControlsUseRules(root: URL) {
         ".codexCapsuleButtonHitArea(": "page views must not call hit-area helpers",
         ".codexCircularButtonHitArea(": "page views must not call hit-area helpers",
         ".codexRoundedButtonHitArea(": "page views must not call hit-area helpers",
-        "readOnlyInputArea": "read-only control overlays belong in CodexReadOnlyNotice"
     ]
 
     for file in files
@@ -374,7 +414,6 @@ private func isSystemControlExceptionFile(_ url: URL) -> Bool {
 private func isControlCompatibilityFile(_ url: URL) -> Bool {
     [
         "ButtonHitAreaModifier.swift",
-        "AppMultilineTextField.swift",
         "AppMultilineTextEditor.swift"
     ].contains(url.lastPathComponent)
 }

@@ -15,8 +15,8 @@ struct WorkbenchStatusBarView: View {
             Text("SQLite 已连接")
             Text("归档索引 待更新")
         }
-        .font(.caption.weight(.semibold))
-        .foregroundStyle(.secondary)
+        .font(CodexTypography.statusBar)
+        .foregroundStyle(CodexColors.secondaryText)
         .padding(.horizontal, 4)
     }
 
@@ -25,31 +25,16 @@ struct WorkbenchStatusBarView: View {
             StatusUsageLimitText(
                 label: "5h",
                 value: status.displayPercentText(for: .fiveHour),
-                color: usageColor(for: .fiveHour, status: status)
+                color: status.color(for: .fiveHour)
             )
             StatusUsageLimitText(
                 label: "1w",
                 value: status.displayPercentText(for: .weekly),
-                color: usageColor(for: .weekly, status: status)
+                color: status.color(for: .weekly)
             )
         }
         .accessibilityElement(children: .combine)
         .accessibilityLabel("Codex usage, five hours \(accessibilityPercentText(status.fiveHourPercent)), one week \(accessibilityPercentText(status.weeklyPercent))")
-    }
-
-    private func usageColor(for window: CodexUsageWindow, status: CodexUsageStatus) -> Color {
-        guard status.percent(for: window) != nil else {
-            return .secondary
-        }
-
-        let ringColor = status.ringColor(for: window)
-
-        return Color(
-            red: ringColor.red,
-            green: ringColor.green,
-            blue: ringColor.blue,
-            opacity: ringColor.opacity
-        )
     }
 
     private func accessibilityPercentText(_ percent: Int?) -> String {
@@ -69,7 +54,7 @@ private struct StatusUsageLimitText: View {
     var body: some View {
         HStack(spacing: 4) {
             Text(label)
-                .foregroundStyle(.secondary)
+                .foregroundStyle(CodexColors.secondaryText)
 
             Text(value)
                 .foregroundStyle(color)

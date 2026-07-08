@@ -17,6 +17,7 @@ public enum PromptTemplateSource: String, CaseIterable, Sendable {
 public enum PromptTemplateType: String, CaseIterable, Sendable {
     case archiveConversationSummary
     case optimizeUserInputPrompt
+    case conversationContextCompression
 
     public var displayName: String {
         switch self {
@@ -24,6 +25,8 @@ public enum PromptTemplateType: String, CaseIterable, Sendable {
             return "对归档对话进行总结"
         case .optimizeUserInputPrompt:
             return "优化用户对话输入框提示词"
+        case .conversationContextCompression:
+            return "上下文压缩提示词"
         }
     }
 
@@ -33,6 +36,8 @@ public enum PromptTemplateType: String, CaseIterable, Sendable {
             return "归档总结"
         case .optimizeUserInputPrompt:
             return "优化输入"
+        case .conversationContextCompression:
+            return "压缩提示词"
         }
     }
 }

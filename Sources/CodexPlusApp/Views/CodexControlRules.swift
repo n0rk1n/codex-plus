@@ -20,10 +20,40 @@ enum CodexTextFieldRule {
     case formField
 }
 
+extension CodexTextFieldRule {
+    var font: Font {
+        switch self {
+        case .composerInline:
+            return CodexTypography.singleLineComposerInput
+        case .searchField, .formField:
+            return .body
+        }
+    }
+}
+
 enum CodexMultilineTextRule {
     case multilinePrompt
     case multilineNote
+    case compactPrompt
+    case conversationFollowUpPrompt
     case longPromptEditor
+}
+
+extension CodexMultilineTextRule {
+    var font: Font {
+        switch self {
+        case .multilinePrompt:
+            return CodexTypography.multilinePrompt
+        case .multilineNote:
+            return CodexTypography.multilineNote
+        case .compactPrompt:
+            return CodexTypography.multilinePrompt
+        case .conversationFollowUpPrompt:
+            return CodexTypography.conversationFollowUpPrompt
+        case .longPromptEditor:
+            return CodexTypography.multilineEditor
+        }
+    }
 }
 
 enum CodexPickerRule {
@@ -95,5 +125,11 @@ extension View {
                     .onTapGesture(perform: handle.show)
             }
         }
+    }
+
+    func codexWorkspaceSelectionGlass() -> some View {
+        glassEffect(.regular, in: Capsule(style: .continuous))
+            .compositingGroup()
+            .mask(Capsule(style: .continuous))
     }
 }

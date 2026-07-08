@@ -6,7 +6,7 @@ struct CodexUsageRingTileView: View {
     let isRefreshing: Bool
 
     var body: some View {
-        LiquidGlassContainer(cornerRadius: 22) {
+        LiquidGlassContainer(cornerRadius: CodexRadius.card) {
             ZStack {
                 VStack(spacing: CompactDashboardMetricTileLayout.footerSpacing) {
                     HStack(spacing: 10) {
@@ -25,8 +25,8 @@ struct CodexUsageRingTileView: View {
                     .frame(height: CompactDashboardMetricTileLayout.metricRowHeight)
 
                     Text(labelText)
-                        .font(.system(size: 9, weight: .medium))
-                        .foregroundStyle(.secondary)
+                        .font(CodexTypography.statusBarValue)
+                        .foregroundStyle(CodexColors.secondaryText)
                         .lineLimit(1)
                         .minimumScaleFactor(0.75)
                         .frame(height: CompactDashboardMetricTileLayout.footerRowHeight)
@@ -39,15 +39,15 @@ struct CodexUsageRingTileView: View {
                             Spacer()
                             ProgressView()
                                 .controlSize(.small)
-                                .tint(.secondary)
-                                .frame(width: 16, height: 16)
+                                .tint(CodexColors.secondaryText)
+                                .frame(width: CGFloat(CompactDashboardTileDragPolicy.tileProgressIndicatorSize), height: CGFloat(CompactDashboardTileDragPolicy.tileProgressIndicatorSize))
                         }
                     }
-                    .padding(.trailing, 8)
-                    .padding(.bottom, 7)
+                    .padding(.trailing, CompactDashboardMetricTileLayout.refreshIndicatorTrailingPadding)
+                    .padding(.bottom, CompactDashboardMetricTileLayout.refreshIndicatorBottomPadding)
                 }
             }
-            .frame(width: 138, height: 92)
+            .frame(width: CGFloat(CompactDashboardTileDragPolicy.codexUsageTileWidth), height: CGFloat(CompactDashboardTileDragPolicy.tileStripHeight))
         }
         .accessibilityElement(children: .ignore)
         .accessibilityLabel(accessibilityText)
@@ -74,18 +74,7 @@ struct CodexUsageRingTileView: View {
     }
 
     private func color(for window: CodexUsageWindow) -> Color {
-        guard status.percent(for: window) != nil else {
-            return .secondary
-        }
-
-        let ringColor = status.ringColor(for: window)
-
-        return Color(
-            red: ringColor.red,
-            green: ringColor.green,
-            blue: ringColor.blue,
-            opacity: ringColor.opacity
-        )
+        status.color(for: window)
     }
 }
 
@@ -97,12 +86,12 @@ private struct UsageMetricColumn: View {
     var body: some View {
         VStack(spacing: 4) {
             Text(label.uppercased())
-                .font(.system(size: 11, weight: .semibold, design: .rounded))
+                .font(CodexTypography.usageMetricLabel)
                 .foregroundStyle(.primary)
                 .frame(height: CompactDashboardMetricTileLayout.labelRowHeight)
 
             Text(value)
-                .font(.system(size: 22, weight: .semibold, design: .rounded))
+                .font(CodexTypography.usageMetricValue)
                 .foregroundStyle(color)
                 .frame(height: CompactDashboardMetricTileLayout.valueRowHeight)
         }

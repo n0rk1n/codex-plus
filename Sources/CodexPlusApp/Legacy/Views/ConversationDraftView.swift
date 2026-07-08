@@ -11,59 +11,60 @@ struct ConversationDraftView: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
-            Button(action: onPickWorkspace) {
+            CodexButton(
+                rule: .workspaceClear,
+                help: "Choose Workspace",
+                accessibilityLabel: "Choose Workspace",
+                action: onPickWorkspace
+            ) {
                 HStack(spacing: 8) {
                     Image(systemName: "folder")
-                        .font(.system(size: 13, weight: .semibold))
+                        .font(CodexTypography.menuPrimary)
 
                     Text(workspaceText)
-                        .font(.caption)
+                        .font(CodexTypography.caption)
                         .lineLimit(1)
 
                     Spacer(minLength: 0)
                 }
-                .padding(.horizontal, 12)
+                .padding(.horizontal, CodexSpacing.contentInline)
                 .frame(height: 34)
             }
-            .buttonStyle(.plain)
-            .codexRoundedButtonHitArea(cornerRadius: 8)
             .background {
                 RoundedRectangle(cornerRadius: 8, style: .continuous)
-                    .fill(Color.primary.opacity(0.06))
+                    .fill(CodexColors.surfaceInactive)
             }
-            .help("Choose Workspace")
-            .accessibilityLabel("Choose Workspace")
 
             if let errorMessage = draft?.errorMessage {
                 Text(errorMessage)
-                    .font(.caption2)
-                    .foregroundStyle(.red)
+                    .font(CodexTypography.caption2)
+                    .foregroundStyle(CodexColors.stateFailed)
                     .lineLimit(2)
             }
 
-            LiquidGlassContainer(cornerRadius: 22) {
+            LiquidGlassContainer(cornerRadius: CodexRadius.card) {
                 HStack(alignment: .bottom, spacing: 10) {
-                    AppMultilineTextField(
+                    CodexMultilineTextField(
+                        rule: .multilinePrompt,
                         placeholder: "Ask Codex...",
                         text: $prompt,
-                        fontSize: 15,
-                        lineLimit: MultilineInputDefaults.conversationPromptLineLimit,
                         onSubmit: submitPrompt
                     )
                         .focused($isPromptFocused)
 
-                    Button(action: submitPrompt) {
+                    CodexButton(
+                        rule: .composerIconCircle,
+                        action: submitPrompt
+                    ) {
                         Image(systemName: "arrow.up.circle.fill")
-                            .font(.system(size: 20, weight: .semibold))
+                            .font(CodexTypography.sectionHeader)
                     }
-                    .buttonStyle(.plain)
-                    .codexCircularButtonHitArea()
                     .help("Send")
                     .accessibilityLabel("Send")
                     .disabled(prompt.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
                 }
-                .padding(.horizontal, 14)
-                .padding(.vertical, 12)
+                    .padding(.horizontal, CodexSpacing.compactInline)
+                    .padding(.vertical, CodexSpacing.contentInline)
             }
         }
         .onAppear {

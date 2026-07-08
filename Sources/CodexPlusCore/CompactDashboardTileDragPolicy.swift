@@ -11,11 +11,14 @@ public enum CompactDashboardTileDragPolicy {
     public static let bottomPadding = 18.0
     public static let verticalSpacing = 14.0
     public static let tileStripHeight = 92.0
+    public static let tileIconSize = 48.0
+    public static let tileProgressIndicatorSize = 16.0
     public static let batteryTileWidth = 92.0
     public static let codexDesktopTileWidth = 92.0
     public static let codexUsageTileWidth = 138.0
     public static let dailyTokensTileWidth = 184.0
     public static let tileSpacing = 12.0
+    public static let tileReorderThreshold = 44.0
     public static let tileStripWidth = codexDesktopTileWidth + codexUsageTileWidth + dailyTokensTileWidth + (tileSpacing * 2)
     public static let minimumPanelWidth = tileStripWidth + (horizontalPadding * 2)
 

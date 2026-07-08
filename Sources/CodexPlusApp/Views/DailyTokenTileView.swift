@@ -6,7 +6,7 @@ struct DailyTokenTileView: View {
     let isRefreshing: Bool
 
     var body: some View {
-        LiquidGlassContainer(cornerRadius: 22) {
+        LiquidGlassContainer(cornerRadius: CodexRadius.card) {
             ZStack {
                 VStack(spacing: CompactDashboardMetricTileLayout.footerSpacing) {
                     HStack(spacing: 6) {
@@ -17,8 +17,8 @@ struct DailyTokenTileView: View {
                     .frame(height: CompactDashboardMetricTileLayout.metricRowHeight)
 
                     Text("Today Tokens")
-                        .font(.system(size: 9, weight: .medium))
-                        .foregroundStyle(.secondary)
+                        .font(CodexTypography.statusBarValue)
+                        .foregroundStyle(CodexColors.secondaryText)
                         .lineLimit(1)
                         .minimumScaleFactor(0.75)
                         .frame(height: CompactDashboardMetricTileLayout.footerRowHeight)
@@ -31,12 +31,12 @@ struct DailyTokenTileView: View {
                             Spacer()
                             ProgressView()
                                 .controlSize(.small)
-                                .tint(.secondary)
-                                .frame(width: 16, height: 16)
+                                .tint(CodexColors.secondaryText)
+                                .frame(width: CGFloat(CompactDashboardTileDragPolicy.tileProgressIndicatorSize), height: CGFloat(CompactDashboardTileDragPolicy.tileProgressIndicatorSize))
                         }
                     }
-                    .padding(.trailing, 8)
-                    .padding(.bottom, 7)
+                    .padding(.trailing, CompactDashboardMetricTileLayout.refreshIndicatorTrailingPadding)
+                    .padding(.bottom, CompactDashboardMetricTileLayout.refreshIndicatorBottomPadding)
                 }
             }
             .frame(
@@ -49,7 +49,7 @@ struct DailyTokenTileView: View {
     }
 
     private var placeholderValueColor: Color {
-        .secondary
+        CodexColors.secondaryText
     }
 
     private var inputOutputColor: Color {
@@ -57,7 +57,7 @@ struct DailyTokenTileView: View {
     }
 
     private var successValueColor: Color {
-        color(from: CodexUsageRingColor.lowUsageGreen)
+        CodexUsageColors.lowUsage
     }
 
     private var hitRateColor: Color {
@@ -68,14 +68,6 @@ struct DailyTokenTileView: View {
         "Today tokens, input \(status.inputText), output \(status.outputText), cache hit \(status.hitRateText)"
     }
 
-    private func color(from ringColor: CodexUsageRingColor) -> Color {
-        Color(
-            red: ringColor.red,
-            green: ringColor.green,
-            blue: ringColor.blue,
-            opacity: ringColor.opacity
-        )
-    }
 }
 
 private struct DailyTokenMetricColumn: View {
@@ -86,12 +78,12 @@ private struct DailyTokenMetricColumn: View {
     var body: some View {
         VStack(spacing: 4) {
             Text(label)
-                .font(.system(size: 11, weight: .semibold, design: .rounded))
+                .font(CodexTypography.usageMetricLabel)
                 .foregroundStyle(.primary)
                 .frame(height: CompactDashboardMetricTileLayout.labelRowHeight)
 
             Text(value)
-                .font(.system(size: 22, weight: .semibold, design: .rounded))
+                .font(CodexTypography.usageMetricValue)
                 .foregroundStyle(color)
                 .frame(height: CompactDashboardMetricTileLayout.valueRowHeight)
         }

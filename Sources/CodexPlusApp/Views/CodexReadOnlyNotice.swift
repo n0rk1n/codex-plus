@@ -63,15 +63,15 @@ private struct CodexReadOnlyNoticeView: View {
 
     var body: some View {
         Text(rule.message)
-            .font(.system(size: 13, weight: .semibold))
+            .font(CodexTypography.menuPrimary)
             .foregroundStyle(.white)
             .multilineTextAlignment(.center)
-            .padding(.horizontal, 18)
-            .padding(.vertical, 12)
-            .background(Color.black.opacity(0.9), in: RoundedRectangle(cornerRadius: 10, style: .continuous))
+            .padding(.horizontal, CodexSpacing.compactField)
+            .padding(.vertical, CodexSpacing.contentInline)
+            .background(CodexColors.readOnlyOverlay, in: RoundedRectangle(cornerRadius: CodexRadius.badge, style: .continuous))
             .overlay(
-                RoundedRectangle(cornerRadius: 10, style: .continuous)
-                    .stroke(Color.white.opacity(0.12), lineWidth: 1)
+                RoundedRectangle(cornerRadius: CodexRadius.badge, style: .continuous)
+                    .stroke(CodexColors.surfaceStroke, lineWidth: 1)
             )
             .shadow(color: .black.opacity(0.32), radius: 18, y: 8)
             .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .center)

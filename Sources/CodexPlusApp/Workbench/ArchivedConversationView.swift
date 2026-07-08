@@ -19,7 +19,7 @@ struct ArchivedConversationView: View {
                 searchPane
 
                 Divider()
-                    .overlay(.white.opacity(0.08))
+                    .overlay(CodexColors.surfaceDivider)
 
                 detailPane
             }
@@ -45,27 +45,28 @@ struct ArchivedConversationView: View {
 
     private var searchPane: some View {
         VStack(alignment: .leading, spacing: 12) {
-            TextField("搜索已归档对话", text: $query)
-                .textFieldStyle(.roundedBorder)
-                .onSubmit {
-                    actions.search(query)
-                }
-                .onChange(of: query) {
-                    actions.search(query)
-                }
+            CodexTextField(
+                rule: .searchField,
+                placeholder: "搜索已归档对话",
+                text: $query,
+                onChange: { newQuery in
+                    actions.search(newQuery)
+                },
+                onSubmit: { actions.search(query) }
+            )
 
             List {
-                ForEach(results) { record in
-                    CodexButton(rule: .rowRectangle, action: {
-                        actions.open(record.id)
-                    }) {
-                        VStack(alignment: .leading, spacing: 4) {
-                            Text(record.title)
-                                .font(.system(size: 13, weight: .semibold))
-                                .lineLimit(1)
+                    ForEach(results) { record in
+                        CodexButton(rule: .rowRectangle, action: {
+                            actions.open(record.id)
+                        }) {
+                            VStack(alignment: .leading, spacing: 4) {
+                                Text(record.title)
+                                    .font(CodexTypography.menuPrimary)
+                                    .lineLimit(1)
 
-                            Text(record.projectPath)
-                                .font(.caption)
+                                Text(record.projectPath)
+                                .font(CodexTypography.caption)
                                 .foregroundStyle(.secondary)
                                 .lineLimit(1)
                                 .truncationMode(.middle)
@@ -88,16 +89,16 @@ struct ArchivedConversationView: View {
                         } label: {
                             Text("恢复")
                         }
-                        .tint(.blue)
+                        .tint(CodexColors.stateRunning)
                         .padding(.trailing, archiveSwipeActionSpacingAdjustment)
                     }
                 }
             }
             .listStyle(.sidebar)
         }
-        .padding(16)
-        .frame(width: 300)
-    }
+            .padding(CodexSpacing.contentStack)
+            .frame(width: WorkbenchMetrics.conversationListWidth)
+        }
 
     @ViewBuilder
     private var detailPane: some View {
@@ -113,11 +114,11 @@ struct ArchivedConversationView: View {
             HStack(alignment: .top, spacing: 12) {
                 VStack(alignment: .leading, spacing: 4) {
                     Text(conversation.title)
-                        .font(.system(size: 18, weight: .semibold))
+                        .font(CodexTypography.contentTitle)
                         .lineLimit(1)
 
                     Text(conversation.workspacePath)
-                        .font(.caption)
+                        .font(CodexTypography.caption)
                         .foregroundStyle(.secondary)
                         .lineLimit(1)
                         .truncationMode(.middle)
@@ -126,15 +127,15 @@ struct ArchivedConversationView: View {
                 Spacer(minLength: 12)
 
                 Text("已归档")
-                    .font(.caption.weight(.semibold))
+                    .font(CodexTypography.statusBar)
                     .foregroundStyle(.secondary)
             }
-            .padding(.horizontal, 16)
-            .padding(.top, 16)
-            .padding(.bottom, 12)
+            .padding(.horizontal, CodexSpacing.contentStack)
+            .padding(.top, CodexSpacing.contentStack)
+            .padding(.bottom, CodexSpacing.contentInline)
 
             Divider()
-                .overlay(.white.opacity(0.08))
+                .overlay(CodexColors.surfaceDivider)
 
             ScrollViewReader { proxy in
                 ScrollView {
@@ -144,7 +145,7 @@ struct ArchivedConversationView: View {
                                 .id(item.id)
                         }
                     }
-                    .padding(16)
+                    .padding(CodexSpacing.contentStack)
                 }
                 .onAppear {
                     scrollToLatest(conversation: conversation, using: proxy)
@@ -158,11 +159,11 @@ struct ArchivedConversationView: View {
             Spacer(minLength: 0)
 
             Image(systemName: "archivebox")
-                .font(.system(size: 28, weight: .medium))
+                .font(CodexTypography.panelHeader)
                 .foregroundStyle(.secondary)
 
             Text("选择已归档对话")
-                .font(.system(size: 16, weight: .semibold))
+                .font(CodexTypography.sectionTitle)
 
             Spacer(minLength: 0)
         }
@@ -179,17 +180,17 @@ struct ArchivedConversationView: View {
                 restoreNotice = nil
             }) {
                 Text("跳转对话")
-                    .foregroundStyle(Color.blue.opacity(0.72))
+                    .foregroundStyle(CodexColors.stateRunning.opacity(0.72))
             }
         }
-        .font(.system(size: 13, weight: .medium))
-        .padding(.horizontal, 14)
-        .padding(.vertical, 10)
-        .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: 10, style: .continuous))
-        .overlay(
-            RoundedRectangle(cornerRadius: 10, style: .continuous)
-                .stroke(.white.opacity(0.12), lineWidth: 1)
-        )
+        .font(CodexTypography.restoreNoticeAction)
+        .padding(.horizontal, CodexSpacing.compactInline)
+        .padding(.vertical, CodexSpacing.tightInline)
+        .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: CodexRadius.badge, style: .continuous))
+            .overlay(
+                RoundedRectangle(cornerRadius: CodexRadius.badge, style: .continuous)
+                    .stroke(CodexColors.surfaceStroke, lineWidth: 1)
+            )
         .shadow(color: .black.opacity(0.25), radius: 18, y: 8)
     }
 
@@ -227,6 +228,8 @@ struct ArchivedConversationView: View {
                     toggleTechnicalGroup(id)
                 }
             )
+        case let .compressionSnapshot(snapshot, sourceEvents):
+            ConversationCompressionSnapshotRow(snapshot: snapshot, sourceEvents: sourceEvents)
         }
     }
 

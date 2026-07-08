@@ -11,17 +11,17 @@ struct ConversationTechnicalEventGroupRow: View {
             CodexButton(rule: .rowRectangle, accessibilityLabel: accessibilityText, action: onToggle) {
                 HStack(spacing: 10) {
                     Image(systemName: isExpanded ? "chevron.down" : "chevron.right")
-                        .font(.system(size: 11, weight: .semibold))
+                        .font(CodexTypography.compactBadge)
                         .foregroundStyle(.secondary)
                         .frame(width: 18, height: 18)
 
                     VStack(alignment: .leading, spacing: 2) {
                         Text("Details · \(eventCountText)")
-                            .font(.caption.weight(.semibold))
+                            .font(CodexTypography.captionStrong)
                             .foregroundStyle(.secondary)
 
                         Text(summaryText)
-                            .font(.system(size: 12))
+                            .font(CodexTypography.compactTechnicalSummary)
                             .foregroundStyle(.secondary)
                             .lineLimit(1)
                             .truncationMode(.tail)
@@ -74,31 +74,5 @@ struct ConversationTechnicalEventGroupRow: View {
 
     private func countLabel(_ count: Int, singular: String, plural: String) -> String {
         "\(count) \(count == 1 ? singular : plural)"
-    }
-}
-
-private extension ConversationDisplayEvent {
-    var isStatusTimelineEvent: Bool {
-        if case .status = self {
-            return true
-        }
-
-        return false
-    }
-
-    var isCommandTimelineEvent: Bool {
-        if case .command = self {
-            return true
-        }
-
-        return false
-    }
-
-    var isParseWarningTimelineEvent: Bool {
-        if case .parseWarning = self {
-            return true
-        }
-
-        return false
     }
 }

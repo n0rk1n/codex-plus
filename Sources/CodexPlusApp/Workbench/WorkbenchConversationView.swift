@@ -25,11 +25,11 @@ struct WorkbenchConversationView: View {
             HStack(alignment: .top, spacing: 12) {
                 VStack(alignment: .leading, spacing: 4) {
                     Text(conversation.title)
-                        .font(.system(size: 18, weight: .semibold))
+                        .font(CodexTypography.contentTitle)
                         .lineLimit(1)
 
                     Text(conversation.workspacePath)
-                        .font(.caption)
+                        .font(CodexTypography.caption)
                         .foregroundStyle(.secondary)
                         .lineLimit(1)
                         .truncationMode(.middle)
@@ -39,12 +39,12 @@ struct WorkbenchConversationView: View {
 
                 archiveButton(for: conversation.id)
             }
-            .padding(.horizontal, 16)
-            .padding(.top, 16)
-            .padding(.bottom, 12)
+            .padding(.horizontal, CodexSpacing.contentStack)
+            .padding(.top, CodexSpacing.contentStack)
+            .padding(.bottom, CodexSpacing.contentInline)
 
             Divider()
-                .overlay(.white.opacity(0.08))
+                .overlay(CodexColors.surfaceDivider)
 
             ScrollViewReader { proxy in
                 ScrollView {
@@ -54,7 +54,7 @@ struct WorkbenchConversationView: View {
                                 .id(item.id)
                         }
                     }
-                    .padding(16)
+                    .padding(CodexSpacing.contentStack)
                 }
                 .onAppear {
                     scrollToLatest(conversation: conversation, using: proxy)
@@ -71,9 +71,9 @@ struct WorkbenchConversationView: View {
             actions.archiveConversation(conversationID)
         }) {
             Label("归档", systemImage: "archivebox.and.arrow.down")
-                .font(.caption.weight(.semibold))
+                .font(CodexTypography.statusBar)
                 .labelStyle(.titleAndIcon)
-                .padding(.horizontal, 10)
+                .padding(.horizontal, CodexSpacing.tightInline)
                 .frame(height: 28)
         }
     }
@@ -83,14 +83,14 @@ struct WorkbenchConversationView: View {
             Spacer(minLength: 0)
 
             Image(systemName: "text.bubble")
-                .font(.system(size: 28, weight: .medium))
+                .font(CodexTypography.panelHeader)
                 .foregroundStyle(.secondary)
 
             Text(WorkbenchStrings.emptyConversationTitle)
-                .font(.system(size: 16, weight: .semibold))
+                .font(CodexTypography.sectionTitle)
 
             Text(WorkbenchStrings.emptyConversationSubtitle)
-                .font(.caption)
+                .font(CodexTypography.caption)
                 .foregroundStyle(.secondary)
 
             Spacer(minLength: 0)
@@ -111,6 +111,8 @@ struct WorkbenchConversationView: View {
                     toggleTechnicalGroup(id)
                 }
             )
+        case let .compressionSnapshot(snapshot, sourceEvents):
+            ConversationCompressionSnapshotRow(snapshot: snapshot, sourceEvents: sourceEvents)
         }
     }
 
