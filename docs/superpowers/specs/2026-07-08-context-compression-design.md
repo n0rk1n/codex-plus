@@ -1,6 +1,6 @@
 # Codex Plus Context Compression Design
 
-Status: approved design draft
+Status: expanded approved design draft
 Last updated: 2026-07-09
 
 ## Purpose
@@ -18,6 +18,27 @@ This feature is not a transcript cleanup tool. It is a model-context projection 
 - Users are responsible for intentional context edits. The app should not block aggressive shortening; it should preserve traceability and rollback.
 - Visual design must satisfy Apple-style macOS aesthetics: calm, precise, spatially clear, lightweight by default, and visually richer only when relationships need explanation.
 - Compression controls and lineage markers must feel native to the current Liquid Glass workbench, not like a separate technical dashboard.
+
+## End-To-End Mental Model
+
+The feature has three synchronized layers:
+
+1. **Source layer:** immutable conversation events stored by conversation and shown as the default timeline.
+2. **Version layer:** user-visible and model-input versions built over dialogue rounds. This layer records edits, compression, exclusion, rollback, tombstone, and lineage.
+3. **Assembly layer:** a deterministic projection that converts the active version layer into the exact text sent to the model.
+
+The user mostly reads the source layer. The app sends the assembly layer. The version layer explains why those two can differ without losing traceability.
+
+Every feature path must preserve this invariant:
+
+```text
+source events remain recoverable
+    -> active lineage can be recomputed
+    -> assembled model input can be reproduced
+    -> archive can preserve both source and lineage
+```
+
+If any operation cannot maintain that chain, it should fail without changing the active lineage.
 
 ## Existing State
 
@@ -79,6 +100,118 @@ Dedicated storage must represent:
 - Tombstoned branches
 - Compression input records
 - Run lifecycle boundaries
+
+### Proposed Storage Shape
+
+The exact SQLite column names can change during implementation, but the model needs these concepts as first-class records.
+
+`compression_rounds`
+
+- `id`
+- `conversation_id`
+- `round_index`
+- `user_event_id`
+- `first_ai_event_id`
+- `last_ai_event_id`
+- `run_state`
+- `run_started_at`
+- `run_finished_at`
+- `created_at`
+- `updated_at`
+
+Purpose: stable round identity. The round is the minimum unit used by selection, compression source metadata, lineage, and archive recovery.
+
+`compression_round_events`
+
+- `id`
+- `round_id`
+- `event_id`
+- `role_bucket` with values `user` or `ai`
+- `ordinal`
+
+Purpose: precise event membership for each round. This avoids relying on event ordering assumptions after the fact.
+
+`compression_versions`
+
+- `id`
+- `conversation_id`
+- `scope_kind` with values such as `round`, `range`, or `assembled`
+- `operation` with values such as `original`, `manual_edit`, `default_compression`, `custom_compression`, `system_compression`, `exclude`, `failed_compression`, or `tombstone`
+- `status` with values such as `active`, `historical`, `failed`, or `tombstoned`
+- `content`
+- `created_at`
+- `updated_at`
+- `template_id`
+- `compression_input_id`
+- `error_message`
+
+Purpose: store the actual version body and the operation that created it.
+
+`compression_version_sources`
+
+- `id`
+- `version_id`
+- `source_kind` with values `round`, `version`, or `range`
+- `source_id`
+- `ordinal`
+
+Purpose: describe what the version was generated from. A joined compression version has multiple source versions or source ranges.
+
+`compression_lineage_edges`
+
+- `id`
+- `parent_version_id`
+- `child_version_id`
+- `edge_kind` with values such as `edit`, `compress`, `join`, `exclude`, `rollback`, or `system_compress`
+- `created_at`
+
+Purpose: preserve the history graph even though the normal UI presents it as a linear history.
+
+`compression_active_versions`
+
+- `conversation_id`
+- `round_id` or `range_id`
+- `active_version_id`
+
+Purpose: make the active model-input projection explicit and quick to load.
+
+`compression_inputs`
+
+- `id`
+- `conversation_id`
+- `mode` with values `default_template`, `custom_template`, or `system`
+- `template_id`
+- `user_instruction`
+- `input_snapshot`
+- `provider_name`
+- `provider_model`
+- `created_at`
+
+Purpose: record what was sent to the compression provider. `user_instruction` is stored here and hidden from normal history by default.
+
+`compression_tombstones`
+
+- `id`
+- `version_id`
+- `reason`
+- `replaced_by_version_id`
+- `created_at`
+
+Purpose: hide deleted downstream branches from normal UI while retaining audit and recovery data.
+
+### Data Invariants
+
+- Every source conversation event belongs to zero or one compression round.
+- Every round has exactly one user segment and one AI segment, but the AI segment may contain zero events if a run failed before producing output.
+- Original versions are immutable.
+- Manual edit versions always have exactly one parent version.
+- Compression versions have one or more source versions or source rounds.
+- Joined compression versions must have at least two sources.
+- Failed compression versions can have sources and error metadata, but they cannot be active.
+- Tombstoned versions cannot be active and cannot be assembled into model input.
+- A conversation can have only one active model-input lineage at a time.
+- Active lineage assembly must be deterministic for the same database state.
+- Archive export must be reproducible from stored source events and compression records.
 
 ### Dialogue Rounds
 
@@ -205,6 +338,56 @@ ABCDEFG -> AMG -> N
 
 The version history must clearly show that `AMG` was the active lineage before system compression and `N` was generated by system compression from `AMG`.
 
+### Compression Execution Flow
+
+Manual and system compression share the same persistence flow after the source range is chosen.
+
+Flow:
+
+1. Resolve the selected continuous round range or the provider-selected system-compression range.
+2. Capture an input snapshot from the current active lineage.
+3. Save a `compression_inputs` record with template, provider, selected rounds, and optional user instruction.
+4. Start compression through `CompressionExecutionProvider`.
+5. Do not append compression run events to normal conversation history.
+6. Collect provider output.
+7. On success, create a new compression version.
+8. Link the new version to the exact source rounds or source versions used.
+9. Update active lineage in one transaction.
+10. Refresh UI state and budget state.
+
+Failure flow:
+
+1. Save a failed compression version or failed attempt record.
+2. Link the failure to the same source input snapshot.
+3. Keep the previous active lineage unchanged.
+4. Keep send disabled if the hard limit still applies.
+5. Show error state in version history and relevant UI.
+
+### Compression Concurrency
+
+Only one compression operation should mutate a conversation's active lineage at a time.
+
+Rules:
+
+- A running compression for conversation A does not block normal work in conversation B.
+- A running compression for conversation A should block another compression on conversation A.
+- If the user edits a version while compression is running on the same source lineage, the compression result must not blindly overwrite the newer active lineage.
+- The implementation should compare the active lineage revision captured at compression start with the active lineage revision at compression finish.
+- If the lineage changed during compression, save the compression result as failed/stale or require retry, rather than applying it to the changed lineage.
+- Stale compression attempts should be visible enough for debugging but should not become active.
+
+### Transaction Boundaries
+
+The following changes must be atomic:
+
+- Creating a successful version and updating active lineage.
+- Rolling back and tombstoning replaced downstream versions.
+- Excluding a version from LLM input.
+- Deleting an active version node and falling back to an earlier version.
+- Archiving source events and compression metadata.
+
+If any part of these operations fails, the app should leave the prior active lineage intact.
+
 ## Context Budget
 
 The first implementation must include real model-context-limit detection. It must not rely only on character counts, event counts, or waiting for Codex CLI to fail after sending.
@@ -223,6 +406,77 @@ Behavior:
 
 - Near limit: warn that compression is recommended, but sending remains available.
 - At or beyond hard limit: disable sending and require compression before continuing.
+
+### Budget Provider Contract
+
+`ContextBudgetProvider` should return a structured result, not just a Boolean.
+
+Required fields:
+
+- `modelIdentifier`
+- `contextWindowTokens`
+- `assembledInputTokens`
+- `reservedOutputTokens`
+- `usableInputTokens`
+- `usageRatio`
+- `budgetState`
+- `measurementSource`
+
+`budgetState` should be at least:
+
+- `safe`
+- `notice`
+- `warning`
+- `hardLimit`
+- `unknown`
+
+`unknown` is important. If the provider cannot get trustworthy token information, the UI should not pretend the budget is known. The first implementation should prefer conservative behavior: allow manual compression, show that the budget is unknown, and avoid disabling send unless the hard limit is known or a provider reports that the assembled context cannot be sent.
+
+### Dynamic Threshold Guidance
+
+The implementation should define thresholds by context-window class. Exact values belong in code and tests, but the design intent is:
+
+- Small windows warn earlier because there is less room for follow-up output.
+- Medium windows use moderate warning thresholds.
+- Large windows can delay early warnings but still enter notice/warning before hard limit.
+- Hard-limit state is based on usable input tokens, not raw context window, because output reserve matters.
+
+Example classes:
+
+- Small: below 32K tokens
+- Medium: 32K to below 128K tokens
+- Large: 128K tokens and above
+
+### Model Input Assembly
+
+The assembly layer builds the exact text sent to the LLM.
+
+Assembly order:
+
+1. Load conversation source events.
+2. Build or load dialogue rounds.
+3. Load active compression versions for each affected round or range.
+4. Walk the conversation in round order.
+5. For each round, choose the active lineage output:
+   - excluded versions contribute nothing to model input
+   - active edited versions contribute their content
+   - active compression versions contribute their content
+   - rounds with no active replacement contribute original user and AI segment text
+6. Apply joined-compression ranges so that replaced child ranges are not emitted twice.
+7. Append the new user prompt for the pending send.
+8. Produce final assembled text.
+9. Pass final assembled text to the budget provider before starting the run.
+
+The model input preview uses the same assembly function. It must not have its own formatting path. If preview and send can diverge, that is a bug.
+
+### Assembly Edge Cases
+
+- If a joined-compression version covers rounds 3 through 7, rounds 3 through 7 are replaced by the joined version content in the assembled output.
+- If round 5 inside that range is tombstoned from an old branch, it must not reappear.
+- If a round is excluded from LLM input, it contributes no text but remains visible in the UI.
+- If a compression failed, the previous active version remains active.
+- If a manual edit creates an empty version, the empty version is valid if the user intentionally saved it. It contributes no text but remains different from exclusion because it is an active edited version, not an excluded state.
+- If a provider cannot determine exact token usage, the preview is still valid as text, but budget status is `unknown`.
 
 ## Manual Editing
 
@@ -282,6 +536,42 @@ Each round shows a lightweight LLM-input status marker:
 - Unchanged original rounds may show a very light `原文发送` hover summary but should not visually compete with changed rounds
 
 Joined-compression relationships appear in the main timeline as lightweight visual hints, such as a side connector, bracket, or compact relation marker.
+
+### Timeline State Matrix
+
+Each round can present one primary model-input state:
+
+- `原文发送`: source text is sent as-is.
+- `已修订`: a manual edit is active.
+- `已压缩`: a compression version is active.
+- `拼接压缩`: a joined compression version covers this round.
+- `已排除模型上下文`: the round is visible but omitted from model input.
+- `压缩失败`: the latest compression attempt failed and the previous active version remains in effect.
+
+Visual rules:
+
+- `原文发送` should be nearly invisible until hover.
+- `已修订` and `已压缩` use calm, low-saturation indicators.
+- `拼接压缩` can use a connector or bracket to show relationship with neighboring rounds.
+- `已排除模型上下文` uses both a marker and dimmed content.
+- `压缩失败` uses a warning treatment but should not look like the active model input is broken if the previous active version is still valid.
+
+### Selection Rules
+
+- Single-round selection enables edit, compress, exclude, and history actions.
+- Continuous multi-round selection enables compress and exclude actions.
+- Non-contiguous multi-selection is not allowed for manual compression.
+- Selection handles should make start and end round boundaries clear.
+- When a selected range already participates in a joined compression, the UI should show that replacing it may create a new active lineage and tombstone the replaced downstream branch.
+
+### Accessibility And Interaction Details
+
+- Every icon-only control needs an accessibility label and tooltip.
+- Status markers need accessible text equivalent to the visual state.
+- Hover-only information must also be reachable by click or keyboard focus.
+- Keyboard users should be able to open the popover, move to the inspector, and trigger primary actions.
+- The edit dialog must support standard macOS text editing behavior.
+- Relationship lines should never be the only source of meaning; labels or summaries must explain the relationship.
 
 ## Popover, Inspector, And Edit Dialog
 
@@ -349,6 +639,32 @@ Archive output should make the original conversation and model-input lineage rec
 
 Archive search searches original conversation text only. Compression versions, manual edit versions, failed compression attempts, tombstones, and lineage metadata are preserved for traceability and recovery, but they do not participate in the archive search index.
 
+### Archive Serialization
+
+Archive export should contain two layers:
+
+1. Human-readable transcript and summary.
+2. Structured compression metadata for recovery and audit.
+
+The human-readable archive should prioritize original text and clear status summaries. It does not need to print every tombstoned body inline.
+
+Structured metadata should include:
+
+- Rounds and event IDs
+- Version IDs and operation types
+- Active lineage at archive time
+- Source relationships
+- Joined-compression relationships
+- Tombstone records
+- Failed compression records
+- Compression input records
+
+Archive restore should be able to recover the conversation source and compression state if the app later supports restoration from archive. Even before full restore support exists, the archive format should avoid throwing away data that restoration would require.
+
+### Archive Search Boundary
+
+Archive search indexes only original source text. This prevents a manually shortened or compressed version from changing search semantics. Search should find what originally happened in the conversation, not every later projection over it.
+
 ## Migration Rule
 
 Do not migrate old memory-card-backed compression snapshots.
@@ -408,3 +724,61 @@ The first complete version is acceptable only if all three categories below pass
 - After successful compression or manual reduction, the user can continue sending.
 - If compression fails, sending remains disabled until the context fits.
 
+## Test Strategy
+
+The implementation plan must include tests at four levels.
+
+### Core Model Tests
+
+- Round builder groups events by user-message boundaries.
+- AI segment includes assistant, command, status, error, and warning events.
+- Original versions are immutable.
+- Manual edit creates a child version.
+- Compression creates lineage edges and source records.
+- Joined compression covers multiple continuous rounds.
+- Non-contiguous manual compression is rejected.
+- Exclusion removes content from assembled model input without deleting source.
+- Failed compression is visible in history but cannot become active.
+- Rollback creates a new branch and tombstones replaced descendants.
+- Tombstoned versions are excluded from active assembly.
+
+### Assembly Tests
+
+- No versions produces original assembled text.
+- Manual edit replaces only the edited segment.
+- Compression replaces the selected continuous range.
+- Joined compression does not duplicate child rounds.
+- Exclusion emits no text for the excluded active version.
+- Empty manual edit emits empty content and is distinct from exclusion.
+- Failed compression preserves the previous active lineage.
+- Preview text equals send text for the same database state.
+
+### Budget And Provider Tests
+
+- Budget provider reports safe, notice, warning, hard-limit, and unknown states.
+- Dynamic thresholds vary by context-window class.
+- Hard-limit state disables send.
+- Near-limit state warns without disabling send.
+- Unknown budget state does not falsely claim safety or hard-limit.
+- Compression provider success creates an active version.
+- Compression provider failure creates a failed history entry and leaves active lineage unchanged.
+- Stale compression result cannot overwrite a newer active lineage.
+
+### UI Source Tests
+
+- Main timeline uses original text as default display.
+- Changed rounds expose LLM-input status markers.
+- Excluded rounds display `已排除模型上下文` and dimmed content.
+- Popover and inspector entry points exist.
+- Model input preview path is separate from lineage traceability path.
+- Archive search still indexes original text only.
+
+## Risks And Guardrails
+
+- **Risk: preview and send diverge.** Guardrail: use one assembly function for both.
+- **Risk: compression overwrites user edits made during a running compression.** Guardrail: compare active lineage revision before applying compression result.
+- **Risk: version history becomes graph-heavy and hard to scan.** Guardrail: keep version history linear-first and show graph relationships as auxiliary hints.
+- **Risk: original source is accidentally treated as mutable.** Guardrail: original versions and conversation events are immutable.
+- **Risk: archive drops version-control metadata.** Guardrail: archive human-readable transcript and structured compression metadata together.
+- **Risk: future non-Codex provider breaks assumptions.** Guardrail: keep provider interfaces capability-based and keep storage/provider concerns separate.
+- **Risk: UI becomes visually noisy.** Guardrail: timeline markers stay quiet by default; detailed controls live in popover, inspector, and menus.
