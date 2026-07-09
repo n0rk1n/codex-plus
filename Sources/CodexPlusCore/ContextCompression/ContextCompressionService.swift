@@ -3,6 +3,9 @@ import Foundation
 public enum ContextCompressionServiceError: Error, Equatable, Sendable {
     case roundNotFound(UUID)
     case noRoundsSelected
+    case nonContiguousRoundSelection([UUID])
+    case versionNotFound(UUID)
+    case versionCannotBecomeActive(UUID)
     case providerDidNotStart
 }
 
@@ -151,6 +154,7 @@ public final class ContextCompressionService: @unchecked Sendable {
 
         let state = try repository.loadCompressionState(conversationID: conversation.id)
         let sortedRoundIDs = try sortedSelectedRoundIDs(roundIDs, state: state)
+        try validateContiguousRoundSelection(sortedRoundIDs, state: state)
         let sourceText = selectedCurrentInputText(
             conversation: conversation,
             state: state,
@@ -189,6 +193,7 @@ public final class ContextCompressionService: @unchecked Sendable {
 
         let state = try repository.loadCompressionState(conversationID: conversation.id)
         let sortedRoundIDs = try sortedSelectedRoundIDs(sourceRoundIDs, state: state)
+        try validateContiguousRoundSelection(sortedRoundIDs, state: state)
         return try startProviderCompression(
             conversationID: conversation.id,
             state: state,
@@ -202,6 +207,114 @@ public final class ContextCompressionService: @unchecked Sendable {
             permissionMode: permissionMode,
             activeRoundID: nil,
             activateAsRange: true,
+            onFinish: onFinish
+        )
+    }
+
+    @discardableResult
+    public func restoreOriginalRound(
+        conversation: ConversationSession,
+        roundID: UUID
+    ) throws -> CompressionVersion {
+        let state = try repository.loadCompressionState(conversationID: conversation.id)
+        guard let round = state.rounds.first(where: { $0.id == roundID }) else {
+            throw ContextCompressionServiceError.roundNotFound(roundID)
+        }
+
+        let eventsByID = Dictionary(uniqueKeysWithValues: conversation.events.map { ($0.id, $0) })
+        let roundEvents = state.roundEvents.filter { $0.roundID == round.id }
+        let content = sourceText(round: round, roundEvents: roundEvents, eventsByID: eventsByID)
+        let version = makeVersion(
+            conversationID: conversation.id,
+            scopeKind: .round,
+            operation: .original,
+            status: .active,
+            content: content,
+            templateID: nil,
+            compressionInputID: nil,
+            errorMessage: nil
+        )
+        try saveVersion(
+            version,
+            state: state,
+            sourceRoundIDs: [roundID],
+            edgeKind: .rollback,
+            activeRoundID: roundID,
+            activeRangeID: nil,
+            tombstonePreviousActiveVersions: true
+        )
+        return version
+    }
+
+    @discardableResult
+    public func rollbackToVersion(
+        conversation: ConversationSession,
+        versionID: UUID
+    ) throws -> CompressionVersion {
+        let state = try repository.loadCompressionState(conversationID: conversation.id)
+        guard let sourceVersion = state.versions.first(where: { $0.id == versionID }) else {
+            throw ContextCompressionServiceError.versionNotFound(versionID)
+        }
+        guard sourceVersion.canBecomeActive else {
+            throw ContextCompressionServiceError.versionCannotBecomeActive(versionID)
+        }
+
+        let sourceRoundIDs = state.versionSources
+            .filter { $0.versionID == versionID && $0.sourceKind == .round }
+            .sorted {
+                if $0.ordinal != $1.ordinal {
+                    return $0.ordinal < $1.ordinal
+                }
+                return $0.id.uuidString < $1.id.uuidString
+            }
+            .map(\.sourceID)
+        guard !sourceRoundIDs.isEmpty else {
+            throw ContextCompressionServiceError.roundNotFound(UUID())
+        }
+
+        let version = makeVersion(
+            conversationID: conversation.id,
+            scopeKind: sourceVersion.scopeKind,
+            operation: sourceVersion.operation,
+            status: .active,
+            content: sourceVersion.content,
+            templateID: sourceVersion.templateID,
+            compressionInputID: sourceVersion.compressionInputID,
+            errorMessage: nil
+        )
+        let activeRoundID = sourceVersion.scopeKind == .round && sourceRoundIDs.count == 1 ? sourceRoundIDs[0] : nil
+        let activeRangeID = activeRoundID == nil ? version.id : nil
+        try saveVersion(
+            version,
+            state: state,
+            sourceRoundIDs: sourceRoundIDs,
+            edgeKind: .rollback,
+            activeRoundID: activeRoundID,
+            activeRangeID: activeRangeID,
+            explicitParentVersionIDs: [sourceVersion.id],
+            tombstonePreviousActiveVersions: true
+        )
+        return version
+    }
+
+    public func continueCompressLatestActiveVersion(
+        conversation: ConversationSession,
+        roundIDs: [UUID],
+        mode: CompressionInputMode,
+        template: PromptTemplate,
+        userInstruction: String,
+        workingDirectoryURL: URL,
+        permissionMode: PermissionMode = .semiAutomatic,
+        onFinish: @escaping @Sendable (ContextCompressionServiceResult) -> Void
+    ) throws -> (any ExecutionHandle)? {
+        try startCompression(
+            conversation: conversation,
+            roundIDs: roundIDs,
+            mode: mode,
+            template: template,
+            userInstruction: userInstruction,
+            workingDirectoryURL: workingDirectoryURL,
+            permissionMode: permissionMode,
             onFinish: onFinish
         )
     }
@@ -320,18 +433,19 @@ public final class ContextCompressionService: @unchecked Sendable {
                 compressionInputID: input.id,
                 errorMessage: nil
             )
-            try saveVersion(
-                version,
-                repository: repository,
+        try saveVersion(
+            version,
+            repository: repository,
                 idGenerator: idGenerator,
                 now: now,
                 state: state,
-                sourceRoundIDs: selectedRoundIDs,
-                edgeKind: mode == .system ? .systemCompress : .compress,
-                activeRoundID: activeRoundID,
-                activeRangeID: activateAsRange ? version.id : nil
-            )
-            return .success(version)
+            sourceRoundIDs: selectedRoundIDs,
+            edgeKind: mode == .system ? .systemCompress : .compress,
+            activeRoundID: activeRoundID,
+            activeRangeID: activateAsRange ? version.id : nil,
+            includePreviousActiveVersionsAsSources: true
+        )
+        return .success(version)
 
         case let .failure(failure):
             let version = try persistFailure(
@@ -456,7 +570,9 @@ public final class ContextCompressionService: @unchecked Sendable {
         sourceRoundIDs: [UUID],
         edgeKind: CompressionLineageEdgeKind,
         activeRoundID: UUID?,
-        activeRangeID: UUID?
+        activeRangeID: UUID?,
+        explicitParentVersionIDs: [UUID] = [],
+        tombstonePreviousActiveVersions: Bool = false
     ) throws {
         try Self.saveVersion(
             version,
@@ -467,7 +583,9 @@ public final class ContextCompressionService: @unchecked Sendable {
             sourceRoundIDs: sourceRoundIDs,
             edgeKind: edgeKind,
             activeRoundID: activeRoundID,
-            activeRangeID: activeRangeID
+            activeRangeID: activeRangeID,
+            explicitParentVersionIDs: explicitParentVersionIDs,
+            tombstonePreviousActiveVersions: tombstonePreviousActiveVersions
         )
     }
 
@@ -480,7 +598,10 @@ public final class ContextCompressionService: @unchecked Sendable {
         sourceRoundIDs: [UUID],
         edgeKind: CompressionLineageEdgeKind,
         activeRoundID: UUID?,
-        activeRangeID: UUID?
+        activeRangeID: UUID?,
+        explicitParentVersionIDs: [UUID] = [],
+        tombstonePreviousActiveVersions: Bool = false,
+        includePreviousActiveVersionsAsSources: Bool = false
     ) throws {
         let previousActiveVersions = activeVersions(
             in: state,
@@ -495,25 +616,40 @@ public final class ContextCompressionService: @unchecked Sendable {
             try repository.saveCompressionVersion(historical)
         }
 
+        let parentVersionIDs = uniqueVersionIDs(previousActiveVersions.map(\.id) + explicitParentVersionIDs)
         try repository.saveCompressionVersion(version)
         try repository.saveCompressionVersionSources(
             makeSources(
                 idGenerator: idGenerator,
                 versionID: version.id,
-                sourceRoundIDs: sourceRoundIDs
+                sourceRoundIDs: sourceRoundIDs,
+                sourceVersionIDs: includePreviousActiveVersionsAsSources ? parentVersionIDs : []
             )
         )
         try repository.saveCompressionLineageEdges(
-            previousActiveVersions.map { previous in
+            parentVersionIDs.map { parentVersionID in
                 CompressionLineageEdge(
                     id: idGenerator(),
-                    parentVersionID: previous.id,
+                    parentVersionID: parentVersionID,
                     childVersionID: version.id,
                     edgeKind: edgeKind,
                     createdAt: now()
                 )
             }
         )
+        if tombstonePreviousActiveVersions {
+            try repository.saveCompressionTombstones(
+                previousActiveVersions.map { previous in
+                    CompressionTombstone(
+                        id: idGenerator(),
+                        versionID: previous.id,
+                        reason: "replaced_by_rollback",
+                        replacedByVersionID: version.id,
+                        createdAt: now()
+                    )
+                }
+            )
+        }
 
         try repository.setActiveCompressionVersion(
             CompressionActiveVersion(
@@ -605,9 +741,10 @@ public final class ContextCompressionService: @unchecked Sendable {
     private static func makeSources(
         idGenerator: @Sendable () -> UUID,
         versionID: UUID,
-        sourceRoundIDs: [UUID]
+        sourceRoundIDs: [UUID],
+        sourceVersionIDs: [UUID] = []
     ) -> [CompressionVersionSource] {
-        sourceRoundIDs.enumerated().map { index, roundID in
+        let roundSources = sourceRoundIDs.enumerated().map { index, roundID in
             CompressionVersionSource(
                 id: idGenerator(),
                 versionID: versionID,
@@ -616,6 +753,16 @@ public final class ContextCompressionService: @unchecked Sendable {
                 ordinal: index
             )
         }
+        let versionSources = sourceVersionIDs.enumerated().map { index, sourceVersionID in
+            CompressionVersionSource(
+                id: idGenerator(),
+                versionID: versionID,
+                sourceKind: .version,
+                sourceID: sourceVersionID,
+                ordinal: sourceRoundIDs.count + index
+            )
+        }
+        return roundSources + versionSources
     }
 
     private static func lineageEdges(
@@ -684,6 +831,30 @@ public final class ContextCompressionService: @unchecked Sendable {
             throw ContextCompressionServiceError.roundNotFound(missing)
         }
         return selected
+    }
+
+    private func validateContiguousRoundSelection(
+        _ roundIDs: [UUID],
+        state: ConversationCompressionState
+    ) throws {
+        guard roundIDs.count > 1 else {
+            return
+        }
+        let order = state.rounds
+            .sorted {
+                if $0.roundIndex != $1.roundIndex {
+                    return $0.roundIndex < $1.roundIndex
+                }
+                return $0.id.uuidString < $1.id.uuidString
+            }
+            .map(\.id)
+        let indexes = roundIDs.compactMap { order.firstIndex(of: $0) }
+        guard indexes.count == roundIDs.count,
+              let first = indexes.first,
+              let last = indexes.last,
+              last - first + 1 == indexes.count else {
+            throw ContextCompressionServiceError.nonContiguousRoundSelection(roundIDs)
+        }
     }
 
     private func selectedCurrentInputText(
@@ -823,6 +994,16 @@ public final class ContextCompressionService: @unchecked Sendable {
         case .system:
             return .systemCompression
         }
+    }
+
+    private static func uniqueVersionIDs(_ ids: [UUID]) -> [UUID] {
+        var seen = Set<UUID>()
+        var result: [UUID] = []
+        for id in ids where !seen.contains(id) {
+            seen.insert(id)
+            result.append(id)
+        }
+        return result
     }
 }
 

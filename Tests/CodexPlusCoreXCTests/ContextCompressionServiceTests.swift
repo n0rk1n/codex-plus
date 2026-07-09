@@ -180,6 +180,41 @@ final class ContextCompressionServiceTests: XCTestCase {
         XCTAssertEqual(resultBox.value(), .success(savedVersion))
     }
 
+    func testCompressionRejectsNonContiguousRoundSelectionBeforeStartingProvider() throws {
+        let fixture = conversationFixture(["A", "B", "C"])
+        let provider = ManualCompressionExecutionProvider()
+        let repository = MemoryContextCompressionRepository(
+            state: ConversationCompressionState(rounds: fixture.rounds, roundEvents: fixture.roundEvents)
+        )
+        let service = ContextCompressionService(
+            repository: repository,
+            executionProvider: provider,
+            idGenerator: IncrementingUUIDGenerator(start: 850).next,
+            now: { Date(timeIntervalSince1970: 4_500) }
+        )
+
+        XCTAssertThrowsError(
+            try service.startCompression(
+                conversation: fixture.conversation,
+                roundIDs: [fixture.rounds[0].id, fixture.rounds[2].id],
+                mode: .defaultTemplate,
+                template: compressionTemplate(),
+                userInstruction: "",
+                workingDirectoryURL: URL(fileURLWithPath: "/tmp/project"),
+                onFinish: { _ in }
+            )
+        ) { error in
+            XCTAssertEqual(
+                error as? ContextCompressionServiceError,
+                .nonContiguousRoundSelection([fixture.rounds[0].id, fixture.rounds[2].id])
+            )
+        }
+
+        XCTAssertTrue(provider.requests.isEmpty)
+        XCTAssertTrue(repository.savedVersions.isEmpty)
+        XCTAssertTrue(repository.activeVersions.isEmpty)
+    }
+
     func testFailedProviderCompressionPersistsFailedVersionWithoutActivatingIt() throws {
         let fixture = conversationFixture(["A"])
         let provider = ManualCompressionExecutionProvider()
@@ -220,6 +255,59 @@ final class ContextCompressionServiceTests: XCTestCase {
         XCTAssertEqual(savedVersion.errorMessage, "provider failed")
         XCTAssertTrue(repository.activeVersions.isEmpty)
         XCTAssertEqual(resultBox.value(), .failure(savedVersion))
+    }
+
+    func testFailedProviderCompressionKeepsPreviousActiveVersionAsModelInput() throws {
+        let fixture = conversationFixture(["A"])
+        let previous = version(id: uuid(910), conversationID: fixture.conversation.id, operation: .manualEdit, status: .active, content: "Still active")
+        let previousActive = CompressionActiveVersion(
+            id: uuid(911),
+            conversationID: fixture.conversation.id,
+            roundID: fixture.rounds[0].id,
+            rangeID: nil,
+            activeVersionID: previous.id
+        )
+        let provider = ManualCompressionExecutionProvider()
+        let repository = MemoryContextCompressionRepository(
+            state: ConversationCompressionState(
+                rounds: fixture.rounds,
+                roundEvents: fixture.roundEvents,
+                versions: [previous],
+                activeVersions: [previousActive]
+            )
+        )
+        let service = ContextCompressionService(
+            repository: repository,
+            executionProvider: provider,
+            idGenerator: IncrementingUUIDGenerator(start: 920).next,
+            now: { Date(timeIntervalSince1970: 5_200) }
+        )
+
+        _ = try service.startCompression(
+            conversation: fixture.conversation,
+            roundIDs: [fixture.rounds[0].id],
+            mode: .defaultTemplate,
+            template: compressionTemplate(),
+            userInstruction: "",
+            workingDirectoryURL: URL(fileURLWithPath: "/tmp/project"),
+            onFinish: { _ in }
+        )
+        provider.finish(
+            .failure(
+                CompressionExecutionFailure(
+                    message: "provider failed",
+                    providerName: "Codex CLI",
+                    providerModel: "gpt-test"
+                )
+            )
+        )
+
+        let assembled = try ContextCompressionAssemblerV2.assemble(
+            ContextCompressionAssemblyInput(conversation: fixture.conversation, compressionState: repository.state)
+        )
+        XCTAssertEqual(repository.savedVersions.last?.operation, .failedCompression)
+        XCTAssertEqual(repository.state.activeVersions.map(\.activeVersionID), [previous.id])
+        XCTAssertEqual(assembled.text, "Still active")
     }
 
     func testCompressionUsesCurrentActiveRangeAsProviderInputForTraceability() throws {
@@ -293,6 +381,8 @@ final class ContextCompressionServiceTests: XCTestCase {
         )
 
         XCTAssertEqual(repository.savedInputs.last?.inputSnapshot, "AMG")
+        XCTAssertEqual(repository.savedSources.map(\.sourceKind), [.round, .round, .round, .version])
+        XCTAssertEqual(repository.savedSources.last?.sourceID, existing.id)
         XCTAssertEqual(repository.savedLineageEdges.last?.parentVersionID, existing.id)
         XCTAssertEqual(repository.savedLineageEdges.last?.edgeKind, .systemCompress)
         XCTAssertEqual(repository.savedVersions.first(where: { $0.id == existing.id })?.status, .historical)
@@ -343,6 +433,125 @@ final class ContextCompressionServiceTests: XCTestCase {
         XCTAssertEqual(repository.savedSources.map(\.sourceID), fixture.rounds.map(\.id))
         XCTAssertEqual(repository.activeVersions.last?.rangeID, savedVersion.id)
         XCTAssertEqual(resultBox.value(), .success(savedVersion))
+    }
+
+    func testRestoreOriginalCreatesNewActiveVersionFromSourceRoundAndTombstonesPreviousActive() throws {
+        let fixture = conversationFixture(["A"])
+        let previous = version(id: uuid(1_200), conversationID: fixture.conversation.id, operation: .manualEdit, status: .active, content: "Edited A")
+        let previousActive = CompressionActiveVersion(
+            id: uuid(1_201),
+            conversationID: fixture.conversation.id,
+            roundID: fixture.rounds[0].id,
+            rangeID: nil,
+            activeVersionID: previous.id
+        )
+        let repository = MemoryContextCompressionRepository(
+            state: ConversationCompressionState(
+                rounds: fixture.rounds,
+                roundEvents: fixture.roundEvents,
+                versions: [previous],
+                activeVersions: [previousActive]
+            )
+        )
+        let service = ContextCompressionService(
+            repository: repository,
+            executionProvider: ManualCompressionExecutionProvider(),
+            idGenerator: IncrementingUUIDGenerator(start: 1_210).next,
+            now: { Date(timeIntervalSince1970: 8_000) }
+        )
+
+        let restored = try service.restoreOriginalRound(conversation: fixture.conversation, roundID: fixture.rounds[0].id)
+
+        XCTAssertEqual(restored.operation, .original)
+        XCTAssertEqual(restored.status, .active)
+        XCTAssertEqual(restored.content, "User A\n\nAssistant A")
+        XCTAssertEqual(repository.savedLineageEdges.last?.edgeKind, .rollback)
+        XCTAssertEqual(repository.savedTombstones.last?.versionID, previous.id)
+        XCTAssertEqual(repository.savedTombstones.last?.replacedByVersionID, restored.id)
+        XCTAssertEqual(repository.state.activeVersions.map(\.activeVersionID), [restored.id])
+    }
+
+    func testRollbackToHistoricalVersionCreatesNewActiveBranchAndTombstonesCurrentActive() throws {
+        let fixture = conversationFixture(["A"])
+        let historical = version(id: uuid(1_300), conversationID: fixture.conversation.id, operation: .manualEdit, status: .historical, content: "Historical A")
+        let current = version(id: uuid(1_301), conversationID: fixture.conversation.id, operation: .defaultCompression, status: .active, content: "Current A")
+        let currentActive = CompressionActiveVersion(
+            id: uuid(1_302),
+            conversationID: fixture.conversation.id,
+            roundID: fixture.rounds[0].id,
+            rangeID: nil,
+            activeVersionID: current.id
+        )
+        let repository = MemoryContextCompressionRepository(
+            state: ConversationCompressionState(
+                rounds: fixture.rounds,
+                roundEvents: fixture.roundEvents,
+                versions: [historical, current],
+                versionSources: [
+                    CompressionVersionSource(id: uuid(1_303), versionID: historical.id, sourceKind: .round, sourceID: fixture.rounds[0].id, ordinal: 0),
+                    CompressionVersionSource(id: uuid(1_304), versionID: current.id, sourceKind: .round, sourceID: fixture.rounds[0].id, ordinal: 0)
+                ],
+                activeVersions: [currentActive]
+            )
+        )
+        let service = ContextCompressionService(
+            repository: repository,
+            executionProvider: ManualCompressionExecutionProvider(),
+            idGenerator: IncrementingUUIDGenerator(start: 1_310).next,
+            now: { Date(timeIntervalSince1970: 8_500) }
+        )
+
+        let rollback = try service.rollbackToVersion(conversation: fixture.conversation, versionID: historical.id)
+
+        XCTAssertNotEqual(rollback.id, historical.id)
+        XCTAssertEqual(rollback.operation, historical.operation)
+        XCTAssertEqual(rollback.status, .active)
+        XCTAssertEqual(rollback.content, historical.content)
+        XCTAssertEqual(repository.savedLineageEdges.last?.parentVersionID, historical.id)
+        XCTAssertEqual(repository.savedLineageEdges.last?.childVersionID, rollback.id)
+        XCTAssertEqual(repository.savedLineageEdges.last?.edgeKind, .rollback)
+        XCTAssertEqual(repository.savedTombstones.last?.versionID, current.id)
+        XCTAssertEqual(repository.state.activeVersions.map(\.activeVersionID), [rollback.id])
+    }
+
+    func testContinueCompressLatestActiveVersionUsesCurrentActiveText() throws {
+        let fixture = conversationFixture(["A"])
+        let current = version(id: uuid(1_400), conversationID: fixture.conversation.id, operation: .manualEdit, status: .active, content: "Latest active A")
+        let currentActive = CompressionActiveVersion(
+            id: uuid(1_401),
+            conversationID: fixture.conversation.id,
+            roundID: fixture.rounds[0].id,
+            rangeID: nil,
+            activeVersionID: current.id
+        )
+        let provider = ManualCompressionExecutionProvider()
+        let repository = MemoryContextCompressionRepository(
+            state: ConversationCompressionState(
+                rounds: fixture.rounds,
+                roundEvents: fixture.roundEvents,
+                versions: [current],
+                activeVersions: [currentActive]
+            )
+        )
+        let service = ContextCompressionService(
+            repository: repository,
+            executionProvider: provider,
+            idGenerator: IncrementingUUIDGenerator(start: 1_410).next,
+            now: { Date(timeIntervalSince1970: 9_000) }
+        )
+
+        _ = try service.continueCompressLatestActiveVersion(
+            conversation: fixture.conversation,
+            roundIDs: [fixture.rounds[0].id],
+            mode: .defaultTemplate,
+            template: compressionTemplate(),
+            userInstruction: "continue",
+            workingDirectoryURL: URL(fileURLWithPath: "/tmp/project"),
+            onFinish: { _ in }
+        )
+
+        XCTAssertEqual(provider.requests.first?.sourceText, "Latest active A")
+        XCTAssertEqual(provider.requests.first?.userInstruction, "continue")
     }
 
     private func conversationFixture(_ labels: [String]) -> (

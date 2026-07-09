@@ -8,6 +8,7 @@ private func runAllLegacyTests() {
     runPromptTemplateLibraryTests()
     runPromptTemplatePersistenceLegacyTests()
     runPromptTemplateManagerAppSourceTests()
+    runContextCompressionAppSourceTests()
     MainActor.assumeIsolated {
         runLegacyMainActorTests()
         runWorkbenchProjectionTests()

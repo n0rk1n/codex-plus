@@ -300,6 +300,79 @@ final class WorkbenchContextCompressionTests: XCTestCase {
     }
 
     @MainActor
+    func testRestoreCompressionOriginalActionRefreshesModelInputAndTimeline() throws {
+        let database = try temporaryDatabase()
+        try CodexPlusSchema.migrate(database)
+        let repository = SQLiteCodexPlusRepository(database: database)
+        let fixture = try saveCompressedConversation(repository: repository)
+        let compressionService = ContextCompressionService(
+            repository: repository,
+            executionProvider: WorkbenchManualCompressionExecutionProvider(),
+            idGenerator: IncrementingUUIDGenerator(start: 560).next,
+            now: { Date(timeIntervalSince1970: 33) }
+        )
+        let store = WorkbenchStore(
+            repository: repository,
+            engine: WorkbenchCompressionManualExecutionEngine(),
+            contextCompressionService: compressionService
+        )
+
+        store.restoreCompressionOriginal(roundID: fixture.roundID)
+
+        XCTAssertEqual(store.snapshot.compression.assembledPreview, "User A\n\nAssistant A")
+        XCTAssertEqual(store.snapshot.compression.timelinePresentation.rounds.first?.status?.label, "原文发送")
+        XCTAssertTrue(store.snapshot.compression.timelinePresentation.versionHistory.contains { $0.isActive && $0.label == "原文发送" })
+    }
+
+    @MainActor
+    func testRollbackCompressionVersionActionRefreshesModelInputAndTimeline() throws {
+        let database = try temporaryDatabase()
+        try CodexPlusSchema.migrate(database)
+        let repository = SQLiteCodexPlusRepository(database: database)
+        let fixture = try saveCompressedConversation(repository: repository)
+        let historical = CompressionVersion(
+            id: uuid(570),
+            conversationID: fixture.conversationID,
+            scopeKind: .round,
+            operation: .manualEdit,
+            status: .historical,
+            content: "Earlier useful answer",
+            templateID: nil,
+            compressionInputID: nil,
+            errorMessage: nil,
+            createdAt: Date(timeIntervalSince1970: 6),
+            updatedAt: Date(timeIntervalSince1970: 7)
+        )
+        try repository.saveCompressionVersion(historical)
+        try repository.saveCompressionVersionSources([
+            CompressionVersionSource(
+                id: uuid(571),
+                versionID: historical.id,
+                sourceKind: .round,
+                sourceID: fixture.roundID,
+                ordinal: 0
+            )
+        ])
+        let compressionService = ContextCompressionService(
+            repository: repository,
+            executionProvider: WorkbenchManualCompressionExecutionProvider(),
+            idGenerator: IncrementingUUIDGenerator(start: 580).next,
+            now: { Date(timeIntervalSince1970: 34) }
+        )
+        let store = WorkbenchStore(
+            repository: repository,
+            engine: WorkbenchCompressionManualExecutionEngine(),
+            contextCompressionService: compressionService
+        )
+
+        store.rollbackCompressionVersion(versionID: historical.id)
+
+        XCTAssertEqual(store.snapshot.compression.assembledPreview, "Earlier useful answer")
+        XCTAssertEqual(store.snapshot.compression.timelinePresentation.rounds.first?.status?.label, "已修订")
+        XCTAssertTrue(store.snapshot.compression.timelinePresentation.versionHistory.contains { $0.isActive && $0.id != historical.id && $0.label == "已修订" })
+    }
+
+    @MainActor
     func testDefaultRangeCompressionActionUsesSelectedRoundsAsProviderInput() throws {
         let database = try temporaryDatabase()
         try CodexPlusSchema.migrate(database)

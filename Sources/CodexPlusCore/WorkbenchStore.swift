@@ -354,8 +354,43 @@ public final class WorkbenchStore: ObservableObject {
         }
     }
 
+    public func restoreCompressionOriginal(roundID: UUID) {
+        guard let contextCompressionService,
+              let activeConversation = conversations.first(where: { $0.id == activeConversationID && !$0.isArchived }) else {
+            return
+        }
+
+        do {
+            try contextCompressionService.restoreOriginalRound(
+                conversation: activeConversation,
+                roundID: roundID
+            )
+            refreshSnapshot()
+        } catch {
+            setError(title: "无法恢复原文", error: error)
+        }
+    }
+
+    public func rollbackCompressionVersion(versionID: UUID) {
+        guard let contextCompressionService,
+              let activeConversation = conversations.first(where: { $0.id == activeConversationID && !$0.isArchived }) else {
+            return
+        }
+
+        do {
+            try contextCompressionService.rollbackToVersion(
+                conversation: activeConversation,
+                versionID: versionID
+            )
+            refreshSnapshot()
+        } catch {
+            setError(title: "无法回滚压缩版本", error: error)
+        }
+    }
+
     public func compressSelectedRounds(
         roundIDs: [UUID],
+        template: PromptTemplate? = nil,
         userInstruction: String = ""
     ) -> (any ExecutionHandle)? {
         guard let contextCompressionService,
@@ -364,12 +399,12 @@ public final class WorkbenchStore: ObservableObject {
         }
 
         do {
-            let template = try contextCompressionTemplate()
+            let defaultTemplate = try contextCompressionTemplate()
             return try contextCompressionService.startCompression(
                 conversation: activeConversation,
                 roundIDs: roundIDs,
-                mode: .defaultTemplate,
-                template: template,
+                mode: template == nil ? .defaultTemplate : .customTemplate,
+                template: template ?? defaultTemplate,
                 userInstruction: userInstruction,
                 workingDirectoryURL: URL(fileURLWithPath: activeConversation.workspacePath, isDirectory: true),
                 permissionMode: activeConversation.permissionMode,
@@ -383,6 +418,18 @@ public final class WorkbenchStore: ObservableObject {
             setError(title: "无法执行上下文压缩", error: error)
             return nil
         }
+    }
+
+    public func loadCompressionTemplates() -> [PromptTemplate] {
+        let templates = PromptTemplateLibrary.builtInTemplates() + ((try? repository.loadPromptTemplates()) ?? [])
+        return templates
+            .filter { $0.type == .conversationContextCompression }
+            .sorted {
+                if $0.source != $1.source {
+                    return $0.source.rawValue < $1.source.rawValue
+                }
+                return $0.name.localizedStandardCompare($1.name) == .orderedAscending
+            }
     }
 
     @discardableResult

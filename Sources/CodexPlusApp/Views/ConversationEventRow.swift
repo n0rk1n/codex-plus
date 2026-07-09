@@ -4,6 +4,7 @@ import SwiftUI
 struct ConversationEventRow: View {
     let event: ConversationDisplayEvent
     var compressionPresentation: ConversationTimelineRowCompressionPresentation? = nil
+    var isCompressionHighlighted = false
 
     var body: some View {
         HStack(alignment: .top, spacing: 10) {
@@ -39,6 +40,13 @@ struct ConversationEventRow: View {
             Spacer(minLength: 0)
         }
         .padding(.vertical, 6)
+        .padding(.horizontal, isCompressionHighlighted ? 8 : 0)
+        .background {
+            if isCompressionHighlighted {
+                RoundedRectangle(cornerRadius: 8)
+                    .fill(Color.accentColor.opacity(0.08))
+            }
+        }
         .opacity(compressionPresentation?.isDimmed == true ? 0.48 : 1)
         .accessibilityElement(children: .combine)
     }

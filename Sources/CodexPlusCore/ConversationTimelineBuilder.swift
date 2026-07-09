@@ -17,13 +17,19 @@ public enum ConversationTimelineItem: Equatable, Identifiable, Sendable {
 public struct ConversationTimelineCompressionPresentation: Equatable, Sendable {
     public var rounds: [ConversationRoundPresentation]
     public var rowsByEventID: [UUID: ConversationTimelineRowCompressionPresentation]
+    public var versionHistory: [CompressionVersionHistoryPresentation]
+    public var versionHistoryByRoundID: [UUID: [CompressionVersionHistoryPresentation]]
 
     public init(
         rounds: [ConversationRoundPresentation] = [],
-        rowsByEventID: [UUID: ConversationTimelineRowCompressionPresentation] = [:]
+        rowsByEventID: [UUID: ConversationTimelineRowCompressionPresentation] = [:],
+        versionHistory: [CompressionVersionHistoryPresentation] = [],
+        versionHistoryByRoundID: [UUID: [CompressionVersionHistoryPresentation]] = [:]
     ) {
         self.rounds = rounds
         self.rowsByEventID = rowsByEventID
+        self.versionHistory = versionHistory
+        self.versionHistoryByRoundID = versionHistoryByRoundID
     }
 }
 
@@ -104,6 +110,49 @@ public struct CompressionJoinedRelationshipPresentation: Equatable, Sendable {
     public init(relatedRoundIDs: [UUID], versionID: UUID) {
         self.relatedRoundIDs = relatedRoundIDs
         self.versionID = versionID
+    }
+}
+
+public struct CompressionVersionHistoryPresentation: Equatable, Identifiable, Sendable {
+    public var id: UUID
+    public var label: String
+    public var statusLabel: String
+    public var operationLabel: String
+    public var sourceRoundIDs: [UUID]
+    public var providerSummary: String?
+    public var inputSummary: String?
+    public var errorMessage: String?
+    public var isActive: Bool
+    public var isFailed: Bool
+    public var isTombstoned: Bool
+    public var createdAt: Date
+
+    public init(
+        id: UUID,
+        label: String,
+        statusLabel: String,
+        operationLabel: String,
+        sourceRoundIDs: [UUID],
+        providerSummary: String? = nil,
+        inputSummary: String? = nil,
+        errorMessage: String? = nil,
+        isActive: Bool,
+        isFailed: Bool,
+        isTombstoned: Bool,
+        createdAt: Date
+    ) {
+        self.id = id
+        self.label = label
+        self.statusLabel = statusLabel
+        self.operationLabel = operationLabel
+        self.sourceRoundIDs = sourceRoundIDs
+        self.providerSummary = providerSummary
+        self.inputSummary = inputSummary
+        self.errorMessage = errorMessage
+        self.isActive = isActive
+        self.isFailed = isFailed
+        self.isTombstoned = isTombstoned
+        self.createdAt = createdAt
     }
 }
 
@@ -224,9 +273,22 @@ public enum ConversationTimelineBuilder {
             )
         }
 
+        let versionHistory = versionHistoryPresentations(
+            compressionState: compressionState,
+            activeVersionIDs: Set(compressionState.activeVersions.map(\.activeVersionID))
+        )
+        var versionHistoryByRoundID: [UUID: [CompressionVersionHistoryPresentation]] = [:]
+        for item in versionHistory {
+            for roundID in item.sourceRoundIDs {
+                versionHistoryByRoundID[roundID, default: []].append(item)
+            }
+        }
+
         return ConversationTimelineCompressionPresentation(
             rounds: roundPresentations,
-            rowsByEventID: rowPresentations
+            rowsByEventID: rowPresentations,
+            versionHistory: versionHistory,
+            versionHistoryByRoundID: versionHistoryByRoundID
         )
     }
 
@@ -262,6 +324,47 @@ public enum ConversationTimelineBuilder {
         CompressionStatusPresentation(label: statusLabel(for: version), versionID: version.id)
     }
 
+    private static func versionHistoryPresentations(
+        compressionState: ConversationCompressionState,
+        activeVersionIDs: Set<UUID>
+    ) -> [CompressionVersionHistoryPresentation] {
+        let sourcesByVersionID = Dictionary(grouping: compressionState.versionSources, by: \.versionID)
+        let inputsByID = Dictionary(uniqueKeysWithValues: compressionState.inputs.map { ($0.id, $0) })
+
+        return compressionState.versions
+            .sorted {
+                if $0.createdAt != $1.createdAt {
+                    return $0.createdAt < $1.createdAt
+                }
+                return $0.id.uuidString < $1.id.uuidString
+            }
+            .map { version in
+                let sources = sourcesByVersionID[version.id, default: []]
+                    .filter { $0.sourceKind == .round }
+                    .sorted {
+                        if $0.ordinal != $1.ordinal {
+                            return $0.ordinal < $1.ordinal
+                        }
+                        return $0.id.uuidString < $1.id.uuidString
+                    }
+                let input = version.compressionInputID.flatMap { inputsByID[$0] }
+                return CompressionVersionHistoryPresentation(
+                    id: version.id,
+                    label: historyLabel(for: version),
+                    statusLabel: historyStatusLabel(for: version.status),
+                    operationLabel: operationLabel(for: version.operation),
+                    sourceRoundIDs: sources.map(\.sourceID),
+                    providerSummary: providerSummary(for: input),
+                    inputSummary: inputSummary(for: input?.inputSnapshot),
+                    errorMessage: version.errorMessage,
+                    isActive: activeVersionIDs.contains(version.id),
+                    isFailed: version.status == .failed || version.operation == .failedCompression,
+                    isTombstoned: version.status == .tombstoned || version.operation == .tombstone,
+                    createdAt: version.createdAt
+                )
+            }
+    }
+
     private static func statusLabel(for version: CompressionVersion) -> String {
         switch version.operation {
         case .manualEdit:
@@ -277,6 +380,81 @@ public enum ConversationTimelineBuilder {
         case .tombstone:
             return "压缩失败"
         }
+    }
+
+    private static func historyLabel(for version: CompressionVersion) -> String {
+        if version.status == .tombstoned || version.operation == .tombstone {
+            return "已废弃分支"
+        }
+        return statusLabel(for: version)
+    }
+
+    private static func historyStatusLabel(for status: CompressionVersionStatus) -> String {
+        switch status {
+        case .active:
+            return "活动版本"
+        case .historical:
+            return "历史版本"
+        case .failed:
+            return "失败尝试"
+        case .tombstoned:
+            return "已废弃"
+        }
+    }
+
+    private static func operationLabel(for operation: CompressionVersionOperation) -> String {
+        switch operation {
+        case .original:
+            return "原文"
+        case .manualEdit:
+            return "手动修订"
+        case .defaultCompression:
+            return "默认压缩"
+        case .customCompression:
+            return "自定义压缩"
+        case .systemCompression:
+            return "系统压缩"
+        case .exclude:
+            return "排除模型上下文"
+        case .failedCompression:
+            return "压缩失败"
+        case .tombstone:
+            return "废弃分支"
+        }
+    }
+
+    private static func providerSummary(for input: CompressionInputRecord?) -> String? {
+        guard let input else {
+            return nil
+        }
+        let provider = input.providerName.trimmingCharacters(in: .whitespacesAndNewlines)
+        let model = input.providerModel.trimmingCharacters(in: .whitespacesAndNewlines)
+        switch (provider.isEmpty, model.isEmpty) {
+        case (true, true):
+            return nil
+        case (false, true):
+            return provider
+        case (true, false):
+            return model
+        case (false, false):
+            return "\(provider) / \(model)"
+        }
+    }
+
+    private static func inputSummary(for inputSnapshot: String?) -> String? {
+        guard let inputSnapshot else {
+            return nil
+        }
+        let summary = inputSnapshot
+            .split(whereSeparator: \.isWhitespace)
+            .joined(separator: " ")
+        guard !summary.isEmpty else {
+            return nil
+        }
+        if summary.count <= 120 {
+            return summary
+        }
+        return String(summary.prefix(117)) + "..."
     }
 
     private static func boundaryKind(for version: CompressionVersion) -> CompressionBoundaryPresentation.Kind {

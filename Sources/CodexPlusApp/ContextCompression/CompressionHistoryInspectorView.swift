@@ -4,6 +4,9 @@ import SwiftUI
 struct CompressionHistoryInspectorView: View {
     let presentation: ConversationTimelineCompressionPresentation
     let selectedRoundID: UUID?
+    let onRestoreOriginal: (UUID) -> Void
+    let onRollback: (UUID) -> Void
+    let onContinueCompression: ([UUID]) -> Void
     let onClose: () -> Void
 
     var body: some View {
@@ -21,7 +24,8 @@ struct CompressionHistoryInspectorView: View {
                         emptySelection
                     }
 
-                    versionList
+                    markerList
+                    historyList
                 }
                 .padding(14)
             }
@@ -67,7 +71,40 @@ struct CompressionHistoryInspectorView: View {
                     .foregroundStyle(.secondary)
                     .fixedSize(horizontal: false, vertical: true)
             }
+
+            selectedActionGroup(for: round)
         }
+    }
+
+    private func selectedActionGroup(for round: ConversationRoundPresentation) -> some View {
+        ViewThatFits(in: .horizontal) {
+            HStack(spacing: 8) {
+                selectedActionButtons(for: round)
+            }
+
+            VStack(alignment: .leading, spacing: 8) {
+                selectedActionButtons(for: round)
+            }
+        }
+    }
+
+    @ViewBuilder
+    private func selectedActionButtons(for round: ConversationRoundPresentation) -> some View {
+        CodexButton(rule: .formHeaderCapsule, help: "恢复这一轮的原文版本", action: {
+            onRestoreOriginal(round.roundID)
+        }) {
+            Label("恢复原文", systemImage: "arrow.uturn.backward")
+                .labelStyle(.titleAndIcon)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+
+        CodexButton(rule: .formHeaderCapsule, help: "继续压缩当前活动内容", action: {
+            onContinueCompression(continueCompressionRoundIDs(for: round))
+        }) {
+            Label("继续压缩", systemImage: "arrow.down.right.and.arrow.up.left.circle")
+                .labelStyle(.titleAndIcon)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
     }
 
     private var emptySelection: some View {
@@ -77,7 +114,7 @@ struct CompressionHistoryInspectorView: View {
             .fixedSize(horizontal: false, vertical: true)
     }
 
-    private var versionList: some View {
+    private var markerList: some View {
         VStack(alignment: .leading, spacing: 10) {
             Text("当前活动标记")
                 .font(CodexTypography.captionStrong)
@@ -104,6 +141,87 @@ struct CompressionHistoryInspectorView: View {
         }
     }
 
+    private var historyList: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Text("版本记录")
+                .font(CodexTypography.captionStrong)
+                .foregroundStyle(.secondary)
+
+            if selectedVersionHistory.isEmpty {
+                Text("这一轮还没有压缩、修改、失败或回滚记录。")
+                    .font(CodexTypography.caption2)
+                    .foregroundStyle(.secondary)
+                    .fixedSize(horizontal: false, vertical: true)
+            } else {
+                ForEach(selectedVersionHistory) { item in
+                    versionHistoryRow(item)
+                }
+            }
+        }
+    }
+
+    private func versionHistoryRow(_ item: CompressionVersionHistoryPresentation) -> some View {
+        HStack(alignment: .top, spacing: 8) {
+            RoundedRectangle(cornerRadius: 2)
+                .fill(historyColor(for: item))
+                .frame(width: 3)
+
+            VStack(alignment: .leading, spacing: 4) {
+                HStack(alignment: .firstTextBaseline, spacing: 6) {
+                    Text(item.label)
+                        .font(CodexTypography.statusBar)
+
+                    Text(item.statusLabel)
+                        .font(CodexTypography.caption2)
+                        .foregroundStyle(.secondary)
+
+                    Spacer(minLength: 4)
+                }
+
+                Text(item.operationLabel)
+                    .font(CodexTypography.caption2)
+                    .foregroundStyle(.secondary)
+
+                if let providerSummary = item.providerSummary {
+                    Label(providerSummary, systemImage: "cpu")
+                        .font(CodexTypography.caption2)
+                        .foregroundStyle(.secondary)
+                        .lineLimit(1)
+                }
+
+                if let inputSummary = item.inputSummary {
+                    Text(inputSummary)
+                        .font(CodexTypography.caption2)
+                        .foregroundStyle(.secondary)
+                        .lineLimit(3)
+                }
+
+                if let errorMessage = item.errorMessage {
+                    Text(errorMessage)
+                        .font(CodexTypography.caption2)
+                        .foregroundStyle(CodexColors.stateFailed)
+                        .lineLimit(3)
+                }
+
+                rollbackAction(for: item)
+            }
+        }
+        .padding(.vertical, 6)
+    }
+
+    private func rollbackAction(for item: CompressionVersionHistoryPresentation) -> some View {
+        CodexButton(
+            rule: .formHeaderCapsule,
+            isDisabled: item.isActive || item.isFailed || item.isTombstoned,
+            help: "回滚到此版本",
+            action: { onRollback(item.id) }
+        ) {
+            Label("回滚到此版本", systemImage: "clock.arrow.circlepath")
+                .labelStyle(.titleAndIcon)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+
     private var selectedRound: ConversationRoundPresentation? {
         guard let selectedRoundID else {
             return nil
@@ -113,6 +231,13 @@ struct CompressionHistoryInspectorView: View {
 
     private var markedRounds: [ConversationRoundPresentation] {
         presentation.rounds.filter { $0.status != nil || $0.boundary != nil || $0.joinedRelationship != nil }
+    }
+
+    private var selectedVersionHistory: [CompressionVersionHistoryPresentation] {
+        guard let selectedRoundID else {
+            return presentation.versionHistory
+        }
+        return presentation.versionHistoryByRoundID[selectedRoundID] ?? []
     }
 
     private func detailText(for round: ConversationRoundPresentation) -> String {
@@ -140,5 +265,25 @@ struct CompressionHistoryInspectorView: View {
         case nil:
             return "text.bubble"
         }
+    }
+
+    private func historyColor(for item: CompressionVersionHistoryPresentation) -> Color {
+        if item.isFailed {
+            return CodexColors.stateFailed
+        }
+        if item.isTombstoned {
+            return Color.secondary.opacity(0.45)
+        }
+        if item.isActive {
+            return Color.accentColor
+        }
+        return Color.secondary.opacity(0.35)
+    }
+
+    private func continueCompressionRoundIDs(for round: ConversationRoundPresentation) -> [UUID] {
+        if let joinedRelationship = round.joinedRelationship, !joinedRelationship.relatedRoundIDs.isEmpty {
+            return joinedRelationship.relatedRoundIDs
+        }
+        return [round.roundID]
     }
 }

@@ -730,7 +730,7 @@ Test Suite 'ContextCompressionServiceTests' passed
 - [ ] Initialize `ContextCompressionService`, `ContextBudgetProvider`, and `CompressionExecutionProvider` in `AppDelegate.makeRuntime()`.
 - [ ] Inject compression dependencies into `WorkbenchStore`.
 - [ ] Load compression state in `refreshSnapshot()` for the active conversation.
-- [ ] Add store actions for selecting a range, opening history, saving manual edit, excluding, restoring original, compressing, continuing compression, rollback, opening model input preview, and closing inspector/sheets.
+- [x] Add store actions for selecting a range, opening history, saving manual edit, excluding, restoring original, compressing, continuing compression, rollback, opening model input preview, and closing inspector/sheets.
 - [ ] Before `sendFollowUp`, assemble model input with the pending prompt and measure budget.
 - [ ] If budget state is `.hardLimit`, keep send disabled and set reason to `需要压缩后继续`.
 - [ ] Add a system compression action that uses the same assembled model input and stores the result as a normal compression version.
@@ -786,16 +786,16 @@ Test Suite 'ContextCompressionAssemblerTests' passed
 
 **Purpose:** Give users direct, visual, recoverable control over each compression version.
 
-- [ ] Add a compact boundary marker view with native materials, subtle hairline borders, and quiet status text.
-- [ ] Add a popover from status marker click/hover summary. Include source range, active version type, latest operation, and `查看完整历史`.
-- [ ] Add a right inspector with linear-first version history.
-- [ ] In the inspector, show source rounds, active version, failed attempts, tombstoned branch note, compression input summary, provider metadata, and joined relationships.
-- [ ] Add contextual actions for edit, compress, continue compression, exclude, restore original, rollback, and model input preview.
-- [ ] Add joined-compression relationship hints when the selected block is related to adjacent blocks.
-- [ ] Use graphical connectors in the inspector, not a graph-first canvas.
-- [ ] Keep nested cards out of the inspector. Use full-height panes, grouped rows, and native controls.
-- [ ] Verify text does not overlap at narrow panel widths.
-- [ ] Build with `swift build`.
+- [x] Add a compact boundary marker view with native materials, subtle hairline borders, and quiet status text.
+- [x] Add a popover from status marker click/hover summary. Include source range, active version type, latest operation, and `查看完整历史`.
+- [x] Add a right inspector with linear-first version history.
+- [x] In the inspector, show source rounds, active version, failed attempts, tombstoned branch note, compression input summary, provider metadata, and joined relationships.
+- [x] Add contextual actions for edit, compress, continue compression, exclude, restore original, rollback, and model input preview.
+- [x] Add joined-compression relationship hints when the selected block is related to adjacent blocks.
+- [x] Use graphical connectors in the inspector, not a graph-first canvas.
+- [x] Keep nested cards out of the inspector. Use full-height panes, grouped rows, and native controls.
+- [x] Add source-level adaptive layout guard so inspector action buttons fall back to vertical layout at narrow panel widths.
+- [x] Build with `swift build`.
 
 Expected result:
 
@@ -813,16 +813,16 @@ Build complete!
 
 **Purpose:** Let users intentionally reduce context with exact control.
 
-- [ ] Add range selection that snaps to complete dialogue rounds.
-- [ ] Reject non-contiguous ranges in the store and do not expose non-contiguous selection in UI.
-- [ ] Add a contextual action bar for selected ranges.
-- [ ] Add actions: `不压缩`, `默认压缩`, `自定义压缩`.
-- [ ] For custom compression, load compression prompt templates, allow template selection, and allow one-time user instruction.
-- [ ] Store the one-time instruction only in `compression_inputs`, not normal conversation history.
-- [ ] Add edit dialog for one user segment or one AI segment.
-- [ ] In edit dialog, allow empty content and save as a manual edit version.
+- [x] Add range selection that snaps to complete dialogue rounds.
+- [x] Reject non-contiguous ranges in the store and do not expose non-contiguous selection in UI.
+- [x] Add a contextual action bar for selected ranges.
+- [x] Add actions: `不压缩`, `默认压缩`, `自定义压缩`.
+- [x] For custom compression, load compression prompt templates, allow template selection, and allow one-time user instruction.
+- [x] Store the one-time instruction only in `compression_inputs`, not normal conversation history.
+- [x] Add edit dialog for one user segment or one AI segment.
+- [x] In edit dialog, allow empty content and save as a manual edit version.
 - [ ] Add optional diff button only if it can be implemented without blocking the first complete flow.
-- [ ] Build with `swift build`.
+- [x] Build with `swift build`.
 
 Expected result:
 
@@ -840,15 +840,15 @@ Build complete!
 
 **Purpose:** Make hard context limits actionable.
 
-- [ ] Add a budget badge near the send control.
-- [ ] Show safe/notice/warning states without blocking send.
-- [ ] Disable send at hard limit.
-- [ ] Display `需要压缩后继续` as the disabled-send reason.
-- [ ] Show `交付系统完成压缩` next to the send button at hard limit.
-- [ ] Wire the system compression button to `WorkbenchStore.systemCompressActiveConversation()`.
-- [ ] After system compression succeeds, refresh active lineage, budget state, and timeline markers.
-- [ ] If system compression fails, keep send disabled and show the failed attempt in history.
-- [ ] Build with `swift build`.
+- [x] Add a budget badge near the send control.
+- [x] Show safe/notice/warning states without blocking send.
+- [x] Disable send at hard limit.
+- [x] Display `需要压缩后继续` as the disabled-send reason.
+- [x] Show `交付系统完成压缩` next to the send button at hard limit.
+- [x] Wire the system compression button to `WorkbenchStore.systemCompressActiveConversation()`.
+- [x] After system compression succeeds, refresh active lineage, budget state, and timeline markers.
+- [x] If system compression fails, keep send disabled and show the failed attempt in history.
+- [x] Build with `swift build`.
 
 Expected result:
 
@@ -865,12 +865,12 @@ Build complete!
 
 **Purpose:** Let users inspect exactly what will be sent to the model.
 
-- [ ] Add a sheet showing only the final assembled model-input text.
-- [ ] Do not show lineage graph, source mapping, or version metadata in this preview. Those stay in the inspector.
-- [ ] Add copy button and close button.
-- [ ] Ensure preview text is produced by the same assembler path used before send.
-- [ ] Add a test that preview text equals send text for the same pending prompt.
-- [ ] Run `swift test --filter WorkbenchContextCompressionTests`.
+- [x] Add a sheet showing only the final assembled model-input text.
+- [x] Do not show lineage graph, source mapping, or version metadata in this preview. Those stay in the inspector.
+- [x] Add copy button and close button.
+- [x] Ensure preview text is produced by the same assembler path used before send.
+- [x] Add a test that preview text equals send text for the same pending prompt.
+- [x] Run `swift test --filter WorkbenchContextCompressionTests`.
 
 Expected result:
 

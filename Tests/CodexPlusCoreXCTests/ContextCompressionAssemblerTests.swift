@@ -197,6 +197,49 @@ final class ContextCompressionAssemblerTests: XCTestCase {
         XCTAssertEqual(presentation.rounds[1].joinedRelationship?.relatedRoundIDs, [fixture.rounds[0].id, fixture.rounds[1].id])
     }
 
+    func testTimelinePresentationIncludesReadableVersionHistoryMetadata() throws {
+        let fixture = conversationFixture(["A", "B"])
+        let input = CompressionInputRecord(
+            id: uuid(130),
+            conversationID: fixture.conversation.id,
+            mode: .defaultTemplate,
+            templateID: uuid(131),
+            userInstruction: "Keep decisions",
+            inputSnapshot: "User A\n\nAssistant A",
+            providerName: "Codex CLI",
+            providerModel: "gpt-5",
+            createdAt: Date(timeIntervalSince1970: 8)
+        )
+        var failed = version(id: uuid(132), operation: .failedCompression, status: .failed, content: "")
+        failed.compressionInputID = input.id
+        failed.errorMessage = "Provider timed out"
+        let tombstoned = version(id: uuid(133), operation: .tombstone, status: .tombstoned, content: "Old branch")
+        let state = ConversationCompressionState(
+            rounds: fixture.rounds,
+            roundEvents: fixture.roundEvents,
+            versions: [failed, tombstoned],
+            versionSources: [
+                source(versionID: failed.id, roundID: fixture.rounds[0].id, ordinal: 0),
+                source(versionID: tombstoned.id, roundID: fixture.rounds[1].id, ordinal: 1)
+            ],
+            inputs: [input]
+        )
+
+        let presentation = ConversationTimelineBuilder.compressionPresentation(
+            conversation: fixture.conversation,
+            compressionState: state
+        )
+
+        XCTAssertEqual(presentation.versionHistory.map(\.label), ["压缩失败", "已废弃分支"])
+        XCTAssertEqual(presentation.versionHistory[0].providerSummary, "Codex CLI / gpt-5")
+        XCTAssertEqual(presentation.versionHistory[0].inputSummary, "User A Assistant A")
+        XCTAssertEqual(presentation.versionHistory[0].errorMessage, "Provider timed out")
+        XCTAssertTrue(presentation.versionHistory[0].isFailed)
+        XCTAssertTrue(presentation.versionHistory[1].isTombstoned)
+        XCTAssertEqual(presentation.versionHistoryByRoundID[fixture.rounds[0].id]?.map(\.id), [failed.id])
+        XCTAssertEqual(presentation.versionHistoryByRoundID[fixture.rounds[1].id]?.map(\.id), [tombstoned.id])
+    }
+
     private func conversationFixture(_ labels: [String]) -> (
         conversation: ConversationSession,
         rounds: [CompressionRound],

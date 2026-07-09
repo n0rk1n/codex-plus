@@ -22,7 +22,10 @@ struct ConversationActions {
     let archiveConversation: (UUID) -> Void
     let editCompressionSegment: (UUID, CompressionSegmentKind, String) -> Void
     let excludeCompressionRound: (UUID) -> Void
-    let compressSelectedRounds: ([UUID]) -> (any ExecutionHandle)?
+    let restoreCompressionOriginal: (UUID) -> Void
+    let rollbackCompressionVersion: (UUID) -> Void
+    let loadCompressionTemplates: () -> [PromptTemplate]
+    let compressSelectedRounds: ([UUID], PromptTemplate?, String) -> (any ExecutionHandle)?
 }
 
 struct ComposerActions {

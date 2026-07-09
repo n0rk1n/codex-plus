@@ -10,6 +10,7 @@ struct WorkbenchConversationView: View {
     @State private var selectedCompressionRoundIDs = Set<UUID>()
     @State private var compressionSelectionAnchorRoundID: UUID?
     @State private var editingCompressionDraft: CompressionEditDraft?
+    @State private var customCompressionDraft: CompressionCustomDraft?
 
     var body: some View {
         LiquidGlassContainer(cornerRadius: WorkbenchMetrics.conversationCornerRadius) {
@@ -56,6 +57,7 @@ struct WorkbenchConversationView: View {
                     canEditSegment: selectedOrderedRoundIDs.count == 1,
                     onEdit: openCompressionEditDialog,
                     onDefaultCompress: compressSelectedRounds,
+                    onCustomCompress: openCustomCompressionDialog,
                     onExclude: excludeSelectedRounds,
                     onClear: clearCompressionSelection
                 )
@@ -90,6 +92,9 @@ struct WorkbenchConversationView: View {
                     CompressionHistoryInspectorView(
                         presentation: snapshot.compression.timelinePresentation,
                         selectedRoundID: selectedCompressionRoundID,
+                        onRestoreOriginal: restoreSelectedCompressionOriginal,
+                        onRollback: rollbackCompressionVersion,
+                        onContinueCompression: continueCompression,
                         onClose: { selectedCompressionRoundID = nil }
                     )
                     .transition(.move(edge: .trailing).combined(with: .opacity))
@@ -107,6 +112,21 @@ struct WorkbenchConversationView: View {
                     actions.editCompressionSegment(draft.roundID, segmentKind, content)
                     editingCompressionDraft = nil
                     selectedCompressionRoundID = draft.roundID
+                }
+            )
+        }
+        .sheet(item: $customCompressionDraft) { draft in
+            CompressionCustomDialog(
+                roundCount: draft.roundIDs.count,
+                templates: draft.templates,
+                onCancel: {
+                    customCompressionDraft = nil
+                },
+                onStart: { template, userInstruction in
+                    let roundIDs = draft.roundIDs
+                    _ = actions.compressSelectedRounds(roundIDs, template, userInstruction)
+                    customCompressionDraft = nil
+                    clearCompressionSelection()
                 }
             )
         }
@@ -163,7 +183,8 @@ struct WorkbenchConversationView: View {
 
                 ConversationEventRow(
                     event: event,
-                    compressionPresentation: snapshot.compression.timelinePresentation.rowsByEventID[event.id]
+                    compressionPresentation: snapshot.compression.timelinePresentation.rowsByEventID[event.id],
+                    isCompressionHighlighted: isCompressionEventHighlighted(event.id)
                 )
                 .onTapGesture {
                     selectCompressionRound(containing: event.id)
@@ -185,6 +206,14 @@ struct WorkbenchConversationView: View {
             return nil
         }
         return snapshot.compression.timelinePresentation.rounds.first { $0.roundID == row.roundID }
+    }
+
+    private func isCompressionEventHighlighted(_ eventID: UUID) -> Bool {
+        guard let selectedCompressionRoundID,
+              let row = snapshot.compression.timelinePresentation.rowsByEventID[eventID] else {
+            return false
+        }
+        return row.roundID == selectedCompressionRoundID
     }
 
     private var selectedOrderedRoundIDs: [UUID] {
@@ -230,8 +259,19 @@ struct WorkbenchConversationView: View {
         guard !roundIDs.isEmpty else {
             return
         }
-        _ = actions.compressSelectedRounds(roundIDs)
+        _ = actions.compressSelectedRounds(roundIDs, nil, "")
         clearCompressionSelection()
+    }
+
+    private func openCustomCompressionDialog() {
+        let roundIDs = selectedOrderedRoundIDs
+        guard !roundIDs.isEmpty else {
+            return
+        }
+        customCompressionDraft = CompressionCustomDraft(
+            roundIDs: roundIDs,
+            templates: actions.loadCompressionTemplates()
+        )
     }
 
     private func excludeSelectedRounds() {
@@ -239,6 +279,26 @@ struct WorkbenchConversationView: View {
             actions.excludeCompressionRound(roundID)
         }
         clearCompressionSelection()
+    }
+
+    private func restoreSelectedCompressionOriginal(_ roundID: UUID) {
+        actions.restoreCompressionOriginal(roundID)
+        selectedCompressionRoundID = roundID
+        selectedCompressionRoundIDs = [roundID]
+        compressionSelectionAnchorRoundID = roundID
+    }
+
+    private func rollbackCompressionVersion(_ versionID: UUID) {
+        actions.rollbackCompressionVersion(versionID)
+    }
+
+    private func continueCompression(_ roundIDs: [UUID]) {
+        guard !roundIDs.isEmpty else {
+            return
+        }
+        _ = actions.compressSelectedRounds(roundIDs, nil, "")
+        selectedCompressionRoundIDs = Set(roundIDs)
+        compressionSelectionAnchorRoundID = roundIDs.first
     }
 
     private func openCompressionEditDialog() {
@@ -297,4 +357,10 @@ private struct CompressionEditDraft: Identifiable {
     var id: UUID { roundID }
     var roundID: UUID
     var initialText: String
+}
+
+private struct CompressionCustomDraft: Identifiable {
+    let id = UUID()
+    var roundIDs: [UUID]
+    var templates: [PromptTemplate]
 }

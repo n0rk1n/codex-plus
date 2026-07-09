@@ -115,7 +115,10 @@ struct WorkbenchView: View {
                 archiveConversation: { _ = store.archiveConversation($0) },
                 editCompressionSegment: { store.editCompressionSegment(roundID: $0, segmentKind: $1, content: $2) },
                 excludeCompressionRound: { store.excludeCompressionRound(roundID: $0) },
-                compressSelectedRounds: { store.compressSelectedRounds(roundIDs: $0) }
+                restoreCompressionOriginal: { store.restoreCompressionOriginal(roundID: $0) },
+                rollbackCompressionVersion: { store.rollbackCompressionVersion(versionID: $0) },
+                loadCompressionTemplates: { store.loadCompressionTemplates() },
+                compressSelectedRounds: { store.compressSelectedRounds(roundIDs: $0, template: $1, userInstruction: $2) }
             ),
             composer: ComposerActions(
                 send: { store.submitPrompt($0) },

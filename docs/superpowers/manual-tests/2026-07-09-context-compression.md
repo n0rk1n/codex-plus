@@ -9,6 +9,32 @@
 
 Known warning: `CodexTextField.swift` still emits an existing macOS deprecation warning for `onChange(of:perform:)`. It is unrelated to context compression.
 
+Latest automatic run:
+
+- `swift build` passed on 2026-07-09.
+- `swift test --filter ContextCompression` passed on 2026-07-09.
+- `swift test` passed on 2026-07-09 with 89 XCTest tests and 3 Swift Testing tests.
+- Initial non-escalated SwiftPM runs can fail when sandboxed from `~/Library` and `~/.cache/clang`; rerun with normal SwiftPM cache access.
+
+Latest local runtime setup:
+
+- Backed up the live app database before QA at `/Users/oriki/.codex-plus/CodexPlus.sqlite.qa-backup-20260709110747`.
+- Launched `swift run CodexPlusApp` on 2026-07-09; startup migration created the compression tables in the live app database.
+- Seeded a pinned QA conversation named `Context Compression QA Fixture` under project `Context Compression QA`.
+- Verified the QA fixture at the database layer:
+  - 7 compression versions.
+  - Active round manual edit, active joined range compression, active excluded round.
+  - Historical manual edit, historical system compression, failed provider version, and tombstoned branch.
+
+Manual macOS UI QA remains partially blocked in this automation session:
+
+- `swift run CodexPlusApp` stays running, but the SwiftPM accessory app does not appear as a selectable app in Computer Use.
+- The app uses an accessory activation policy plus floating panels; Computer Use rejected `CodexPlusApp` and the executable path as app identifiers.
+- `screencapture` returned an all-black screen in the current automation session.
+- `osascript`/System Events calls to trigger the global hotkey or enumerate windows hung and were interrupted.
+
+Because of that, no visual pass/fail claim has been made for the timeline or inspector. The remaining items below still require either direct user-driven visual QA, a normal local app automation session with screen/accessibility access, or a dedicated debug launch mode that opens the workbench window without relying on the global hotkey.
+
 ## Manual Scenario
 
 1. Launch the app and create a conversation with at least four user/AI rounds.
@@ -30,6 +56,8 @@ Known warning: `CodexTextField.swift` still emits an existing macOS deprecation 
 17. Confirm the archive markdown includes `## Context Compression`, active model input, versions, sources, and active versions.
 18. Search archives by original source text and confirm the conversation is found.
 19. Search by compressed-only text and confirm search does not rely on compressed output as the primary searchable body.
+20. Open custom compression from a selected continuous range, choose a context compression template, add one-time intent text, and confirm the resulting input record stores that intent outside normal conversation history.
+21. Roll back to an older version or restore original from the inspector once those contextual actions are exposed in UI, and confirm the old active branch is no longer used for model input.
 
 ## Pass Criteria
 
