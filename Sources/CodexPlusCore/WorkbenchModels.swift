@@ -84,6 +84,7 @@ public struct WorkbenchContextCompressionState: Equatable, Sendable {
     public var budgetSnapshot: ContextBudgetSnapshot?
     public var sendBlockReason: String?
     public var assembledPreview: String
+    public var modelInputPreview: String?
     public var activeOperationDescription: String?
 
     public init(
@@ -94,6 +95,7 @@ public struct WorkbenchContextCompressionState: Equatable, Sendable {
         budgetSnapshot: ContextBudgetSnapshot? = nil,
         sendBlockReason: String? = nil,
         assembledPreview: String = "",
+        modelInputPreview: String? = nil,
         activeOperationDescription: String? = nil
     ) {
         self.conversationID = conversationID
@@ -103,6 +105,7 @@ public struct WorkbenchContextCompressionState: Equatable, Sendable {
         self.budgetSnapshot = budgetSnapshot
         self.sendBlockReason = sendBlockReason
         self.assembledPreview = assembledPreview
+        self.modelInputPreview = modelInputPreview
         self.activeOperationDescription = activeOperationDescription
     }
 }

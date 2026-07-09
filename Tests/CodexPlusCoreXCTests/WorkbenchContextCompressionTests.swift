@@ -325,6 +325,22 @@ final class WorkbenchContextCompressionTests: XCTestCase {
         XCTAssertEqual(compressionProvider.requests.first?.userInstruction, "")
     }
 
+    @MainActor
+    func testModelInputPreviewMatchesFollowUpSendPrompt() throws {
+        let database = try temporaryDatabase()
+        try CodexPlusSchema.migrate(database)
+        let repository = SQLiteCodexPlusRepository(database: database)
+        _ = try saveCompressedConversation(repository: repository)
+        let engine = WorkbenchCompressionManualExecutionEngine()
+        let store = WorkbenchStore(repository: repository, engine: engine)
+
+        let preview = store.refreshModelInputPreview(pendingPrompt: "Next task")
+        store.submitPrompt("Next task")
+
+        XCTAssertEqual(preview, engine.requests.last?.prompt)
+        XCTAssertEqual(store.snapshot.compression.modelInputPreview, preview)
+    }
+
     private func saveCompressedConversation(
         repository: SQLiteCodexPlusRepository
     ) throws -> (conversationID: UUID, roundID: UUID, versionID: UUID) {

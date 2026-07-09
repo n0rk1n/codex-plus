@@ -385,6 +385,22 @@ public final class WorkbenchStore: ObservableObject {
         }
     }
 
+    @discardableResult
+    public func refreshModelInputPreview(pendingPrompt: String) -> String? {
+        guard let activeConversation = conversations.first(where: { $0.id == activeConversationID && !$0.isArchived }) else {
+            return nil
+        }
+
+        do {
+            let preview = try modelInputPrompt(for: activeConversation, pendingPrompt: pendingPrompt)
+            snapshot.compression.modelInputPreview = preview
+            return preview
+        } catch {
+            setError(title: "无法生成模型输入预览", error: error)
+            return nil
+        }
+    }
+
     public func archiveConversation(_ id: UUID) -> ArchiveRequestResult {
         guard let conversation = conversations.first(where: { $0.id == id }) else {
             return .notFound
@@ -890,6 +906,7 @@ public final class WorkbenchStore: ObservableObject {
                 budgetSnapshot: canReusePreviousBudget ? snapshot.compression.budgetSnapshot : nil,
                 sendBlockReason: canReusePreviousBudget ? snapshot.compression.sendBlockReason : nil,
                 assembledPreview: assembledPreview,
+                modelInputPreview: canReusePreviousBudget ? snapshot.compression.modelInputPreview : nil,
                 activeOperationDescription: activeOperationDescription(in: compressionState)
             )
         } catch {

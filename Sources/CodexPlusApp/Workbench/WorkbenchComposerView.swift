@@ -10,6 +10,7 @@ struct WorkbenchComposerView: View {
     @State private var promptOptimizationID: UUID?
     @State private var systemCompressionHandle: (any ExecutionHandle)?
     @State private var budgetRefreshTask: Task<Void, Never>?
+    @State private var modelInputPreviewText: String?
     @State private var isOptimizingPrompt = false
     @State private var isSystemCompressing = false
     @State private var isShowingStopOptimizationConfirmation = false
@@ -39,6 +40,11 @@ struct WorkbenchComposerView: View {
                 if let budgetSnapshot = snapshot.compression.budgetSnapshot {
                     ContextBudgetBadge(snapshot: budgetSnapshot)
                         .transition(.opacity.combined(with: .scale(scale: 0.94)))
+                }
+
+                if shouldShowModelInputPreviewButton {
+                    modelInputPreviewButton
+                        .transition(.scale(scale: 0.92).combined(with: .opacity))
                 }
 
                 composerButton
@@ -83,6 +89,12 @@ struct WorkbenchComposerView: View {
         .onDisappear {
             budgetRefreshTask?.cancel()
             budgetRefreshTask = nil
+        }
+        .sheet(item: modelInputPreviewBinding) { preview in
+            ModelInputPreviewSheet(
+                text: preview.text,
+                onClose: { modelInputPreviewText = nil }
+            )
         }
     }
 
@@ -202,6 +214,20 @@ struct WorkbenchComposerView: View {
         }
     }
 
+    private var modelInputPreviewButton: some View {
+        CodexButton(
+            rule: .composerIconCircle,
+            isDisabled: snapshot.activeConversation == nil,
+            help: "预览模型输入",
+            accessibilityLabel: "预览模型输入",
+            action: showModelInputPreview
+        ) {
+            Image(systemName: "doc.text.magnifyingglass")
+                .symbolRenderingMode(.hierarchical)
+                .foregroundStyle(.secondary)
+        }
+    }
+
     private var workspacePickerButton: some View {
         HStack(spacing: 0) {
             CodexButton(rule: .workspaceCapsule, action: actions.pickWorkspace) {
@@ -280,6 +306,23 @@ struct WorkbenchComposerView: View {
     private var shouldShowCompressionBlockControls: Bool {
         snapshot.composerAction == .send
             && snapshot.compression.sendBlockReason != nil
+    }
+
+    private var shouldShowModelInputPreviewButton: Bool {
+        snapshot.composerAction == .send
+            && snapshot.activeConversation != nil
+            && !prompt.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+    }
+
+    private var modelInputPreviewBinding: Binding<ModelInputPreview?> {
+        Binding(
+            get: {
+                modelInputPreviewText.map { ModelInputPreview(text: $0) }
+            },
+            set: { preview in
+                modelInputPreviewText = preview?.text
+            }
+        )
     }
 
     private func submitPrompt() {
@@ -365,6 +408,14 @@ struct WorkbenchComposerView: View {
         isSystemCompressing = systemCompressionHandle != nil
     }
 
+    private func showModelInputPreview() {
+        let trimmedPrompt = prompt.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !trimmedPrompt.isEmpty else {
+            return
+        }
+        modelInputPreviewText = actions.previewModelInput(trimmedPrompt)
+    }
+
     private func stopPromptOptimization() {
         promptOptimizationHandle?.stop()
         promptOptimizationHandle = nil
@@ -373,4 +424,9 @@ struct WorkbenchComposerView: View {
         bulbPulse = false
         optimizingPromptGlow = false
     }
+}
+
+private struct ModelInputPreview: Identifiable {
+    let id = UUID()
+    var text: String
 }
