@@ -24,6 +24,7 @@ struct ConversationActions {
 
 struct ComposerActions {
     let send: (String) -> Void
+    let systemCompress: (String) -> (any ExecutionHandle)?
     let optimizePrompt: (String, @escaping @Sendable (PromptOptimizationResult) -> Void) -> (any ExecutionHandle)?
     let pickWorkspace: () -> Void
     let clearWorkspace: () -> Void

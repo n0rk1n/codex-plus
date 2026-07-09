@@ -116,6 +116,7 @@ struct WorkbenchView: View {
             ),
             composer: ComposerActions(
                 send: { store.submitPrompt($0) },
+                systemCompress: { store.systemCompressActiveConversation(pendingPrompt: $0) },
                 optimizePrompt: optimizePrompt,
                 pickWorkspace: pickWorkspace,
                 clearWorkspace: { store.clearDraftWorkspaceSelection() },

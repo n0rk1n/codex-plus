@@ -8,7 +8,9 @@ struct WorkbenchComposerView: View {
     @State private var prompt = ""
     @State private var promptOptimizationHandle: (any ExecutionHandle)?
     @State private var promptOptimizationID: UUID?
+    @State private var systemCompressionHandle: (any ExecutionHandle)?
     @State private var isOptimizingPrompt = false
+    @State private var isSystemCompressing = false
     @State private var isShowingStopOptimizationConfirmation = false
     @State private var bulbPulse = false
     @State private var optimizingPromptGlow = false
@@ -28,9 +30,15 @@ struct WorkbenchComposerView: View {
                         .transition(.scale(scale: 0.82).combined(with: .opacity))
                 }
 
+                if shouldShowCompressionBlockControls {
+                    compressionBlockControls
+                        .transition(.scale(scale: 0.92).combined(with: .opacity))
+                }
+
                 composerButton
             }
             .animation(.spring(response: 0.24, dampingFraction: 0.78), value: shouldShowPromptOptimizationButton)
+            .animation(.spring(response: 0.24, dampingFraction: 0.78), value: shouldShowCompressionBlockControls)
             .padding(.horizontal, CodexSpacing.contentStack)
             .padding(.vertical, CodexSpacing.contentInline)
         }
@@ -51,6 +59,12 @@ struct WorkbenchComposerView: View {
         .onChange(of: snapshot.composerAction) {
             if snapshot.composerAction == .stop {
                 isFocused = false
+            }
+        }
+        .onChange(of: snapshot.compression.sendBlockReason) {
+            if snapshot.compression.sendBlockReason == nil {
+                systemCompressionHandle = nil
+                isSystemCompressing = false
             }
         }
         .onChange(of: isOptimizingPrompt) {
@@ -150,6 +164,33 @@ struct WorkbenchComposerView: View {
         }
     }
 
+    private var compressionBlockControls: some View {
+        HStack(spacing: 8) {
+            if let reason = snapshot.compression.sendBlockReason {
+                Text(reason)
+                    .font(CodexTypography.microControl)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
+                    .fixedSize(horizontal: true, vertical: false)
+            }
+
+            CodexButton(
+                rule: .formHeaderCapsule,
+                isDisabled: isSystemCompressing || prompt.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty,
+                help: "交付系统完成压缩",
+                accessibilityLabel: "交付系统完成压缩",
+                action: systemCompressPrompt
+            ) {
+                HStack(spacing: 6) {
+                    Image(systemName: isSystemCompressing ? "arrow.triangle.2.circlepath.circle.fill" : "arrow.triangle.2.circlepath")
+                        .symbolRenderingMode(.hierarchical)
+                    Text("交付系统完成压缩")
+                        .lineLimit(1)
+                }
+            }
+        }
+    }
+
     private var workspacePickerButton: some View {
         HStack(spacing: 0) {
             CodexButton(rule: .workspaceCapsule, action: actions.pickWorkspace) {
@@ -222,6 +263,12 @@ struct WorkbenchComposerView: View {
     private var shouldShowPromptOptimizationButton: Bool {
         snapshot.composerAction == .send
             && !prompt.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+            && snapshot.compression.sendBlockReason == nil
+    }
+
+    private var shouldShowCompressionBlockControls: Bool {
+        snapshot.composerAction == .send
+            && snapshot.compression.sendBlockReason != nil
     }
 
     private func submitPrompt() {
@@ -282,6 +329,17 @@ struct WorkbenchComposerView: View {
             bulbPulse = false
             optimizingPromptGlow = false
         }
+    }
+
+    private func systemCompressPrompt() {
+        let trimmedPrompt = prompt.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard snapshot.composerAction == .send, !trimmedPrompt.isEmpty, !isSystemCompressing else {
+            return
+        }
+
+        stopPromptOptimization()
+        systemCompressionHandle = actions.systemCompress(trimmedPrompt)
+        isSystemCompressing = systemCompressionHandle != nil
     }
 
     private func stopPromptOptimization() {
