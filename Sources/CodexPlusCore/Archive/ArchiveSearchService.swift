@@ -53,7 +53,19 @@ public struct ArchiveSearchService: Sendable {
         conversation: ConversationSession,
         project: WorkspaceSessionGroup
     ) throws -> ConversationArchiveRecord {
-        let markdown = MarkdownArchiveRenderer.render(conversation: conversation, projectName: project.displayName)
+        let compressionState = try repository.loadCompressionState(conversationID: conversation.id)
+        let assembledModelInput = try ContextCompressionAssemblerV2.assemble(
+            ContextCompressionAssemblyInput(
+                conversation: conversation,
+                compressionState: compressionState
+            )
+        ).text
+        let markdown = MarkdownArchiveRenderer.render(
+            conversation: conversation,
+            projectName: project.displayName,
+            compressionState: compressionState,
+            assembledModelInput: assembledModelInput
+        )
 
         let archivedAt = now()
         let record = Self.indexRecord(
