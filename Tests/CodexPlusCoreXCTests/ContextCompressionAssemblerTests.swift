@@ -116,6 +116,87 @@ final class ContextCompressionAssemblerTests: XCTestCase {
         XCTAssertEqual(assembled.text, "APENG")
     }
 
+    func testTimelinePresentationKeepsOriginalRowsAndMarksManualEditBoundary() throws {
+        let fixture = conversationFixture(["A", "B"])
+        let edited = version(id: uuid(120), operation: .manualEdit, content: "Edited A")
+        let active = active(roundID: fixture.rounds[0].id, versionID: edited.id)
+        let state = ConversationCompressionState(
+            rounds: fixture.rounds,
+            roundEvents: fixture.roundEvents,
+            versions: [edited],
+            activeVersions: [active]
+        )
+
+        let presentation = ConversationTimelineBuilder.compressionPresentation(
+            conversation: fixture.conversation,
+            compressionState: state
+        )
+
+        XCTAssertEqual(presentation.rounds.map(\.roundID), fixture.rounds.map(\.id))
+        XCTAssertEqual(presentation.rounds[0].status?.label, "已修订")
+        XCTAssertEqual(presentation.rounds[0].boundary?.kind, .edited)
+        XCTAssertFalse(presentation.rounds[0].isDimmed)
+        XCTAssertEqual(presentation.rounds[0].eventIDs, [uuid(10), uuid(11)])
+    }
+
+    func testTimelinePresentationDimsExcludedSourceRows() throws {
+        let fixture = conversationFixture(["A", "B"])
+        let excluded = version(id: uuid(121), operation: .exclude, content: "")
+        let active = active(roundID: fixture.rounds[0].id, versionID: excluded.id)
+        let state = ConversationCompressionState(
+            rounds: fixture.rounds,
+            roundEvents: fixture.roundEvents,
+            versions: [excluded],
+            activeVersions: [active]
+        )
+
+        let presentation = ConversationTimelineBuilder.compressionPresentation(
+            conversation: fixture.conversation,
+            compressionState: state
+        )
+
+        XCTAssertEqual(presentation.rounds[0].status?.label, "已排除模型上下文")
+        XCTAssertEqual(presentation.rounds[0].boundary?.kind, .excluded)
+        XCTAssertTrue(presentation.rounds[0].isDimmed)
+        XCTAssertEqual(presentation.rowsByEventID[uuid(10)]?.isDimmed, true)
+        XCTAssertEqual(presentation.rowsByEventID[uuid(11)]?.isDimmed, true)
+    }
+
+    func testTimelinePresentationMarksJoinedCompressionRelationships() throws {
+        let fixture = conversationFixture(["A", "B", "C"])
+        let joined = version(id: uuid(122), scopeKind: .range, operation: .defaultCompression, content: "Compressed A-B")
+        let sources = [
+            source(versionID: joined.id, roundID: fixture.rounds[0].id, ordinal: 0),
+            source(versionID: joined.id, roundID: fixture.rounds[1].id, ordinal: 1)
+        ]
+        let active = CompressionActiveVersion(
+            id: uuid(123),
+            conversationID: fixture.conversation.id,
+            roundID: nil,
+            rangeID: joined.id,
+            activeVersionID: joined.id
+        )
+        let state = ConversationCompressionState(
+            rounds: fixture.rounds,
+            roundEvents: fixture.roundEvents,
+            versions: [joined],
+            versionSources: sources,
+            activeVersions: [active]
+        )
+
+        let presentation = ConversationTimelineBuilder.compressionPresentation(
+            conversation: fixture.conversation,
+            compressionState: state
+        )
+
+        XCTAssertEqual(presentation.rounds[0].status?.label, "拼接压缩")
+        XCTAssertEqual(presentation.rounds[0].boundary?.kind, .joined)
+        XCTAssertEqual(presentation.rounds[0].joinedRelationship?.relatedRoundIDs, [fixture.rounds[0].id, fixture.rounds[1].id])
+        XCTAssertNil(presentation.rounds[1].boundary)
+        XCTAssertEqual(presentation.rounds[1].status?.label, "拼接压缩")
+        XCTAssertEqual(presentation.rounds[1].joinedRelationship?.relatedRoundIDs, [fixture.rounds[0].id, fixture.rounds[1].id])
+    }
+
     private func conversationFixture(_ labels: [String]) -> (
         conversation: ConversationSession,
         rounds: [CompressionRound],
