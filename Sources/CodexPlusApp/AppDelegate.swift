@@ -48,8 +48,20 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         try CodexPlusSchema.migrate(database)
         let repository = SQLiteCodexPlusRepository(database: database)
         let engine = CodexCLIEngine(runner: ProcessCodexRunner())
+        let compressionProvider = CodexCLICompressionExecutionProvider(
+            engine: engine,
+            providerModel: "codex-cli"
+        )
+        let compressionService = ContextCompressionService(
+            repository: repository,
+            executionProvider: compressionProvider
+        )
         return AppRuntime(
-            store: WorkbenchStore(repository: repository, engine: engine),
+            store: WorkbenchStore(
+                repository: repository,
+                engine: engine,
+                contextCompressionService: compressionService
+            ),
             repository: repository,
             promptOptimizationService: PromptOptimizationService(repository: repository, engine: engine)
         )
