@@ -6,6 +6,7 @@ struct WorkbenchConversationView: View {
     let actions: ConversationActions
 
     @State private var expandedTechnicalGroupIDs = Set<UUID>()
+    @State private var selectedCompressionRoundID: UUID?
 
     var body: some View {
         LiquidGlassContainer(cornerRadius: WorkbenchMetrics.conversationCornerRadius) {
@@ -46,21 +47,35 @@ struct WorkbenchConversationView: View {
             Divider()
                 .overlay(CodexColors.surfaceDivider)
 
-            ScrollViewReader { proxy in
-                ScrollView {
-                    LazyVStack(alignment: .leading, spacing: 0) {
-                        ForEach(ConversationTimelineBuilder.items(from: conversation.events)) { item in
-                            timelineRow(for: item)
-                                .id(item.id)
+            HStack(spacing: 0) {
+                ScrollViewReader { proxy in
+                    ScrollView {
+                        LazyVStack(alignment: .leading, spacing: 0) {
+                            ForEach(ConversationTimelineBuilder.items(from: conversation.events)) { item in
+                                timelineRow(for: item)
+                                    .id(item.id)
+                            }
                         }
+                        .padding(CodexSpacing.contentStack)
                     }
-                    .padding(CodexSpacing.contentStack)
+                    .onAppear {
+                        scrollToLatest(conversation: conversation, using: proxy)
+                    }
+                    .onChange(of: conversation.events.count) {
+                        scrollToLatest(conversation: conversation, using: proxy)
+                    }
                 }
-                .onAppear {
-                    scrollToLatest(conversation: conversation, using: proxy)
-                }
-                .onChange(of: conversation.events.count) {
-                    scrollToLatest(conversation: conversation, using: proxy)
+
+                if selectedCompressionRoundID != nil {
+                    Divider()
+                        .overlay(CodexColors.surfaceDivider)
+
+                    CompressionHistoryInspectorView(
+                        presentation: snapshot.compression.timelinePresentation,
+                        selectedRoundID: selectedCompressionRoundID,
+                        onClose: { selectedCompressionRoundID = nil }
+                    )
+                    .transition(.move(edge: .trailing).combined(with: .opacity))
                 }
             }
         }
@@ -102,7 +117,24 @@ struct WorkbenchConversationView: View {
     private func timelineRow(for item: ConversationTimelineItem) -> some View {
         switch item {
         case let .event(event):
-            ConversationEventRow(event: event)
+            VStack(alignment: .leading, spacing: 0) {
+                if let round = roundPresentation(for: event.id),
+                   let boundary = round.boundary,
+                   round.eventIDs.first == event.id {
+                    CompressionRangeMarkerView(
+                        boundary: boundary,
+                        status: round.status,
+                        joinedRelationship: round.joinedRelationship,
+                        isSelected: selectedCompressionRoundID == round.roundID,
+                        onSelect: { selectedCompressionRoundID = round.roundID }
+                    )
+                }
+
+                ConversationEventRow(
+                    event: event,
+                    compressionPresentation: snapshot.compression.timelinePresentation.rowsByEventID[event.id]
+                )
+            }
         case let .technicalGroup(id, events):
             ConversationTechnicalEventGroupRow(
                 events: events,
@@ -114,6 +146,13 @@ struct WorkbenchConversationView: View {
         case let .compressionSnapshot(snapshot, sourceEvents):
             ConversationCompressionSnapshotRow(snapshot: snapshot, sourceEvents: sourceEvents)
         }
+    }
+
+    private func roundPresentation(for eventID: UUID) -> ConversationRoundPresentation? {
+        guard let row = snapshot.compression.timelinePresentation.rowsByEventID[eventID] else {
+            return nil
+        }
+        return snapshot.compression.timelinePresentation.rounds.first { $0.roundID == row.roundID }
     }
 
     private func scrollToLatest(conversation: ConversationSession, using proxy: ScrollViewProxy) {

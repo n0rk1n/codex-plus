@@ -80,6 +80,7 @@ public struct WorkbenchContextCompressionState: Equatable, Sendable {
     public var conversationID: UUID?
     public var rounds: [CompressionRound]
     public var activeVersions: [CompressionActiveVersion]
+    public var timelinePresentation: ConversationTimelineCompressionPresentation
     public var budgetSnapshot: ContextBudgetSnapshot?
     public var sendBlockReason: String?
     public var assembledPreview: String
@@ -89,6 +90,7 @@ public struct WorkbenchContextCompressionState: Equatable, Sendable {
         conversationID: UUID? = nil,
         rounds: [CompressionRound] = [],
         activeVersions: [CompressionActiveVersion] = [],
+        timelinePresentation: ConversationTimelineCompressionPresentation = ConversationTimelineCompressionPresentation(),
         budgetSnapshot: ContextBudgetSnapshot? = nil,
         sendBlockReason: String? = nil,
         assembledPreview: String = "",
@@ -97,6 +99,7 @@ public struct WorkbenchContextCompressionState: Equatable, Sendable {
         self.conversationID = conversationID
         self.rounds = rounds
         self.activeVersions = activeVersions
+        self.timelinePresentation = timelinePresentation
         self.budgetSnapshot = budgetSnapshot
         self.sendBlockReason = sendBlockReason
         self.assembledPreview = assembledPreview

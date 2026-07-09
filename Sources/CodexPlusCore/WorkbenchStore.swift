@@ -812,6 +812,10 @@ public final class WorkbenchStore: ObservableObject {
                 conversationID: conversation.id,
                 rounds: compressionState.rounds,
                 activeVersions: compressionState.activeVersions,
+                timelinePresentation: ConversationTimelineBuilder.compressionPresentation(
+                    conversation: conversation,
+                    compressionState: compressionState
+                ),
                 budgetSnapshot: canReusePreviousBudget ? snapshot.compression.budgetSnapshot : nil,
                 sendBlockReason: canReusePreviousBudget ? snapshot.compression.sendBlockReason : nil,
                 assembledPreview: assembledPreview,

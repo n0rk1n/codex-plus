@@ -3,6 +3,7 @@ import SwiftUI
 
 struct ConversationEventRow: View {
     let event: ConversationDisplayEvent
+    var compressionPresentation: ConversationTimelineRowCompressionPresentation? = nil
 
     var body: some View {
         HStack(alignment: .top, spacing: 10) {
@@ -38,6 +39,7 @@ struct ConversationEventRow: View {
             Spacer(minLength: 0)
         }
         .padding(.vertical, 6)
+        .opacity(compressionPresentation?.isDimmed == true ? 0.48 : 1)
         .accessibilityElement(children: .combine)
     }
 

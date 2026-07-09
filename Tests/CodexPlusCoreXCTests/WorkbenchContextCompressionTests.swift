@@ -133,6 +133,10 @@ final class WorkbenchContextCompressionTests: XCTestCase {
         XCTAssertEqual(store.snapshot.compression.rounds.map(\.id), [fixture.roundID])
         XCTAssertEqual(store.snapshot.compression.activeVersions.map(\.activeVersionID), [fixture.versionID])
         XCTAssertEqual(store.snapshot.compression.assembledPreview, "Compressed A")
+        XCTAssertEqual(store.snapshot.compression.timelinePresentation.rounds.map(\.roundID), [fixture.roundID])
+        XCTAssertEqual(store.snapshot.compression.timelinePresentation.rounds.first?.status?.label, "已修订")
+        XCTAssertEqual(store.snapshot.compression.timelinePresentation.rowsByEventID[uuid(210)]?.status?.label, "已修订")
+        XCTAssertEqual(store.snapshot.compression.timelinePresentation.rowsByEventID[uuid(211)]?.status?.label, "已修订")
         XCTAssertNil(store.snapshot.compression.sendBlockReason)
     }
 
