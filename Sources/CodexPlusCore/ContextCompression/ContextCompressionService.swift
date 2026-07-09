@@ -113,6 +113,71 @@ public final class ContextCompressionService: @unchecked Sendable {
             state: state,
             selectedRoundIDs: sortedRoundIDs
         )
+        let scopeKind: CompressionVersionScopeKind = sortedRoundIDs.count == 1 ? .round : .range
+        return try startProviderCompression(
+            conversationID: conversation.id,
+            state: state,
+            selectedRoundIDs: sortedRoundIDs,
+            sourceText: sourceText,
+            mode: mode,
+            scopeKind: scopeKind,
+            template: template,
+            userInstruction: userInstruction,
+            workingDirectoryURL: workingDirectoryURL,
+            permissionMode: permissionMode,
+            activeRoundID: sortedRoundIDs.count == 1 ? sortedRoundIDs[0] : nil,
+            activateAsRange: sortedRoundIDs.count > 1,
+            onFinish: onFinish
+        )
+    }
+
+    public func startAssembledSystemCompression(
+        conversation: ConversationSession,
+        sourceText: String,
+        sourceRoundIDs: [UUID],
+        template: PromptTemplate,
+        workingDirectoryURL: URL,
+        permissionMode: PermissionMode = .semiAutomatic,
+        onFinish: @escaping @Sendable (ContextCompressionServiceResult) -> Void
+    ) throws -> (any ExecutionHandle)? {
+        guard !sourceRoundIDs.isEmpty else {
+            throw ContextCompressionServiceError.noRoundsSelected
+        }
+
+        let state = try repository.loadCompressionState(conversationID: conversation.id)
+        let sortedRoundIDs = try sortedSelectedRoundIDs(sourceRoundIDs, state: state)
+        return try startProviderCompression(
+            conversationID: conversation.id,
+            state: state,
+            selectedRoundIDs: sortedRoundIDs,
+            sourceText: sourceText,
+            mode: .system,
+            scopeKind: .assembled,
+            template: template,
+            userInstruction: "",
+            workingDirectoryURL: workingDirectoryURL,
+            permissionMode: permissionMode,
+            activeRoundID: nil,
+            activateAsRange: true,
+            onFinish: onFinish
+        )
+    }
+
+    private func startProviderCompression(
+        conversationID: UUID,
+        state: ConversationCompressionState,
+        selectedRoundIDs: [UUID],
+        sourceText: String,
+        mode: CompressionInputMode,
+        scopeKind: CompressionVersionScopeKind,
+        template: PromptTemplate,
+        userInstruction: String,
+        workingDirectoryURL: URL,
+        permissionMode: PermissionMode,
+        activeRoundID: UUID?,
+        activateAsRange: Bool,
+        onFinish: @escaping @Sendable (ContextCompressionServiceResult) -> Void
+    ) throws -> (any ExecutionHandle)? {
         let request = CompressionExecutionRequest(
             sourceText: sourceText,
             template: template,
@@ -128,13 +193,16 @@ public final class ContextCompressionService: @unchecked Sendable {
                     repository: repository,
                     idGenerator: idGenerator,
                     now: now,
-                    conversationID: conversation.id,
+                    conversationID: conversationID,
                     state: state,
-                    selectedRoundIDs: sortedRoundIDs,
+                    selectedRoundIDs: selectedRoundIDs,
                     mode: mode,
+                    scopeKind: scopeKind,
                     templateID: template.id,
                     userInstruction: userInstruction,
-                    inputSnapshot: sourceText
+                    inputSnapshot: sourceText,
+                    activeRoundID: activeRoundID,
+                    activateAsRange: activateAsRange
                 )
                 onFinish(storedResult)
             } catch {
@@ -142,10 +210,11 @@ public final class ContextCompressionService: @unchecked Sendable {
                     repository: repository,
                     idGenerator: idGenerator,
                     now: now,
-                    conversationID: conversation.id,
+                    conversationID: conversationID,
                     state: state,
-                    selectedRoundIDs: sortedRoundIDs,
+                    selectedRoundIDs: selectedRoundIDs,
                     mode: mode,
+                    scopeKind: scopeKind,
                     templateID: template.id,
                     userInstruction: userInstruction,
                     inputSnapshot: sourceText,
@@ -174,9 +243,12 @@ public final class ContextCompressionService: @unchecked Sendable {
         state: ConversationCompressionState,
         selectedRoundIDs: [UUID],
         mode: CompressionInputMode,
+        scopeKind: CompressionVersionScopeKind,
         templateID: UUID,
         userInstruction: String,
-        inputSnapshot: String
+        inputSnapshot: String,
+        activeRoundID: UUID?,
+        activateAsRange: Bool
     ) throws -> ContextCompressionServiceResult {
         switch result {
         case let .success(success):
@@ -197,7 +269,7 @@ public final class ContextCompressionService: @unchecked Sendable {
                 idGenerator: idGenerator,
                 now: now,
                 conversationID: conversationID,
-                scopeKind: selectedRoundIDs.count == 1 ? .round : .range,
+                scopeKind: scopeKind,
                 operation: operation(for: mode),
                 status: .active,
                 content: success.output,
@@ -213,8 +285,8 @@ public final class ContextCompressionService: @unchecked Sendable {
                 state: state,
                 sourceRoundIDs: selectedRoundIDs,
                 edgeKind: mode == .system ? .systemCompress : .compress,
-                activeRoundID: selectedRoundIDs.count == 1 ? selectedRoundIDs[0] : nil,
-                activeRangeID: selectedRoundIDs.count > 1 ? version.id : nil
+                activeRoundID: activeRoundID,
+                activeRangeID: activateAsRange ? version.id : nil
             )
             return .success(version)
 
@@ -227,6 +299,7 @@ public final class ContextCompressionService: @unchecked Sendable {
                 state: state,
                 selectedRoundIDs: selectedRoundIDs,
                 mode: mode,
+                scopeKind: scopeKind,
                 templateID: templateID,
                 userInstruction: userInstruction,
                 inputSnapshot: inputSnapshot,
@@ -246,6 +319,7 @@ public final class ContextCompressionService: @unchecked Sendable {
         state: ConversationCompressionState,
         selectedRoundIDs: [UUID],
         mode: CompressionInputMode,
+        scopeKind: CompressionVersionScopeKind,
         templateID: UUID,
         userInstruction: String,
         inputSnapshot: String,
@@ -270,7 +344,7 @@ public final class ContextCompressionService: @unchecked Sendable {
             idGenerator: idGenerator,
             now: now,
             conversationID: conversationID,
-            scopeKind: selectedRoundIDs.count == 1 ? .round : .range,
+            scopeKind: scopeKind,
             operation: .failedCompression,
             status: .failed,
             content: "",
@@ -307,6 +381,7 @@ public final class ContextCompressionService: @unchecked Sendable {
         state: ConversationCompressionState,
         selectedRoundIDs: [UUID],
         mode: CompressionInputMode,
+        scopeKind: CompressionVersionScopeKind,
         templateID: UUID,
         userInstruction: String,
         inputSnapshot: String,
@@ -322,6 +397,7 @@ public final class ContextCompressionService: @unchecked Sendable {
             state: state,
             selectedRoundIDs: selectedRoundIDs,
             mode: mode,
+            scopeKind: scopeKind,
             templateID: templateID,
             userInstruction: userInstruction,
             inputSnapshot: inputSnapshot,

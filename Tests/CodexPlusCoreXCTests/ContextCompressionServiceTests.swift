@@ -269,6 +269,51 @@ final class ContextCompressionServiceTests: XCTestCase {
         XCTAssertEqual(repository.savedVersions.last?.content, "N")
     }
 
+    func testSystemCompressionCanUseExplicitAssembledInputSnapshot() throws {
+        let fixture = conversationFixture(["A", "B"])
+        let provider = ManualCompressionExecutionProvider()
+        let repository = MemoryContextCompressionRepository(
+            state: ConversationCompressionState(rounds: fixture.rounds, roundEvents: fixture.roundEvents)
+        )
+        let service = ContextCompressionService(
+            repository: repository,
+            executionProvider: provider,
+            idGenerator: IncrementingUUIDGenerator(start: 1_100).next,
+            now: { Date(timeIntervalSince1970: 7_000) }
+        )
+        let resultBox = CompressionServiceResultBox()
+
+        _ = try service.startAssembledSystemCompression(
+            conversation: fixture.conversation,
+            sourceText: "Compressed history\n\nNext task",
+            sourceRoundIDs: fixture.rounds.map(\.id),
+            template: compressionTemplate(),
+            workingDirectoryURL: URL(fileURLWithPath: "/tmp/project"),
+            onFinish: { resultBox.set($0) }
+        )
+
+        XCTAssertEqual(provider.requests.first?.sourceText, "Compressed history\n\nNext task")
+
+        provider.finish(
+            .success(
+                CompressionExecutionSuccess(
+                    output: "System compressed assembled input",
+                    providerName: "Codex CLI",
+                    providerModel: "gpt-test"
+                )
+            )
+        )
+
+        let savedVersion = try XCTUnwrap(repository.savedVersions.last)
+        XCTAssertEqual(savedVersion.scopeKind, .assembled)
+        XCTAssertEqual(savedVersion.operation, .systemCompression)
+        XCTAssertEqual(savedVersion.content, "System compressed assembled input")
+        XCTAssertEqual(repository.savedInputs.last?.inputSnapshot, "Compressed history\n\nNext task")
+        XCTAssertEqual(repository.savedSources.map(\.sourceID), fixture.rounds.map(\.id))
+        XCTAssertEqual(repository.activeVersions.last?.rangeID, savedVersion.id)
+        XCTAssertEqual(resultBox.value(), .success(savedVersion))
+    }
+
     private func conversationFixture(_ labels: [String]) -> (
         conversation: ConversationSession,
         rounds: [CompressionRound],
