@@ -76,6 +76,34 @@ public struct WorkbenchStatusBarState: Equatable, Sendable {
     }
 }
 
+public struct WorkbenchContextCompressionState: Equatable, Sendable {
+    public var conversationID: UUID?
+    public var rounds: [CompressionRound]
+    public var activeVersions: [CompressionActiveVersion]
+    public var budgetSnapshot: ContextBudgetSnapshot?
+    public var sendBlockReason: String?
+    public var assembledPreview: String
+    public var activeOperationDescription: String?
+
+    public init(
+        conversationID: UUID? = nil,
+        rounds: [CompressionRound] = [],
+        activeVersions: [CompressionActiveVersion] = [],
+        budgetSnapshot: ContextBudgetSnapshot? = nil,
+        sendBlockReason: String? = nil,
+        assembledPreview: String = "",
+        activeOperationDescription: String? = nil
+    ) {
+        self.conversationID = conversationID
+        self.rounds = rounds
+        self.activeVersions = activeVersions
+        self.budgetSnapshot = budgetSnapshot
+        self.sendBlockReason = sendBlockReason
+        self.assembledPreview = assembledPreview
+        self.activeOperationDescription = activeOperationDescription
+    }
+}
+
 public struct WorkbenchSnapshot: Equatable, Sendable {
     public var projectCards: [WorkbenchProjectCard]
     public var selectedDraftWorkspace: WorkbenchDraftWorkspaceSelection?
@@ -89,6 +117,7 @@ public struct WorkbenchSnapshot: Equatable, Sendable {
     public var pendingArchiveConfirmationConversationID: UUID?
     public var isShowingArchiveSearch: Bool
     public var openedArchiveConversation: ConversationSession?
+    public var compression: WorkbenchContextCompressionState
     public var error: WorkbenchErrorState?
 
     public init(
@@ -108,6 +137,7 @@ public struct WorkbenchSnapshot: Equatable, Sendable {
         pendingArchiveConfirmationConversationID: UUID? = nil,
         isShowingArchiveSearch: Bool = false,
         openedArchiveConversation: ConversationSession? = nil,
+        compression: WorkbenchContextCompressionState = WorkbenchContextCompressionState(),
         error: WorkbenchErrorState? = nil
     ) {
         self.projectCards = projectCards
@@ -122,6 +152,7 @@ public struct WorkbenchSnapshot: Equatable, Sendable {
         self.pendingArchiveConfirmationConversationID = pendingArchiveConfirmationConversationID
         self.isShowingArchiveSearch = isShowingArchiveSearch
         self.openedArchiveConversation = openedArchiveConversation
+        self.compression = compression
         self.error = error
     }
 }

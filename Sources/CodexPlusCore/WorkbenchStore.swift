@@ -9,6 +9,7 @@ public final class WorkbenchStore: ObservableObject {
     private let archiveService: ArchiveSearchService
     private let lifecycle: ConversationLifecycleService
     private let runOrchestrator: ConversationRunOrchestrator
+    private let contextBudgetProvider: (any ContextBudgetProvider)?
     private let defaultWorkspacePathProvider: () throws -> String
 
     private var workspaces: [WorkspaceSessionGroup]
@@ -19,6 +20,7 @@ public final class WorkbenchStore: ObservableObject {
     public init(
         repository: CodexPlusRepository,
         engine: ExecutionEngine,
+        contextBudgetProvider: (any ContextBudgetProvider)? = nil,
         defaultWorkspacePathProvider: @escaping () throws -> String = {
             try ConversationWorkspacePolicy.createDefaultWorkspaceDirectory()
         }
@@ -31,6 +33,7 @@ public final class WorkbenchStore: ObservableObject {
         )
         self.lifecycle = lifecycle
         self.runOrchestrator = ConversationRunOrchestrator(engine: engine)
+        self.contextBudgetProvider = contextBudgetProvider
         self.defaultWorkspacePathProvider = defaultWorkspacePathProvider
 
         let initialState = (try? lifecycle.loadInitialState()) ?? .empty
@@ -209,6 +212,50 @@ public final class WorkbenchStore: ObservableObject {
         }
 
         _ = stopRun(for: conversationID)
+    }
+
+    public func refreshCompressionBudget(
+        pendingPrompt: String,
+        reservedOutputTokens: Int = 4_096,
+        modelName: String? = nil
+    ) async {
+        guard let contextBudgetProvider,
+              let activeConversation = conversations.first(where: { $0.id == activeConversationID && !$0.isArchived }) else {
+            refreshSnapshot()
+            return
+        }
+
+        let assembledInput: String
+        do {
+            let compressionState = try repository.loadCompressionState(conversationID: activeConversation.id)
+            assembledInput = try ContextCompressionAssemblerV2.assemble(
+                ContextCompressionAssemblyInput(
+                    conversation: activeConversation,
+                    compressionState: compressionState,
+                    pendingUserPrompt: pendingPrompt
+                )
+            ).text
+        } catch {
+            setError(title: "无法测量压缩上下文", error: error)
+            return
+        }
+
+        let snapshot = await contextBudgetProvider.measure(
+            ContextBudgetRequest(
+                modelName: modelName,
+                assembledInput: assembledInput,
+                reservedOutputTokens: reservedOutputTokens,
+                workingDirectoryURL: URL(fileURLWithPath: activeConversation.workspacePath, isDirectory: true)
+            )
+        )
+
+        var compression = self.snapshot.compression
+        compression.conversationID = activeConversation.id
+        compression.budgetSnapshot = snapshot
+        compression.sendBlockReason = snapshot.state == .hardLimit ? "需要压缩后继续" : nil
+        compression.assembledPreview = assembledInput
+        self.snapshot.compression = compression
+        self.snapshot.canSubmitPrompt = activeConversation.state != .running && compression.sendBlockReason == nil
     }
 
     public func archiveConversation(_ id: UUID) -> ArchiveRequestResult {
@@ -662,6 +709,7 @@ public final class WorkbenchStore: ObservableObject {
         let selectedDraftWorkspace = activeConversation == nil ? activeWorkspace.map {
             WorkbenchDraftWorkspaceSelection(projectName: $0.displayName, projectPath: $0.path)
         } : nil
+        let compression = compressionSnapshotState(for: activeConversation)
 
         snapshot = WorkbenchSnapshot(
             projectCards: WorkbenchProjection.projectCards(
@@ -683,7 +731,54 @@ public final class WorkbenchStore: ObservableObject {
             pendingArchiveConfirmationConversationID: snapshot.pendingArchiveConfirmationConversationID,
             isShowingArchiveSearch: snapshot.isShowingArchiveSearch,
             openedArchiveConversation: snapshot.openedArchiveConversation,
+            compression: compression,
             error: snapshot.error
         )
+    }
+
+    private func compressionSnapshotState(
+        for conversation: ConversationSession?
+    ) -> WorkbenchContextCompressionState {
+        guard let conversation else {
+            return WorkbenchContextCompressionState()
+        }
+
+        do {
+            let compressionState = try repository.loadCompressionState(conversationID: conversation.id)
+            let assembledPreview = try ContextCompressionAssemblerV2.assemble(
+                ContextCompressionAssemblyInput(
+                    conversation: conversation,
+                    compressionState: compressionState
+                )
+            ).text
+            let canReusePreviousBudget = snapshot.compression.conversationID == conversation.id
+            return WorkbenchContextCompressionState(
+                conversationID: conversation.id,
+                rounds: compressionState.rounds,
+                activeVersions: compressionState.activeVersions,
+                budgetSnapshot: canReusePreviousBudget ? snapshot.compression.budgetSnapshot : nil,
+                sendBlockReason: canReusePreviousBudget ? snapshot.compression.sendBlockReason : nil,
+                assembledPreview: assembledPreview,
+                activeOperationDescription: activeOperationDescription(in: compressionState)
+            )
+        } catch {
+            return WorkbenchContextCompressionState(
+                sendBlockReason: "无法读取压缩状态",
+                activeOperationDescription: String(describing: error)
+            )
+        }
+    }
+
+    private func activeOperationDescription(
+        in state: ConversationCompressionState
+    ) -> String? {
+        let versionsByID = Dictionary(uniqueKeysWithValues: state.versions.map { ($0.id, $0) })
+        let operations = state.activeVersions.compactMap { active in
+            versionsByID[active.activeVersionID]?.operation.rawValue
+        }
+        guard !operations.isEmpty else {
+            return nil
+        }
+        return operations.joined(separator: ",")
     }
 }
