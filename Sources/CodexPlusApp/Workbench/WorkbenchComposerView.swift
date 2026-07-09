@@ -9,6 +9,7 @@ struct WorkbenchComposerView: View {
     @State private var promptOptimizationHandle: (any ExecutionHandle)?
     @State private var promptOptimizationID: UUID?
     @State private var systemCompressionHandle: (any ExecutionHandle)?
+    @State private var budgetRefreshTask: Task<Void, Never>?
     @State private var isOptimizingPrompt = false
     @State private var isSystemCompressing = false
     @State private var isShowingStopOptimizationConfirmation = false
@@ -35,6 +36,11 @@ struct WorkbenchComposerView: View {
                         .transition(.scale(scale: 0.92).combined(with: .opacity))
                 }
 
+                if let budgetSnapshot = snapshot.compression.budgetSnapshot {
+                    ContextBudgetBadge(snapshot: budgetSnapshot)
+                        .transition(.opacity.combined(with: .scale(scale: 0.94)))
+                }
+
                 composerButton
             }
             .animation(.spring(response: 0.24, dampingFraction: 0.78), value: shouldShowPromptOptimizationButton)
@@ -55,6 +61,7 @@ struct WorkbenchComposerView: View {
             if prompt.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
                 stopPromptOptimization()
             }
+            scheduleBudgetRefresh()
         }
         .onChange(of: snapshot.composerAction) {
             if snapshot.composerAction == .stop {
@@ -72,6 +79,10 @@ struct WorkbenchComposerView: View {
             if isOptimizingPrompt {
                 isFocused = false
             }
+        }
+        .onDisappear {
+            budgetRefreshTask?.cancel()
+            budgetRefreshTask = nil
         }
     }
 
@@ -289,6 +300,18 @@ struct WorkbenchComposerView: View {
         stopPromptOptimization()
         actions.send(trimmedPrompt)
         prompt = ""
+    }
+
+    private func scheduleBudgetRefresh() {
+        let trimmedPrompt = prompt.trimmingCharacters(in: .whitespacesAndNewlines)
+        budgetRefreshTask?.cancel()
+        budgetRefreshTask = Task {
+            try? await Task.sleep(nanoseconds: 350_000_000)
+            guard !Task.isCancelled else {
+                return
+            }
+            await actions.refreshCompressionBudget(trimmedPrompt)
+        }
     }
 
     private func optimizePrompt() {
