@@ -62,6 +62,49 @@ public final class ContextCompressionService: @unchecked Sendable {
     }
 
     @discardableResult
+    public func editRoundSegment(
+        conversation: ConversationSession,
+        roundID: UUID,
+        segmentKind: CompressionSegmentKind,
+        content: String
+    ) throws -> CompressionVersion {
+        let state = try repository.loadCompressionState(conversationID: conversation.id)
+        guard let round = state.rounds.first(where: { $0.id == roundID }) else {
+            throw ContextCompressionServiceError.roundNotFound(roundID)
+        }
+
+        let eventsByID = Dictionary(uniqueKeysWithValues: conversation.events.map { ($0.id, $0) })
+        let roundEvents = state.roundEvents.filter { $0.roundID == round.id }
+        let editedContent = roundContent(
+            round: round,
+            roundEvents: roundEvents,
+            eventsByID: eventsByID,
+            replacing: segmentKind,
+            with: content
+        )
+
+        let version = makeVersion(
+            conversationID: conversation.id,
+            scopeKind: .round,
+            operation: .manualEdit,
+            status: .active,
+            content: editedContent,
+            templateID: nil,
+            compressionInputID: nil,
+            errorMessage: nil
+        )
+        try saveVersion(
+            version,
+            state: state,
+            sourceRoundIDs: [roundID],
+            edgeKind: .edit,
+            activeRoundID: roundID,
+            activeRangeID: nil
+        )
+        return version
+    }
+
+    @discardableResult
     public func excludeRound(
         conversation: ConversationSession,
         roundID: UUID
@@ -740,6 +783,35 @@ public final class ContextCompressionService: @unchecked Sendable {
             return parts.joined(separator: "\n\n")
         }
         return eventsByID[round.userEventID]?.modelInputText ?? ""
+    }
+
+    private func roundContent(
+        round: CompressionRound,
+        roundEvents: [CompressionRoundEvent],
+        eventsByID: [UUID: ConversationDisplayEvent],
+        replacing segmentKind: CompressionSegmentKind,
+        with content: String
+    ) -> String {
+        let orderedEvents = roundEvents.sorted {
+            if $0.ordinal != $1.ordinal {
+                return $0.ordinal < $1.ordinal
+            }
+            return $0.id.uuidString < $1.id.uuidString
+        }
+        let parts = orderedEvents.map { roundEvent in
+            if roundEvent.segmentKind == segmentKind {
+                return content
+            }
+            return eventsByID[roundEvent.eventID]?.modelInputText ?? ""
+        }
+        if !parts.isEmpty {
+            return parts.joined(separator: "\n\n")
+        }
+        if segmentKind == .user {
+            return content
+        }
+        return [eventsByID[round.userEventID]?.modelInputText ?? "", content]
+            .joined(separator: "\n\n")
     }
 
     private static func operation(for mode: CompressionInputMode) -> CompressionVersionOperation {

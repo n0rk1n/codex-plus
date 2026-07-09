@@ -67,6 +67,37 @@ final class ContextCompressionServiceTests: XCTestCase {
         XCTAssertEqual(repository.savedLineageEdges.last?.edgeKind, .edit)
     }
 
+    func testManualSegmentEditReplacesOnlySelectedSegmentInsideRoundVersion() throws {
+        let fixture = conversationFixture(["A"])
+        let repository = MemoryContextCompressionRepository(
+            state: ConversationCompressionState(rounds: fixture.rounds, roundEvents: fixture.roundEvents)
+        )
+        let service = ContextCompressionService(
+            repository: repository,
+            executionProvider: ManualCompressionExecutionProvider(),
+            idGenerator: IncrementingUUIDGenerator(start: 650).next,
+            now: { Date(timeIntervalSince1970: 2_500) }
+        )
+
+        let userEdited = try service.editRoundSegment(
+            conversation: fixture.conversation,
+            roundID: fixture.rounds[0].id,
+            segmentKind: .user,
+            content: "User A edited"
+        )
+
+        XCTAssertEqual(userEdited.content, "User A edited\n\nAssistant A")
+
+        let assistantEdited = try service.editRoundSegment(
+            conversation: fixture.conversation,
+            roundID: fixture.rounds[0].id,
+            segmentKind: .assistant,
+            content: "Assistant A edited"
+        )
+
+        XCTAssertEqual(assistantEdited.content, "User A\n\nAssistant A edited")
+    }
+
     func testExcludeRoundCreatesNonEmittingActiveVersion() throws {
         let fixture = conversationFixture(["A", "B"])
         let repository = MemoryContextCompressionRepository(

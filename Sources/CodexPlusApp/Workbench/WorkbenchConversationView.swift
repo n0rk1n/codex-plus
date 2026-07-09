@@ -7,6 +7,9 @@ struct WorkbenchConversationView: View {
 
     @State private var expandedTechnicalGroupIDs = Set<UUID>()
     @State private var selectedCompressionRoundID: UUID?
+    @State private var selectedCompressionRoundIDs = Set<UUID>()
+    @State private var compressionSelectionAnchorRoundID: UUID?
+    @State private var editingCompressionDraft: CompressionEditDraft?
 
     var body: some View {
         LiquidGlassContainer(cornerRadius: WorkbenchMetrics.conversationCornerRadius) {
@@ -47,6 +50,20 @@ struct WorkbenchConversationView: View {
             Divider()
                 .overlay(CodexColors.surfaceDivider)
 
+            if !selectedCompressionRoundIDs.isEmpty {
+                CompressionRangeActionBar(
+                    selectedCount: selectedOrderedRoundIDs.count,
+                    canEditSegment: selectedOrderedRoundIDs.count == 1,
+                    onEdit: openCompressionEditDialog,
+                    onDefaultCompress: compressSelectedRounds,
+                    onExclude: excludeSelectedRounds,
+                    onClear: clearCompressionSelection
+                )
+
+                Divider()
+                    .overlay(CodexColors.surfaceDivider)
+            }
+
             HStack(spacing: 0) {
                 ScrollViewReader { proxy in
                     ScrollView {
@@ -78,6 +95,20 @@ struct WorkbenchConversationView: View {
                     .transition(.move(edge: .trailing).combined(with: .opacity))
                 }
             }
+        }
+        .sheet(item: $editingCompressionDraft) { draft in
+            CompressionEditDialog(
+                roundID: draft.roundID,
+                initialText: draft.initialText,
+                onCancel: {
+                    editingCompressionDraft = nil
+                },
+                onSave: { segmentKind, content in
+                    actions.editCompressionSegment(draft.roundID, segmentKind, content)
+                    editingCompressionDraft = nil
+                    selectedCompressionRoundID = draft.roundID
+                }
+            )
         }
     }
 
@@ -134,6 +165,9 @@ struct WorkbenchConversationView: View {
                     event: event,
                     compressionPresentation: snapshot.compression.timelinePresentation.rowsByEventID[event.id]
                 )
+                .onTapGesture {
+                    selectCompressionRound(containing: event.id)
+                }
             }
         case let .technicalGroup(id, events):
             ConversationTechnicalEventGroupRow(
@@ -155,6 +189,95 @@ struct WorkbenchConversationView: View {
         return snapshot.compression.timelinePresentation.rounds.first { $0.roundID == row.roundID }
     }
 
+    private var selectedOrderedRoundIDs: [UUID] {
+        snapshot.compression.timelinePresentation.rounds
+            .map(\.roundID)
+            .filter { selectedCompressionRoundIDs.contains($0) }
+    }
+
+    private func selectCompressionRound(containing eventID: UUID) {
+        guard let round = roundPresentation(for: eventID) else {
+            return
+        }
+
+        selectedCompressionRoundID = round.roundID
+        if let anchor = compressionSelectionAnchorRoundID,
+           anchor != round.roundID,
+           let range = contiguousRoundIDs(from: anchor, to: round.roundID) {
+            selectedCompressionRoundIDs = Set(range)
+        } else {
+            compressionSelectionAnchorRoundID = round.roundID
+            selectedCompressionRoundIDs = [round.roundID]
+        }
+    }
+
+    private func contiguousRoundIDs(from first: UUID, to second: UUID) -> [UUID]? {
+        let roundIDs = snapshot.compression.timelinePresentation.rounds.map(\.roundID)
+        guard let firstIndex = roundIDs.firstIndex(of: first),
+              let secondIndex = roundIDs.firstIndex(of: second) else {
+            return nil
+        }
+        let lower = min(firstIndex, secondIndex)
+        let upper = max(firstIndex, secondIndex)
+        return Array(roundIDs[lower...upper])
+    }
+
+    private func clearCompressionSelection() {
+        selectedCompressionRoundIDs.removeAll()
+        compressionSelectionAnchorRoundID = nil
+    }
+
+    private func compressSelectedRounds() {
+        let roundIDs = selectedOrderedRoundIDs
+        guard !roundIDs.isEmpty else {
+            return
+        }
+        _ = actions.compressSelectedRounds(roundIDs)
+        clearCompressionSelection()
+    }
+
+    private func excludeSelectedRounds() {
+        for roundID in selectedOrderedRoundIDs {
+            actions.excludeCompressionRound(roundID)
+        }
+        clearCompressionSelection()
+    }
+
+    private func openCompressionEditDialog() {
+        guard let roundID = selectedOrderedRoundIDs.first,
+              selectedOrderedRoundIDs.count == 1,
+              let conversation = snapshot.activeConversation else {
+            return
+        }
+        editingCompressionDraft = CompressionEditDraft(
+            roundID: roundID,
+            initialText: segmentText(roundID: roundID, segmentKind: .assistant, conversation: conversation)
+        )
+    }
+
+    private func segmentText(
+        roundID: UUID,
+        segmentKind: CompressionSegmentKind,
+        conversation: ConversationSession
+    ) -> String {
+        let eventIDs = snapshot.compression.timelinePresentation.rounds
+            .first { $0.roundID == roundID }?
+            .eventIDs ?? []
+        for eventID in eventIDs {
+            guard let event = conversation.events.first(where: { $0.id == eventID }) else {
+                continue
+            }
+            switch (segmentKind, event) {
+            case let (.user, .userPrompt(_, text)),
+                 let (.assistant, .assistantMessage(_, text)):
+                return text
+            default:
+                continue
+            }
+        }
+        return ""
+    }
+
     private func scrollToLatest(conversation: ConversationSession, using proxy: ScrollViewProxy) {
         guard let latestID = ConversationTimelineBuilder.items(from: conversation.events).last?.id else {
             return
@@ -170,4 +293,10 @@ struct WorkbenchConversationView: View {
             expandedTechnicalGroupIDs.insert(id)
         }
     }
+}
+
+private struct CompressionEditDraft: Identifiable {
+    var id: UUID { roundID }
+    var roundID: UUID
+    var initialText: String
 }

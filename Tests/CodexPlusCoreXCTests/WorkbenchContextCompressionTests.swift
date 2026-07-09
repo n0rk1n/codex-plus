@@ -251,6 +251,80 @@ final class WorkbenchContextCompressionTests: XCTestCase {
         XCTAssertEqual(compressionProvider.requests.first?.sourceText, "Compressed A\n\nNext task")
     }
 
+    @MainActor
+    func testManualSegmentEditActionRefreshesTimelinePresentation() throws {
+        let database = try temporaryDatabase()
+        try CodexPlusSchema.migrate(database)
+        let repository = SQLiteCodexPlusRepository(database: database)
+        let fixture = try saveCompressedConversation(repository: repository)
+        let compressionService = ContextCompressionService(
+            repository: repository,
+            executionProvider: WorkbenchManualCompressionExecutionProvider(),
+            idGenerator: IncrementingUUIDGenerator(start: 500).next,
+            now: { Date(timeIntervalSince1970: 30) }
+        )
+        let store = WorkbenchStore(
+            repository: repository,
+            engine: WorkbenchCompressionManualExecutionEngine(),
+            contextCompressionService: compressionService
+        )
+
+        store.editCompressionSegment(roundID: fixture.roundID, segmentKind: .assistant, content: "Only useful answer")
+
+        XCTAssertEqual(store.snapshot.compression.assembledPreview, "User A\n\nOnly useful answer")
+        XCTAssertEqual(store.snapshot.compression.timelinePresentation.rounds.first?.status?.label, "已修订")
+    }
+
+    @MainActor
+    func testExcludeCompressionRoundActionRefreshesDimmedTimelinePresentation() throws {
+        let database = try temporaryDatabase()
+        try CodexPlusSchema.migrate(database)
+        let repository = SQLiteCodexPlusRepository(database: database)
+        let fixture = try saveCompressedConversation(repository: repository)
+        let compressionService = ContextCompressionService(
+            repository: repository,
+            executionProvider: WorkbenchManualCompressionExecutionProvider(),
+            idGenerator: IncrementingUUIDGenerator(start: 520).next,
+            now: { Date(timeIntervalSince1970: 31) }
+        )
+        let store = WorkbenchStore(
+            repository: repository,
+            engine: WorkbenchCompressionManualExecutionEngine(),
+            contextCompressionService: compressionService
+        )
+
+        store.excludeCompressionRound(roundID: fixture.roundID)
+
+        XCTAssertTrue(store.snapshot.compression.timelinePresentation.rounds.first?.isDimmed == true)
+        XCTAssertEqual(store.snapshot.compression.timelinePresentation.rounds.first?.status?.label, "已排除模型上下文")
+    }
+
+    @MainActor
+    func testDefaultRangeCompressionActionUsesSelectedRoundsAsProviderInput() throws {
+        let database = try temporaryDatabase()
+        try CodexPlusSchema.migrate(database)
+        let repository = SQLiteCodexPlusRepository(database: database)
+        let fixture = try saveCompressedConversation(repository: repository)
+        let compressionProvider = WorkbenchManualCompressionExecutionProvider()
+        let compressionService = ContextCompressionService(
+            repository: repository,
+            executionProvider: compressionProvider,
+            idGenerator: IncrementingUUIDGenerator(start: 540).next,
+            now: { Date(timeIntervalSince1970: 32) }
+        )
+        let store = WorkbenchStore(
+            repository: repository,
+            engine: WorkbenchCompressionManualExecutionEngine(),
+            contextCompressionService: compressionService
+        )
+
+        let handle = store.compressSelectedRounds(roundIDs: [fixture.roundID])
+
+        XCTAssertNotNil(handle)
+        XCTAssertEqual(compressionProvider.requests.first?.sourceText, "Compressed A")
+        XCTAssertEqual(compressionProvider.requests.first?.userInstruction, "")
+    }
+
     private func saveCompressedConversation(
         repository: SQLiteCodexPlusRepository
     ) throws -> (conversationID: UUID, roundID: UUID, versionID: UUID) {

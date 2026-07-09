@@ -20,6 +20,9 @@ struct ProjectStripActions {
 
 struct ConversationActions {
     let archiveConversation: (UUID) -> Void
+    let editCompressionSegment: (UUID, CompressionSegmentKind, String) -> Void
+    let excludeCompressionRound: (UUID) -> Void
+    let compressSelectedRounds: ([UUID]) -> (any ExecutionHandle)?
 }
 
 struct ComposerActions {

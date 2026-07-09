@@ -314,6 +314,77 @@ public final class WorkbenchStore: ObservableObject {
         }
     }
 
+    public func editCompressionSegment(
+        roundID: UUID,
+        segmentKind: CompressionSegmentKind,
+        content: String
+    ) {
+        guard let contextCompressionService,
+              let activeConversation = conversations.first(where: { $0.id == activeConversationID && !$0.isArchived }) else {
+            return
+        }
+
+        do {
+            try contextCompressionService.editRoundSegment(
+                conversation: activeConversation,
+                roundID: roundID,
+                segmentKind: segmentKind,
+                content: content
+            )
+            refreshSnapshot()
+        } catch {
+            setError(title: "无法保存压缩编辑", error: error)
+        }
+    }
+
+    public func excludeCompressionRound(roundID: UUID) {
+        guard let contextCompressionService,
+              let activeConversation = conversations.first(where: { $0.id == activeConversationID && !$0.isArchived }) else {
+            return
+        }
+
+        do {
+            try contextCompressionService.excludeRound(
+                conversation: activeConversation,
+                roundID: roundID
+            )
+            refreshSnapshot()
+        } catch {
+            setError(title: "无法排除上下文", error: error)
+        }
+    }
+
+    public func compressSelectedRounds(
+        roundIDs: [UUID],
+        userInstruction: String = ""
+    ) -> (any ExecutionHandle)? {
+        guard let contextCompressionService,
+              let activeConversation = conversations.first(where: { $0.id == activeConversationID && !$0.isArchived }) else {
+            return nil
+        }
+
+        do {
+            let template = try contextCompressionTemplate()
+            return try contextCompressionService.startCompression(
+                conversation: activeConversation,
+                roundIDs: roundIDs,
+                mode: .defaultTemplate,
+                template: template,
+                userInstruction: userInstruction,
+                workingDirectoryURL: URL(fileURLWithPath: activeConversation.workspacePath, isDirectory: true),
+                permissionMode: activeConversation.permissionMode,
+                onFinish: { [weak self] _ in
+                    Task { @MainActor in
+                        self?.refreshSnapshot()
+                    }
+                }
+            )
+        } catch {
+            setError(title: "无法执行上下文压缩", error: error)
+            return nil
+        }
+    }
+
     public func archiveConversation(_ id: UUID) -> ArchiveRequestResult {
         guard let conversation = conversations.first(where: { $0.id == id }) else {
             return .notFound

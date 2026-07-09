@@ -112,7 +112,10 @@ struct WorkbenchView: View {
                 selectConversation: { store.selectConversation($0) }
             ),
             conversation: ConversationActions(
-                archiveConversation: { _ = store.archiveConversation($0) }
+                archiveConversation: { _ = store.archiveConversation($0) },
+                editCompressionSegment: { store.editCompressionSegment(roundID: $0, segmentKind: $1, content: $2) },
+                excludeCompressionRound: { store.excludeCompressionRound(roundID: $0) },
+                compressSelectedRounds: { store.compressSelectedRounds(roundIDs: $0) }
             ),
             composer: ComposerActions(
                 send: { store.submitPrompt($0) },
