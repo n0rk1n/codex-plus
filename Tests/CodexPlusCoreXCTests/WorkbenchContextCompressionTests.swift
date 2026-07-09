@@ -222,6 +222,31 @@ final class WorkbenchContextCompressionTests: XCTestCase {
         XCTAssertTrue(store.snapshot.canSubmitPrompt)
     }
 
+    @MainActor
+    func testSystemCompressActiveConversationUsesAssembledPreviewAndPendingPrompt() throws {
+        let database = try temporaryDatabase()
+        try CodexPlusSchema.migrate(database)
+        let repository = SQLiteCodexPlusRepository(database: database)
+        _ = try saveCompressedConversation(repository: repository)
+        let compressionProvider = WorkbenchManualCompressionExecutionProvider()
+        let compressionService = ContextCompressionService(
+            repository: repository,
+            executionProvider: compressionProvider,
+            idGenerator: IncrementingUUIDGenerator(start: 400).next,
+            now: { Date(timeIntervalSince1970: 20) }
+        )
+        let store = WorkbenchStore(
+            repository: repository,
+            engine: WorkbenchCompressionManualExecutionEngine(),
+            contextCompressionService: compressionService
+        )
+
+        let handle = store.systemCompressActiveConversation(pendingPrompt: "Next task")
+
+        XCTAssertNotNil(handle)
+        XCTAssertEqual(compressionProvider.requests.first?.sourceText, "Compressed A\n\nNext task")
+    }
+
     private func saveCompressedConversation(
         repository: SQLiteCodexPlusRepository
     ) throws -> (conversationID: UUID, roundID: UUID, versionID: UUID) {
@@ -311,6 +336,43 @@ private final class WorkbenchCompressionManualExecutionEngine: ExecutionEngine, 
 
 private final class WorkbenchCompressionManualExecutionHandle: ExecutionHandle, @unchecked Sendable {
     func stop() {}
+}
+
+private final class WorkbenchManualCompressionExecutionProvider: CompressionExecutionProvider, @unchecked Sendable {
+    final class Handle: ExecutionHandle, @unchecked Sendable {
+        func stop() {}
+    }
+
+    var requests: [CompressionExecutionRequest] = []
+    private var onFinish: (@Sendable (CompressionExecutionResult) -> Void)?
+
+    func startCompression(
+        request: CompressionExecutionRequest,
+        onFinish: @escaping @Sendable (CompressionExecutionResult) -> Void
+    ) -> (any ExecutionHandle)? {
+        requests.append(request)
+        self.onFinish = onFinish
+        return Handle()
+    }
+
+    func finish(_ result: CompressionExecutionResult) {
+        onFinish?(result)
+    }
+}
+
+private final class IncrementingUUIDGenerator: @unchecked Sendable {
+    private var value: Int
+
+    init(start: Int) {
+        self.value = start
+    }
+
+    func next() -> UUID {
+        defer {
+            value += 1
+        }
+        return UUID(uuidString: String(format: "00000000-0000-0000-0000-%012d", value))!
+    }
 }
 
 private final class WorkbenchFixedBudgetProvider: ContextBudgetProvider, @unchecked Sendable {

@@ -10,6 +10,7 @@ public final class WorkbenchStore: ObservableObject {
     private let lifecycle: ConversationLifecycleService
     private let runOrchestrator: ConversationRunOrchestrator
     private let contextBudgetProvider: (any ContextBudgetProvider)?
+    private let contextCompressionService: ContextCompressionService?
     private let defaultWorkspacePathProvider: () throws -> String
 
     private var workspaces: [WorkspaceSessionGroup]
@@ -21,6 +22,7 @@ public final class WorkbenchStore: ObservableObject {
         repository: CodexPlusRepository,
         engine: ExecutionEngine,
         contextBudgetProvider: (any ContextBudgetProvider)? = nil,
+        contextCompressionService: ContextCompressionService? = nil,
         defaultWorkspacePathProvider: @escaping () throws -> String = {
             try ConversationWorkspacePolicy.createDefaultWorkspaceDirectory()
         }
@@ -34,6 +36,7 @@ public final class WorkbenchStore: ObservableObject {
         self.lifecycle = lifecycle
         self.runOrchestrator = ConversationRunOrchestrator(engine: engine)
         self.contextBudgetProvider = contextBudgetProvider
+        self.contextCompressionService = contextCompressionService
         self.defaultWorkspacePathProvider = defaultWorkspacePathProvider
 
         let initialState = (try? lifecycle.loadInitialState()) ?? .empty
@@ -256,6 +259,59 @@ public final class WorkbenchStore: ObservableObject {
         compression.assembledPreview = assembledInput
         self.snapshot.compression = compression
         self.snapshot.canSubmitPrompt = activeConversation.state != .running && compression.sendBlockReason == nil
+    }
+
+    public func systemCompressActiveConversation(
+        pendingPrompt: String
+    ) -> (any ExecutionHandle)? {
+        guard let contextCompressionService,
+              let activeConversation = conversations.first(where: { $0.id == activeConversationID && !$0.isArchived }) else {
+            return nil
+        }
+
+        do {
+            let compressionState = try repository.loadCompressionState(conversationID: activeConversation.id)
+            let sourceText = try ContextCompressionAssemblerV2.assemble(
+                ContextCompressionAssemblyInput(
+                    conversation: activeConversation,
+                    compressionState: compressionState,
+                    pendingUserPrompt: pendingPrompt
+                )
+            ).text
+            let sourceRoundIDs = compressionState.rounds
+                .sorted {
+                    if $0.roundIndex != $1.roundIndex {
+                        return $0.roundIndex < $1.roundIndex
+                    }
+                    return $0.id.uuidString < $1.id.uuidString
+                }
+                .map(\.id)
+            let template = try contextCompressionTemplate()
+            return try contextCompressionService.startAssembledSystemCompression(
+                conversation: activeConversation,
+                sourceText: sourceText,
+                sourceRoundIDs: sourceRoundIDs,
+                template: template,
+                workingDirectoryURL: URL(fileURLWithPath: activeConversation.workspacePath, isDirectory: true),
+                permissionMode: activeConversation.permissionMode,
+                onFinish: { [weak self] result in
+                    Task { @MainActor in
+                        guard let self else {
+                            return
+                        }
+                        if case .success = result {
+                            self.snapshot.compression.budgetSnapshot = nil
+                            self.snapshot.compression.sendBlockReason = nil
+                            self.snapshot.canSubmitPrompt = activeConversation.state != .running
+                        }
+                        self.refreshSnapshot()
+                    }
+                }
+            )
+        } catch {
+            setError(title: "无法执行系统压缩", error: error)
+            return nil
+        }
     }
 
     public func archiveConversation(_ id: UUID) -> ArchiveRequestResult {
@@ -780,5 +836,21 @@ public final class WorkbenchStore: ObservableObject {
             return nil
         }
         return operations.joined(separator: ",")
+    }
+
+    private func contextCompressionTemplate() throws -> PromptTemplate {
+        let builtIns = PromptTemplateLibrary.builtInTemplates()
+        let templates = builtIns + ((try? repository.loadPromptTemplates()) ?? [])
+        let defaults = (try? repository.loadDefaultPromptTemplateIDs()) ?? [:]
+        if let defaultID = defaults[.conversationContextCompression],
+           let template = templates.first(where: { $0.id == defaultID && $0.type == .conversationContextCompression }) {
+            return template
+        }
+
+        if let builtIn = builtIns.first(where: { $0.type == .conversationContextCompression }) {
+            return builtIn
+        }
+
+        throw WorkbenchDomainError.persistenceFailed("Missing context compression prompt template.")
     }
 }
