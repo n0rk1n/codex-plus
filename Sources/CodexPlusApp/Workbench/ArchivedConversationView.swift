@@ -229,8 +229,6 @@ struct ArchivedConversationView: View {
                     toggleTechnicalGroup(id)
                 }
             )
-        case let .compressionSnapshot(snapshot, sourceEvents):
-            ConversationCompressionSnapshotRow(snapshot: snapshot, sourceEvents: sourceEvents)
         }
     }
 

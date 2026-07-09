@@ -177,8 +177,6 @@ struct WorkbenchConversationView: View {
                     toggleTechnicalGroup(id)
                 }
             )
-        case let .compressionSnapshot(snapshot, sourceEvents):
-            ConversationCompressionSnapshotRow(snapshot: snapshot, sourceEvents: sourceEvents)
         }
     }
 
