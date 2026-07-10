@@ -116,6 +116,7 @@ public struct CompressionJoinedRelationshipPresentation: Equatable, Sendable {
 public struct CompressionVersionHistoryPresentation: Equatable, Identifiable, Sendable {
     public var id: UUID
     public var label: String
+    public var versionOrderLabel: String
     public var statusLabel: String
     public var operationLabel: String
     public var sourceRoundIDs: [UUID]
@@ -130,6 +131,7 @@ public struct CompressionVersionHistoryPresentation: Equatable, Identifiable, Se
     public init(
         id: UUID,
         label: String,
+        versionOrderLabel: String,
         statusLabel: String,
         operationLabel: String,
         sourceRoundIDs: [UUID],
@@ -143,6 +145,7 @@ public struct CompressionVersionHistoryPresentation: Equatable, Identifiable, Se
     ) {
         self.id = id
         self.label = label
+        self.versionOrderLabel = versionOrderLabel
         self.statusLabel = statusLabel
         self.operationLabel = operationLabel
         self.sourceRoundIDs = sourceRoundIDs
@@ -331,14 +334,17 @@ public enum ConversationTimelineBuilder {
         let sourcesByVersionID = Dictionary(grouping: compressionState.versionSources, by: \.versionID)
         let inputsByID = Dictionary(uniqueKeysWithValues: compressionState.inputs.map { ($0.id, $0) })
 
-        return compressionState.versions
+        let sortedVersions = compressionState.versions
             .sorted {
                 if $0.createdAt != $1.createdAt {
                     return $0.createdAt < $1.createdAt
                 }
                 return $0.id.uuidString < $1.id.uuidString
             }
-            .map { version in
+
+        return sortedVersions
+            .enumerated()
+            .map { index, version in
                 let sources = sourcesByVersionID[version.id, default: []]
                     .filter { $0.sourceKind == .round }
                     .sorted {
@@ -351,6 +357,7 @@ public enum ConversationTimelineBuilder {
                 return CompressionVersionHistoryPresentation(
                     id: version.id,
                     label: historyLabel(for: version),
+                    versionOrderLabel: "V\(index + 1)",
                     statusLabel: historyStatusLabel(for: version.status),
                     operationLabel: operationLabel(for: version.operation),
                     sourceRoundIDs: sources.map(\.sourceID),

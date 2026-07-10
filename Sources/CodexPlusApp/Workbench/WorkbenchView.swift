@@ -8,6 +8,9 @@ struct WorkbenchView: View {
     let promptOptimizationService: PromptOptimizationService
     let onOpenSettings: () -> Void
 
+    @State private var infoNotice: WorkbenchInfoNotice?
+    private let infoNoticeTopOffset: CGFloat = 18
+
     var body: some View {
         LiquidGlassScene(padding: 0, minWidth: 980, minHeight: 620) {
             VStack(spacing: WorkbenchMetrics.verticalSpacing) {
@@ -62,6 +65,9 @@ struct WorkbenchView: View {
                 }
             }
             .padding(WorkbenchMetrics.scenePadding)
+            .overlay(alignment: .top) {
+                infoNoticeArea
+            }
             .alert("终止任务后归档？", isPresented: pendingArchiveConfirmationBinding) {
                 Button("取消", role: .cancel) {
                     store.cancelArchiveConfirmation()
@@ -114,6 +120,8 @@ struct WorkbenchView: View {
             conversation: ConversationActions(
                 archiveConversation: { _ = store.archiveConversation($0) },
                 editCompressionSegment: { store.editCompressionSegment(roundID: $0, segmentKind: $1, content: $2) },
+                editCompressionRound: { store.editCompressionRound(roundID: $0, userContent: $1, assistantContent: $2) },
+                editCompressionRoundContent: { store.editCompressionRoundContent(roundID: $0, content: $1) },
                 excludeCompressionRound: { store.excludeCompressionRound(roundID: $0) },
                 restoreCompressionOriginal: { store.restoreCompressionOriginal(roundID: $0) },
                 rollbackCompressionVersion: { store.rollbackCompressionVersion(versionID: $0) },
@@ -135,9 +143,46 @@ struct WorkbenchView: View {
                 open: { store.openArchive($0) },
                 delete: { store.deleteArchive($0) },
                 restore: { store.restoreArchive($0) },
-                jumpToRestored: { store.selectConversation($0) }
+                showRestoredNotice: { showRestoredNotice(for: $0) }
             )
         )
+    }
+
+    @ViewBuilder
+    private var infoNoticeArea: some View {
+        if let infoNotice {
+            infoNoticeView(infoNotice)
+                .padding(.top, infoNoticeTopOffset)
+                .frame(maxWidth: .infinity, alignment: .center)
+                .transition(.opacity.combined(with: .scale(scale: 0.98)))
+                .zIndex(1)
+        }
+    }
+
+    private func infoNoticeView(_ notice: WorkbenchInfoNotice) -> some View {
+        LiquidGlassContainer(cornerRadius: CodexRadius.badge) {
+            HStack(spacing: 4) {
+                Text(notice.message)
+                    .foregroundStyle(.primary)
+
+                if let actionTitle = notice.actionTitle, notice.conversationID != nil {
+                    CodexButton(rule: .inlineTextLink, action: {
+                        handleInfoNoticeAction(notice)
+                    }) {
+                        Text(actionTitle)
+                            .foregroundStyle(CodexColors.stateRunning.opacity(0.72))
+                    }
+                }
+            }
+            .font(CodexTypography.restoreNoticeAction)
+            .padding(.horizontal, CodexSpacing.compactInline)
+            .padding(.vertical, CodexSpacing.tightInline)
+        }
+        .overlay(
+            RoundedRectangle(cornerRadius: CodexRadius.badge, style: .continuous)
+                .stroke(CodexColors.surfaceStroke, lineWidth: 1)
+        )
+        .shadow(color: .black.opacity(0.25), radius: 18, y: 8)
     }
 
     private var pendingArchiveConfirmationBinding: Binding<Bool> {
@@ -149,6 +194,26 @@ struct WorkbenchView: View {
                 }
             }
         )
+    }
+
+    private func showRestoredNotice(for conversationID: UUID) {
+        showInfoNotice(.restored(conversationID: conversationID))
+    }
+
+    private func showInfoNotice(_ notice: WorkbenchInfoNotice) {
+        infoNotice = notice
+        DispatchQueue.main.asyncAfter(deadline: .now() + 5) {
+            if infoNotice?.id == notice.id {
+                infoNotice = nil
+            }
+        }
+    }
+
+    private func handleInfoNoticeAction(_ notice: WorkbenchInfoNotice) {
+        if let conversationID = notice.conversationID {
+            store.selectConversation(conversationID)
+        }
+        infoNotice = nil
     }
 
     private func pickWorkspace() {
@@ -193,5 +258,20 @@ struct WorkbenchView: View {
 
     private var activeProjectPath: String? {
         store.snapshot.selectedDraftWorkspace?.projectPath ?? store.snapshot.projectCards.first { $0.isActive }?.projectPath
+    }
+
+    private struct WorkbenchInfoNotice: Equatable, Identifiable {
+        let id = UUID()
+        let message: String
+        let actionTitle: String?
+        let conversationID: UUID?
+
+        static func restored(conversationID: UUID) -> WorkbenchInfoNotice {
+            WorkbenchInfoNotice(
+                message: "已经恢复，是否",
+                actionTitle: "跳转对话",
+                conversationID: conversationID
+            )
+        }
     }
 }

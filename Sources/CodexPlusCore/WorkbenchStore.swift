@@ -337,6 +337,50 @@ public final class WorkbenchStore: ObservableObject {
         }
     }
 
+    public func editCompressionRound(
+        roundID: UUID,
+        userContent: String,
+        assistantContent: String
+    ) {
+        guard let contextCompressionService,
+              let activeConversation = conversations.first(where: { $0.id == activeConversationID && !$0.isArchived }) else {
+            return
+        }
+
+        do {
+            try contextCompressionService.editRoundSegments(
+                conversation: activeConversation,
+                roundID: roundID,
+                userContent: userContent,
+                assistantContent: assistantContent
+            )
+            refreshSnapshot()
+        } catch {
+            setError(title: "无法保存压缩编辑", error: error)
+        }
+    }
+
+    public func editCompressionRoundContent(
+        roundID: UUID,
+        content: String
+    ) {
+        guard let contextCompressionService,
+              let activeConversation = conversations.first(where: { $0.id == activeConversationID && !$0.isArchived }) else {
+            return
+        }
+
+        do {
+            try contextCompressionService.editRound(
+                conversation: activeConversation,
+                roundID: roundID,
+                content: content
+            )
+            refreshSnapshot()
+        } catch {
+            setError(title: "无法保存压缩编辑", error: error)
+        }
+    }
+
     public func excludeCompressionRound(roundID: UUID) {
         guard let contextCompressionService,
               let activeConversation = conversations.first(where: { $0.id == activeConversationID && !$0.isArchived }) else {

@@ -1965,6 +1965,9 @@ func runLegacyMainActorTests() {
     let archiveViewPath = FileManager.default.currentDirectoryPath
         + "/Sources/CodexPlusApp/Workbench/ArchivedConversationView.swift"
     let archiveViewSource = (try? String(contentsOfFile: archiveViewPath, encoding: .utf8)) ?? ""
+    let workbenchViewPath = FileManager.default.currentDirectoryPath
+        + "/Sources/CodexPlusApp/Workbench/WorkbenchView.swift"
+    let workbenchViewSource = (try? String(contentsOfFile: workbenchViewPath, encoding: .utf8)) ?? ""
     if let actionRange = archiveViewSource.range(of: "CodexButton(rule: .rowRectangle, action: {"),
        let buttonEndRange = archiveViewSource[actionRange.upperBound...].range(of: ".swipeActions(edge: .trailing)") {
         let rowButtonSource = archiveViewSource[actionRange.lowerBound..<buttonEndRange.upperBound]
@@ -2011,20 +2014,40 @@ func runLegacyMainActorTests() {
             "archived conversation swipe action pills tighten their inter-button spacing"
         )
         expect(
-            archiveViewSource.contains("已经恢复，是否"),
-            "archived conversation restore shows recovered prompt"
+            archiveViewSource.contains("actions.showRestoredNotice(record.id)"),
+            "archived conversation restore reports recovered conversations to the shared notice area"
         )
         expect(
-            archiveViewSource.contains("跳转对话"),
-            "archived conversation restore prompt includes jump link text"
+            workbenchViewSource.contains("private var infoNoticeArea"),
+            "workbench owns a top information notice area"
         )
         expect(
-            archiveViewSource.contains("CodexColors.stateRunning.opacity"),
-            "archived conversation restore jump text is light blue"
+            workbenchViewSource.contains(".overlay(alignment: .top)"),
+            "workbench positions information notices at the top of the scene"
         )
         expect(
-            archiveViewSource.contains(".now() + 5"),
-            "archived conversation restore prompt auto-dismisses after five seconds"
+            workbenchViewSource.contains("private let infoNoticeTopOffset: CGFloat = 18"),
+            "workbench information notice aligns vertically with the top strip buttons"
+        )
+        expect(
+            workbenchViewSource.contains(".padding(.top, infoNoticeTopOffset)"),
+            "workbench information notice uses the shared top offset"
+        )
+        expect(
+            workbenchViewSource.contains("message: \"已经恢复，是否\""),
+            "workbench restore notice shows recovered prompt"
+        )
+        expect(
+            workbenchViewSource.contains("actionTitle: \"跳转对话\""),
+            "workbench restore notice includes jump link text"
+        )
+        expect(
+            workbenchViewSource.contains("CodexColors.stateRunning.opacity"),
+            "workbench restore jump text is light blue"
+        )
+        expect(
+            workbenchViewSource.contains(".now() + 5"),
+            "workbench information notice auto-dismisses after five seconds"
         )
     } else {
         expect(false, "archived conversation result row source is discoverable")

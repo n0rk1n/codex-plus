@@ -24,7 +24,6 @@ struct CompressionHistoryInspectorView: View {
                         emptySelection
                     }
 
-                    markerList
                     historyList
                 }
                 .padding(14)
@@ -57,20 +56,17 @@ struct CompressionHistoryInspectorView: View {
     @ViewBuilder
     private func selectedSummary(_ round: ConversationRoundPresentation) -> some View {
         VStack(alignment: .leading, spacing: 8) {
+            Text("发送时使用")
+                .font(CodexTypography.captionStrong)
+                .foregroundStyle(.secondary)
+
             Label(round.status?.label ?? "原文发送", systemImage: symbolName(for: round.boundary?.kind))
                 .font(CodexTypography.statusBar)
 
-            if let joinedRelationship = round.joinedRelationship, joinedRelationship.relatedRoundIDs.count > 1 {
-                Text("这段内容和相邻 \(joinedRelationship.relatedRoundIDs.count - 1) 轮一起形成当前拼接压缩版本。")
-                    .font(CodexTypography.caption)
-                    .foregroundStyle(.secondary)
-                    .fixedSize(horizontal: false, vertical: true)
-            } else {
-                Text("当前窗口仍显示原文；发送给模型时使用最后一个活动版本。")
-                    .font(CodexTypography.caption)
-                    .foregroundStyle(.secondary)
-                    .fixedSize(horizontal: false, vertical: true)
-            }
+            Text(usageDetailText(for: round))
+                .font(CodexTypography.caption)
+                .foregroundStyle(.secondary)
+                .fixedSize(horizontal: false, vertical: true)
 
             selectedActionGroup(for: round)
         }
@@ -114,33 +110,6 @@ struct CompressionHistoryInspectorView: View {
             .fixedSize(horizontal: false, vertical: true)
     }
 
-    private var markerList: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            Text("当前活动标记")
-                .font(CodexTypography.captionStrong)
-                .foregroundStyle(.secondary)
-
-            ForEach(markedRounds) { round in
-                HStack(alignment: .top, spacing: 8) {
-                    Circle()
-                        .fill(round.id == selectedRoundID ? Color.accentColor : Color.secondary.opacity(0.5))
-                        .frame(width: 7, height: 7)
-                        .padding(.top, 5)
-
-                    VStack(alignment: .leading, spacing: 3) {
-                        Text(round.status?.label ?? "原文发送")
-                            .font(CodexTypography.statusBar)
-
-                        Text(detailText(for: round))
-                            .font(CodexTypography.caption2)
-                            .foregroundStyle(.secondary)
-                            .lineLimit(2)
-                    }
-                }
-            }
-        }
-    }
-
     private var historyList: some View {
         VStack(alignment: .leading, spacing: 10) {
             Text("版本记录")
@@ -168,6 +137,8 @@ struct CompressionHistoryInspectorView: View {
 
             VStack(alignment: .leading, spacing: 4) {
                 HStack(alignment: .firstTextBaseline, spacing: 6) {
+                    versionOrderBadge(for: item)
+
                     Text(item.label)
                         .font(CodexTypography.statusBar)
 
@@ -209,6 +180,15 @@ struct CompressionHistoryInspectorView: View {
         .padding(.vertical, 6)
     }
 
+    private func versionOrderBadge(for item: CompressionVersionHistoryPresentation) -> some View {
+        Text(item.versionOrderLabel)
+            .font(CodexTypography.caption2)
+            .foregroundStyle(historyOrderForeground(for: item))
+            .padding(.horizontal, 6)
+            .padding(.vertical, 2)
+            .background(historyOrderBackground(for: item), in: Capsule(style: .continuous))
+    }
+
     private func rollbackAction(for item: CompressionVersionHistoryPresentation) -> some View {
         CodexButton(
             rule: .formHeaderCapsule,
@@ -229,10 +209,6 @@ struct CompressionHistoryInspectorView: View {
         return presentation.rounds.first { $0.roundID == selectedRoundID }
     }
 
-    private var markedRounds: [ConversationRoundPresentation] {
-        presentation.rounds.filter { $0.status != nil || $0.boundary != nil || $0.joinedRelationship != nil }
-    }
-
     private var selectedVersionHistory: [CompressionVersionHistoryPresentation] {
         guard let selectedRoundID else {
             return presentation.versionHistory
@@ -240,14 +216,17 @@ struct CompressionHistoryInspectorView: View {
         return presentation.versionHistoryByRoundID[selectedRoundID] ?? []
     }
 
-    private func detailText(for round: ConversationRoundPresentation) -> String {
+    private func usageDetailText(for round: ConversationRoundPresentation) -> String {
         if let joinedRelationship = round.joinedRelationship, joinedRelationship.relatedRoundIDs.count > 1 {
-            return "拼接 \(joinedRelationship.relatedRoundIDs.count) 轮"
+            return "发送时使用这 \(joinedRelationship.relatedRoundIDs.count) 轮拼接后的活动版本。"
         }
         if round.isDimmed {
-            return "原文淡化显示，不参与模型输入"
+            return "这一轮不会参与模型输入，原文只保留在时间线里。"
         }
-        return "原文可见，活动版本参与模型输入"
+        if round.status?.label == "原文发送" || round.status == nil {
+            return "发送时使用这一轮原文。"
+        }
+        return "发送时使用这一轮的活动版本，原文仍保留在时间线里。"
     }
 
     private func symbolName(for kind: CompressionBoundaryPresentation.Kind?) -> String {
@@ -278,6 +257,14 @@ struct CompressionHistoryInspectorView: View {
             return Color.accentColor
         }
         return Color.secondary.opacity(0.35)
+    }
+
+    private func historyOrderBackground(for item: CompressionVersionHistoryPresentation) -> Color {
+        item.isActive ? CodexColors.surfaceSelection : CodexColors.surfaceSubtleStrong
+    }
+
+    private func historyOrderForeground(for item: CompressionVersionHistoryPresentation) -> Color {
+        item.isActive ? Color.accentColor : Color.secondary
     }
 
     private func continueCompressionRoundIDs(for round: ConversationRoundPresentation) -> [UUID] {

@@ -21,6 +21,8 @@ struct ProjectStripActions {
 struct ConversationActions {
     let archiveConversation: (UUID) -> Void
     let editCompressionSegment: (UUID, CompressionSegmentKind, String) -> Void
+    let editCompressionRound: (UUID, String, String) -> Void
+    let editCompressionRoundContent: (UUID, String) -> Void
     let excludeCompressionRound: (UUID) -> Void
     let restoreCompressionOriginal: (UUID) -> Void
     let rollbackCompressionVersion: (UUID) -> Void
@@ -44,5 +46,5 @@ struct ArchiveActions {
     let open: (UUID) -> Void
     let delete: (UUID) -> Void
     let restore: (UUID) -> Bool
-    let jumpToRestored: (UUID) -> Void
+    let showRestoredNotice: (UUID) -> Void
 }

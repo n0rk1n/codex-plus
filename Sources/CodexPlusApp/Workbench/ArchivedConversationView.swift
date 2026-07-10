@@ -11,7 +11,6 @@ struct ArchivedConversationView: View {
     @State private var query = ""
     @State private var expandedTechnicalGroupIDs = Set<UUID>()
     @State private var pendingDeleteRecord: ConversationArchiveRecord?
-    @State private var restoreNotice: RestoreNotice?
 
     var body: some View {
         LiquidGlassContainer(cornerRadius: WorkbenchMetrics.conversationCornerRadius) {
@@ -24,11 +23,6 @@ struct ArchivedConversationView: View {
                 detailPane
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
-        }
-        .overlay {
-            if let restoreNotice {
-                restoreNoticeView(restoreNotice)
-            }
         }
         .alert("删除归档对话？", isPresented: deleteConfirmationBinding, presenting: pendingDeleteRecord) { record in
             Button("取消", role: .cancel) {
@@ -84,7 +78,7 @@ struct ArchivedConversationView: View {
 
                         Button {
                             if actions.restore(record.id) {
-                                showRestoreNotice(for: record)
+                                actions.showRestoredNotice(record.id)
                             }
                         } label: {
                             Text("恢复")
@@ -170,31 +164,6 @@ struct ArchivedConversationView: View {
         .frame(maxWidth: .infinity, minHeight: 320)
     }
 
-    private func restoreNoticeView(_ notice: RestoreNotice) -> some View {
-        LiquidGlassContainer(cornerRadius: CodexRadius.badge) {
-            HStack(spacing: 4) {
-                Text("已经恢复，是否")
-                    .foregroundStyle(.primary)
-
-                CodexButton(rule: .inlineTextLink, action: {
-                    actions.jumpToRestored(notice.conversationID)
-                    restoreNotice = nil
-                }) {
-                    Text("跳转对话")
-                        .foregroundStyle(CodexColors.stateRunning.opacity(0.72))
-                }
-            }
-            .font(CodexTypography.restoreNoticeAction)
-            .padding(.horizontal, CodexSpacing.compactInline)
-            .padding(.vertical, CodexSpacing.tightInline)
-        }
-        .overlay(
-            RoundedRectangle(cornerRadius: CodexRadius.badge, style: .continuous)
-                .stroke(CodexColors.surfaceStroke, lineWidth: 1)
-        )
-        .shadow(color: .black.opacity(0.25), radius: 18, y: 8)
-    }
-
     private var deleteConfirmationBinding: Binding<Bool> {
         Binding(
             get: { pendingDeleteRecord != nil },
@@ -204,16 +173,6 @@ struct ArchivedConversationView: View {
                 }
             }
         )
-    }
-
-    private func showRestoreNotice(for record: ConversationArchiveRecord) {
-        let notice = RestoreNotice(conversationID: record.id)
-        restoreNotice = notice
-        DispatchQueue.main.asyncAfter(deadline: .now() + 5) {
-            if restoreNotice?.id == notice.id {
-                restoreNotice = nil
-            }
-        }
     }
 
     @ViewBuilder
@@ -246,10 +205,5 @@ struct ArchivedConversationView: View {
         } else {
             expandedTechnicalGroupIDs.insert(id)
         }
-    }
-
-    private struct RestoreNotice: Equatable, Identifiable {
-        let id = UUID()
-        let conversationID: UUID
     }
 }

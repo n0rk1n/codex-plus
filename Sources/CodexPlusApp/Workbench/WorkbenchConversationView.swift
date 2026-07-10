@@ -26,94 +26,84 @@ struct WorkbenchConversationView: View {
     }
 
     private func activeConversationView(_ conversation: ConversationSession) -> some View {
-        VStack(spacing: 0) {
-            HStack(alignment: .top, spacing: 12) {
-                VStack(alignment: .leading, spacing: 4) {
-                    Text(conversation.title)
-                        .font(CodexTypography.contentTitle)
-                        .lineLimit(1)
+        ZStack {
+            VStack(spacing: 0) {
+                HStack(alignment: .top, spacing: 12) {
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text(conversation.title)
+                            .font(CodexTypography.contentTitle)
+                            .lineLimit(1)
 
-                    Text(conversation.workspacePath)
-                        .font(CodexTypography.caption)
-                        .foregroundStyle(.secondary)
-                        .lineLimit(1)
-                        .truncationMode(.middle)
+                        Text(conversation.workspacePath)
+                            .font(CodexTypography.caption)
+                            .foregroundStyle(.secondary)
+                            .lineLimit(1)
+                            .truncationMode(.middle)
+                    }
+
+                    Spacer(minLength: 12)
+
+                    archiveButton(for: conversation.id)
                 }
-
-                Spacer(minLength: 12)
-
-                archiveButton(for: conversation.id)
-            }
-            .padding(.horizontal, CodexSpacing.contentStack)
-            .padding(.top, CodexSpacing.contentStack)
-            .padding(.bottom, CodexSpacing.contentInline)
-
-            Divider()
-                .overlay(CodexColors.surfaceDivider)
-
-            if !selectedCompressionRoundIDs.isEmpty {
-                CompressionRangeActionBar(
-                    selectedCount: selectedOrderedRoundIDs.count,
-                    canEditSegment: selectedOrderedRoundIDs.count == 1,
-                    onEdit: openCompressionEditDialog,
-                    onDefaultCompress: compressSelectedRounds,
-                    onCustomCompress: openCustomCompressionDialog,
-                    onExclude: excludeSelectedRounds,
-                    onClear: clearCompressionSelection
-                )
+                .padding(.horizontal, CodexSpacing.contentStack)
+                .padding(.top, CodexSpacing.contentStack)
+                .padding(.bottom, CodexSpacing.contentInline)
 
                 Divider()
                     .overlay(CodexColors.surfaceDivider)
-            }
 
-            HStack(spacing: 0) {
-                ScrollViewReader { proxy in
-                    ScrollView {
-                        LazyVStack(alignment: .leading, spacing: 0) {
-                            ForEach(ConversationTimelineBuilder.items(from: conversation.events)) { item in
-                                timelineRow(for: item)
-                                    .id(item.id)
-                            }
-                        }
-                        .padding(CodexSpacing.contentStack)
-                    }
-                    .onAppear {
-                        scrollToLatest(conversation: conversation, using: proxy)
-                    }
-                    .onChange(of: conversation.events.count) {
-                        scrollToLatest(conversation: conversation, using: proxy)
-                    }
-                }
+                if !selectedCompressionRoundIDs.isEmpty {
+                    CompressionRangeActionBar(
+                        selectedCount: selectedOrderedRoundIDs.count,
+                        canEditSegment: selectedOrderedRoundIDs.count == 1,
+                        onEdit: openCompressionEditDialog,
+                        onDefaultCompress: compressSelectedRounds,
+                        onCustomCompress: openCustomCompressionDialog,
+                        onExclude: excludeSelectedRounds,
+                        onClear: clearCompressionSelection
+                    )
 
-                if selectedCompressionRoundID != nil {
                     Divider()
                         .overlay(CodexColors.surfaceDivider)
+                }
 
-                    CompressionHistoryInspectorView(
-                        presentation: snapshot.compression.timelinePresentation,
-                        selectedRoundID: selectedCompressionRoundID,
-                        onRestoreOriginal: restoreSelectedCompressionOriginal,
-                        onRollback: rollbackCompressionVersion,
-                        onContinueCompression: continueCompression,
-                        onClose: { selectedCompressionRoundID = nil }
-                    )
-                    .transition(.move(edge: .trailing).combined(with: .opacity))
+                HStack(spacing: 0) {
+                    ScrollViewReader { proxy in
+                        ScrollView {
+                            LazyVStack(alignment: .leading, spacing: 0) {
+                                ForEach(ConversationTimelineBuilder.items(from: conversation.events)) { item in
+                                    timelineRow(for: item)
+                                        .id(item.id)
+                                }
+                            }
+                            .padding(CodexSpacing.contentStack)
+                        }
+                        .onAppear {
+                            scrollToLatest(conversation: conversation, using: proxy)
+                        }
+                        .onChange(of: conversation.events.count) {
+                            scrollToLatest(conversation: conversation, using: proxy)
+                        }
+                    }
+
+                    if selectedCompressionRoundID != nil {
+                        Divider()
+                            .overlay(CodexColors.surfaceDivider)
+
+                        CompressionHistoryInspectorView(
+                            presentation: snapshot.compression.timelinePresentation,
+                            selectedRoundID: selectedCompressionRoundID,
+                            onRestoreOriginal: restoreSelectedCompressionOriginal,
+                            onRollback: rollbackCompressionVersion,
+                            onContinueCompression: continueCompression,
+                            onClose: { selectedCompressionRoundID = nil }
+                        )
+                        .transition(.move(edge: .trailing).combined(with: .opacity))
+                    }
                 }
             }
-        }
-        .sheet(item: $editingCompressionDraft) { draft in
-            CompressionEditDialog(
-                roundID: draft.roundID,
-                initialText: draft.initialText,
-                onCancel: {
-                    editingCompressionDraft = nil
-                },
-                onSave: { segmentKind, content in
-                    actions.editCompressionSegment(draft.roundID, segmentKind, content)
-                    editingCompressionDraft = nil
-                    selectedCompressionRoundID = draft.roundID
-                }
-            )
+
+            compressionEditOverlay
         }
         .sheet(item: $customCompressionDraft) { draft in
             CompressionCustomDialog(
@@ -129,6 +119,27 @@ struct WorkbenchConversationView: View {
                     clearCompressionSelection()
                 }
             )
+        }
+    }
+
+    @ViewBuilder
+    private var compressionEditOverlay: some View {
+        if let draft = editingCompressionDraft {
+            CompressionEditDialog(
+                roundID: draft.roundID,
+                initialUserText: draft.initialUserText,
+                initialAIBlocks: draft.initialAIBlocks,
+                onCancel: {
+                    editingCompressionDraft = nil
+                },
+                onSave: { content in
+                    actions.editCompressionRoundContent(draft.roundID, content)
+                    editingCompressionDraft = nil
+                    selectedCompressionRoundID = draft.roundID
+                }
+            )
+            .transition(.opacity)
+            .zIndex(10)
         }
     }
 
@@ -307,33 +318,99 @@ struct WorkbenchConversationView: View {
               let conversation = snapshot.activeConversation else {
             return
         }
+        let editParts = compressionEditParts(roundID: roundID, conversation: conversation)
         editingCompressionDraft = CompressionEditDraft(
             roundID: roundID,
-            initialText: segmentText(roundID: roundID, segmentKind: .assistant, conversation: conversation)
+            initialUserText: editParts.user,
+            initialAIBlocks: editParts.aiBlocks
         )
     }
 
-    private func segmentText(
+    private func compressionEditParts(
         roundID: UUID,
-        segmentKind: CompressionSegmentKind,
         conversation: ConversationSession
-    ) -> String {
+    ) -> (user: String, aiBlocks: [CompressionEditBlock]) {
         let eventIDs = snapshot.compression.timelinePresentation.rounds
             .first { $0.roundID == roundID }?
             .eventIDs ?? []
+        var userTexts: [String] = []
+        var aiBlocks: [CompressionEditBlock] = []
+        var technicalEvents: [ConversationDisplayEvent] = []
+
+        func flushTechnicalEvents() {
+            guard let firstEvent = technicalEvents.first else {
+                return
+            }
+            aiBlocks.append(.details(
+                id: firstEvent.id,
+                title: "Details · \(countLabel(technicalEvents.count, singular: "event", plural: "events"))",
+                subtitle: detailSummaryText(for: technicalEvents),
+                modelInputText: technicalEvents
+                    .map(modelInputText)
+                    .filter { !$0.isEmpty }
+                    .joined(separator: "\n\n")
+            ))
+            technicalEvents.removeAll(keepingCapacity: true)
+        }
+
         for eventID in eventIDs {
             guard let event = conversation.events.first(where: { $0.id == eventID }) else {
                 continue
             }
-            switch (segmentKind, event) {
-            case let (.user, .userPrompt(_, text)),
-                 let (.assistant, .assistantMessage(_, text)):
-                return text
-            default:
-                continue
+            switch event {
+            case let .userPrompt(_, text):
+                userTexts.append(text)
+            case let .assistantMessage(_, text):
+                flushTechnicalEvents()
+                aiBlocks.append(.assistant(id: event.id, text: text))
+            case .status, .command, .parseWarning:
+                technicalEvents.append(event)
+            case let .error(id, text):
+                flushTechnicalEvents()
+                aiBlocks.append(.details(id: id, title: "Error", subtitle: text, modelInputText: text))
             }
         }
-        return ""
+        flushTechnicalEvents()
+        return (
+            user: userTexts.joined(separator: "\n\n"),
+            aiBlocks: aiBlocks
+        )
+    }
+
+    private func detailSummaryText(for events: [ConversationDisplayEvent]) -> String {
+        var parts: [String] = []
+        let statusCount = events.filter(\.isStatusTimelineEvent).count
+        let commandCount = events.filter(\.isCommandTimelineEvent).count
+        let warningCount = events.filter(\.isParseWarningTimelineEvent).count
+
+        if statusCount > 0 {
+            parts.append(countLabel(statusCount, singular: "status", plural: "statuses"))
+        }
+        if commandCount > 0 {
+            parts.append(countLabel(commandCount, singular: "command", plural: "commands"))
+        }
+        if warningCount > 0 {
+            parts.append(countLabel(warningCount, singular: "warning", plural: "warnings"))
+        }
+
+        return parts.joined(separator: ", ")
+    }
+
+    private func modelInputText(for event: ConversationDisplayEvent) -> String {
+        switch event {
+        case let .userPrompt(_, text),
+             let .status(_, text),
+             let .assistantMessage(_, text),
+             let .error(_, text),
+             let .parseWarning(_, text):
+            return text
+        case let .command(_, _, command, _):
+            return command
+        }
+    }
+
+    private func countLabel(_ count: Int, singular: String, plural: String) -> String {
+        "\(count) \(count == 1 ? singular : plural)"
     }
 
     private func scrollToLatest(conversation: ConversationSession, using proxy: ScrollViewProxy) {
@@ -356,7 +433,8 @@ struct WorkbenchConversationView: View {
 private struct CompressionEditDraft: Identifiable {
     var id: UUID { roundID }
     var roundID: UUID
-    var initialText: String
+    var initialUserText: String
+    var initialAIBlocks: [CompressionEditBlock]
 }
 
 private struct CompressionCustomDraft: Identifiable {

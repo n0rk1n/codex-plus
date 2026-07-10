@@ -12,6 +12,7 @@ func runWorkbenchStoreTests() {
     runRunningArchiveConfirmationTests()
     runRunningStopPersistenceFailureTests()
     runArchivePersistenceFailureTests()
+    runCompressionRoundEditTests()
 }
 
 @MainActor
@@ -307,6 +308,185 @@ private func runArchiveRestoreTests() {
 }
 
 @MainActor
+private func runCompressionRoundEditTests() {
+    withSQLiteRepositoryTest("full compression round edit updates user and AI model input") { _, repository in
+        let now = Date(timeIntervalSince1970: 1_000)
+        let projectID = UUID()
+        let conversationID = UUID()
+        let userEventID = UUID()
+        let assistantEventID = UUID()
+        let secondAssistantEventID = UUID()
+        let workspacePath = "/tmp/codex-plus-compression-edit"
+        let conversation = ConversationSession(
+            id: conversationID,
+            title: "Compression edit",
+            prompt: "Original user",
+            workspacePath: workspacePath,
+            state: .completed,
+            createdAt: now,
+            lastActivityAt: now,
+            events: [
+                .userPrompt(id: userEventID, text: "Original user"),
+                .assistantMessage(id: assistantEventID, text: "Original AI"),
+                .assistantMessage(id: secondAssistantEventID, text: "More original AI")
+            ]
+        )
+        let project = WorkspaceSessionGroup(
+            id: projectID,
+            path: workspacePath,
+            displayName: "compression-edit",
+            conversationIDs: [conversationID],
+            lastActivityAt: now
+        )
+        try repository.saveProject(project)
+        try repository.saveConversation(conversation, projectID: projectID)
+
+        let compressionService = ContextCompressionService(
+            repository: repository,
+            executionProvider: NoopCompressionExecutionProvider(),
+            now: { Date(timeIntervalSince1970: 1_100) }
+        )
+        let store = WorkbenchStore(
+            repository: repository,
+            engine: ManualExecutionEngine(),
+            contextCompressionService: compressionService
+        )
+
+        store.editCompressionRound(
+            roundID: userEventID,
+            userContent: "Edited user",
+            assistantContent: "Edited AI"
+        )
+
+        expect(
+            store.snapshot.compression.assembledPreview == "Edited user\n\nEdited AI",
+            "full compression round edit saves both user and AI text into the active model input"
+        )
+    }
+
+    withSQLiteRepositoryTest("full compression content edit can preserve read-only details between AI blocks") { _, repository in
+        let now = Date(timeIntervalSince1970: 1_200)
+        let projectID = UUID()
+        let conversationID = UUID()
+        let userEventID = UUID()
+        let firstDetailsID = UUID()
+        let firstAssistantEventID = UUID()
+        let secondDetailsID = UUID()
+        let secondAssistantEventID = UUID()
+        let finalDetailsID = UUID()
+        let workspacePath = "/tmp/codex-plus-compression-details-edit"
+        let conversation = ConversationSession(
+            id: conversationID,
+            title: "Compression details edit",
+            prompt: "Original user",
+            workspacePath: workspacePath,
+            state: .completed,
+            createdAt: now,
+            lastActivityAt: now,
+            events: [
+                .userPrompt(id: userEventID, text: "Original user"),
+                .status(id: firstDetailsID, text: "3 statuses, 4 commands"),
+                .assistantMessage(id: firstAssistantEventID, text: "Original first AI"),
+                .command(id: secondDetailsID, executionID: nil, command: "swift build", status: .completed),
+                .assistantMessage(id: secondAssistantEventID, text: "Original second AI"),
+                .parseWarning(id: finalDetailsID, text: "1 status")
+            ]
+        )
+        let project = WorkspaceSessionGroup(
+            id: projectID,
+            path: workspacePath,
+            displayName: "compression-details-edit",
+            conversationIDs: [conversationID],
+            lastActivityAt: now
+        )
+        try repository.saveProject(project)
+        try repository.saveConversation(conversation, projectID: projectID)
+
+        let compressionService = ContextCompressionService(
+            repository: repository,
+            executionProvider: NoopCompressionExecutionProvider(),
+            now: { Date(timeIntervalSince1970: 1_300) }
+        )
+        let store = WorkbenchStore(
+            repository: repository,
+            engine: ManualExecutionEngine(),
+            contextCompressionService: compressionService
+        )
+        let editedContent = [
+            "Edited user",
+            "3 statuses, 4 commands",
+            "Edited first AI",
+            "swift build",
+            "Edited second AI",
+            "1 status"
+        ].joined(separator: "\n\n")
+
+        store.editCompressionRoundContent(roundID: userEventID, content: editedContent)
+
+        expect(
+            store.snapshot.compression.assembledPreview == editedContent,
+            "full compression content edit preserves read-only details while replacing editable user and AI text"
+        )
+    }
+
+    withSQLiteRepositoryTest("compression history labels versions in chronological order") { _, repository in
+        let now = Date(timeIntervalSince1970: 1_400)
+        let projectID = UUID()
+        let conversationID = UUID()
+        let userEventID = UUID()
+        let assistantEventID = UUID()
+        let workspacePath = "/tmp/codex-plus-compression-version-order"
+        let conversation = ConversationSession(
+            id: conversationID,
+            title: "Compression version order",
+            prompt: "Original user",
+            workspacePath: workspacePath,
+            state: .completed,
+            createdAt: now,
+            lastActivityAt: now,
+            events: [
+                .userPrompt(id: userEventID, text: "Original user"),
+                .assistantMessage(id: assistantEventID, text: "Original AI")
+            ]
+        )
+        let project = WorkspaceSessionGroup(
+            id: projectID,
+            path: workspacePath,
+            displayName: "compression-version-order",
+            conversationIDs: [conversationID],
+            lastActivityAt: now
+        )
+        try repository.saveProject(project)
+        try repository.saveConversation(conversation, projectID: projectID)
+
+        let dateProvider = MutableDateProvider(Date(timeIntervalSince1970: 1_500))
+        let compressionService = ContextCompressionService(
+            repository: repository,
+            executionProvider: NoopCompressionExecutionProvider(),
+            now: { dateProvider.now() }
+        )
+        let store = WorkbenchStore(
+            repository: repository,
+            engine: ManualExecutionEngine(),
+            contextCompressionService: compressionService
+        )
+
+        dateProvider.set(Date(timeIntervalSince1970: 1_501))
+        store.editCompressionRoundContent(roundID: userEventID, content: "First edit")
+        dateProvider.set(Date(timeIntervalSince1970: 1_502))
+        store.editCompressionRoundContent(roundID: userEventID, content: "Second edit")
+
+        let history = store.snapshot.compression.timelinePresentation.versionHistoryByRoundID[userEventID] ?? []
+        let orderLabels = history.map { item in
+            Mirror(reflecting: item).children.first { $0.label == "versionOrderLabel" }?.value as? String
+        }
+
+        expect(orderLabels == ["V1", "V2"], "compression history exposes chronological version order labels")
+        expect(history.map(\.statusLabel) == ["历史版本", "活动版本"], "compression history keeps older versions before the active version")
+    }
+}
+
+@MainActor
 private func runArchiveLifecycleTests() {
     withSQLiteRepositoryTest("archive lifecycle test") { dbURL, repository in
         let engine = ManualExecutionEngine()
@@ -567,6 +747,40 @@ private final class ManualExecutionEngine: ExecutionEngine, @unchecked Sendable 
 
     func finish(conversationID: UUID, result: CodexRunResult) {
         callbacksByConversationID[conversationID]?.onFinish(result)
+    }
+}
+
+private final class NoopCompressionExecutionProvider: CompressionExecutionProvider, @unchecked Sendable {
+    func startCompression(
+        request: CompressionExecutionRequest,
+        onFinish: @escaping @Sendable (CompressionExecutionResult) -> Void
+    ) -> (any ExecutionHandle)? {
+        nil
+    }
+}
+
+private final class MutableDateProvider: @unchecked Sendable {
+    private let lock = NSLock()
+    private var date: Date
+
+    init(_ date: Date) {
+        self.date = date
+    }
+
+    func set(_ date: Date) {
+        lock.lock()
+        defer {
+            lock.unlock()
+        }
+        self.date = date
+    }
+
+    func now() -> Date {
+        lock.lock()
+        defer {
+            lock.unlock()
+        }
+        return date
     }
 }
 
